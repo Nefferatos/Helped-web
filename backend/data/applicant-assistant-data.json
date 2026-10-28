@@ -405,6 +405,33 @@
       "currentTrackerId": null,
       "createdAt": "2026-10-05T05:32:10.699Z",
       "updatedAt": "2026-10-05T05:32:13.152Z"
+    },
+    {
+      "id": "7f7740a9-2c3c-45ee-8ec4-8b289d25c409",
+      "agencyId": 1,
+      "userId": "2",
+      "messages": [
+        {
+          "id": "1d0c59ce-d323-476f-8406-5b257ec42104",
+          "role": "user",
+          "content": "Compare the selected applicants",
+          "requestId": "07e33410-a028-4d35-9146-df49f8b4dfac",
+          "applicantIds": [],
+          "timestamp": "2026-10-24T05:07:24.695Z"
+        },
+        {
+          "id": "86e22a43-5868-4e44-a54b-4d9a92039cee",
+          "role": "assistant",
+          "content": "I was unable to process your request. Please try again.",
+          "requestId": "07e33410-a028-4d35-9146-df49f8b4dfac",
+          "applicantIds": [],
+          "timestamp": "2026-10-24T05:07:26.838Z"
+        }
+      ],
+      "selectedApplicantIds": [],
+      "currentTrackerId": null,
+      "createdAt": "2026-10-24T05:07:24.689Z",
+      "updatedAt": "2026-10-24T05:07:26.838Z"
     }
   ],
   "auditLog": [
@@ -665,6 +692,22 @@
       "errorMessage": null,
       "humanApprovalRequired": false,
       "humanApprovalGiven": null
+    },
+    {
+      "id": "e1311ed8-b31b-4ce9-9708-d0d2e69aa876",
+      "timestamp": "2026-10-24T05:07:26.840Z",
+      "agencyId": 1,
+      "userId": "2",
+      "requestId": "07e33410-a028-4d35-9146-df49f8b4dfac",
+      "conversationId": "7f7740a9-2c3c-45ee-8ec4-8b289d25c409",
+      "action": "chat",
+      "applicantIds": [],
+      "result": "success",
+      "makeExecutionId": "1",
+      "googleDocId": null,
+      "errorMessage": null,
+      "humanApprovalRequired": false,
+      "humanApprovalGiven": null
     }
   ],
   "googleDocLinks": [],
@@ -684,11 +727,12 @@
     "60f4059c-0121-48ed-8b52-0ef1f7cd141b",
     "003c833c-c5a3-411e-9657-61977afa7567",
     "ba41e2b9-d1f7-477b-9ad2-f08b3970cdb6",
-    "8b7afbc2-379e-47bf-9f04-fd8b96d5d460"
+    "8b7afbc2-379e-47bf-9f04-fd8b96d5d460",
+    "07e33410-a028-4d35-9146-df49f8b4dfac"
   ],
   "counters": {
     "trackers": 1,
-    "conversations": 14,
-    "auditLog": 17
+    "conversations": 15,
+    "auditLog": 18
   }
 }

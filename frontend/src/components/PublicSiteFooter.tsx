@@ -41,7 +41,8 @@ const PublicSiteFooter = () => (
     <div className="psf-inner">
       <div className="psf-grid">
         <div>
-          <h4 className="psf-brand">AT The Agency <span style={{ fontSize: 13, fontFamily: "'Inter',sans-serif", fontWeight: 500 }}>(formerly Rinzin Agency)</span></h4>
+          <h4 className="psf-brand">AT THE AGENCY <span style={{ fontSize: 13, fontFamily: "'Inter',sans-serif", fontWeight: 500 }}>(formerly Rinzin Agency)</span></h4>
+          <p className="psf-copy" style={{ marginBottom: 8 }}>Business name: AT THE AGENCY</p>
           <p className="psf-copy">Matching trusted domestic professionals with Singapore families since 2009.</p>
         </div>
         <div>
@@ -55,7 +56,7 @@ const PublicSiteFooter = () => (
           <ul className="psf-list">
             <li className="psf-contact"><MapPin className="psf-icon" size={16}/><span>3 Jalan Kukoh, #01-115<br/>Singapore 161003</span></li>
             <li className="psf-contact"><Mail className="psf-icon" size={16}/><a className="psf-link" href="mailto:enquiries.j1@gmail.com">enquiries.j1@gmail.com</a></li>
-            <li className="psf-contact"><Phone className="psf-icon" size={16}/><a className="psf-link" href="tel:+6580730757">8073 0757</a></li>
+            <li className="psf-contact"><Phone className="psf-icon" size={16}/><a className="psf-link" href="tel:+6591813137">+65 9181 3137</a></li>
           </ul>
         </div>
         <div>

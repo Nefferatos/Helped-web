@@ -11,6 +11,8 @@ binding = "APP_DATA"
 id = "62a5ada5801547b5b0895fec94ab0b12"
 preview_id = "595830971f4f4125975ddcdeb627de67"
 
+# Optional: WhatsApp broadcast media uploads require Cloudflare R2. Add the
+# WHATSAPP_MEDIA R2 binding here after R2 is enabled on the Cloudflare account.
 [vars]
 # Storage: "kv" uses the APP_DATA KV namespace above. Remove to fall back to Supabase.
 STORAGE_BACKEND = "supabase"
@@ -36,6 +38,10 @@ SUPABASE_URL = "https://etdbexgrsenjznxbbnbd.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0ZGJleGdyc2VuanpueGJibmJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjY3MjAsImV4cCI6MjA5MDcwMjcyMH0.vtop8R2up7ItNoGXoU1Bx1VAVq23gimj-21nBX4LAg4"
 
 AI_AUTOPILOT_ENABLED = "true"
+# Scheduled autonomous campaign scanning and dispatch; set true to enable.
+AUTONOMOUS_MARKETING_ENABLED = "false"
+# Marketing uses deterministic message templates unless explicitly enabled.
+MARKETING_AI_ENABLED = "false"
 
 # Claude model for AI Marketing copy (and other Anthropic calls that read it).
 # Defaults to claude-haiku-4-5 in code when unset — cheap/fast, suited to short

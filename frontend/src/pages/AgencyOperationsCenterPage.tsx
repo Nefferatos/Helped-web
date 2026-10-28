@@ -331,6 +331,9 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
           .operations-center-embedded :is(input,textarea,select){font-size:16px!important;border-radius:12px}
           .operations-center-embedded button{min-height:44px;transition:transform .15s,box-shadow .15s,border-color .15s}
           .operations-center-embedded button:hover:not(:disabled){box-shadow:0 4px 14px rgba(15,23,42,.09)}
+          .operations-center-embedded .placement-empty-cta{background-color:#0D6E56!important;color:#fff!important;box-shadow:0 2px 6px rgba(13,110,86,.18)!important}
+          .operations-center-embedded .placement-empty-cta:hover{background-color:#0b5a46!important;box-shadow:0 5px 14px rgba(13,110,86,.24)!important}
+          .operations-center-embedded .placement-empty-cta:focus-visible{outline:3px solid rgba(13,110,86,.35);outline-offset:2px}
           .operations-center-embedded section{border-color:#dbe4f0;box-shadow:0 5px 18px rgba(15,23,42,.045)}
           .operations-center-embedded h1,.operations-center-embedded h2,.operations-center-embedded h3{color:#000!important}
           .operations-center :is(input,textarea,select){transition:border-color .18s,box-shadow .18s,background-color .18s}
@@ -425,7 +428,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
               <div className="rounded-2xl bg-muted p-5 text-sm">
                 <p className="font-medium text-foreground">No active placements yet.</p>
                 <p className="mt-1 text-black">When a placement begins, its progress will appear here automatically.</p>
-                <button type="button" onClick={() => setActiveTab('matching')} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">Start a new match <ArrowRight className="h-4 w-4" /></button>
+                <button type="button" onClick={() => setActiveTab('matching')} className="placement-empty-cta group mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2">Start a new match <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></button>
               </div>
             ) : (
               <>

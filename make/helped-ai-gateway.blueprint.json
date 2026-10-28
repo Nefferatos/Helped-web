@@ -25,7 +25,7 @@
         "reasoningEffort": "low",
         "systemPrompt": "{{1.systemPrompt}}",
         "message": "{{1.userPrompt}}",
-        "threadId": "helped-{{ifempty(1.scenario; \"general\")}}",
+        "threadId": "{{ifempty(1.threadId; concat(\"helped-\"; ifempty(1.scenario; \"general\")))}}",
         "modelConfig": { "recursionLimit": 20, "iterationsFromHistoryCount": "0" },
         "outputType": "text"
       },

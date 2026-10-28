@@ -1,5 +1,5 @@
 {
-  "name": "Helped - WhatsApp Broadcast",
+  "name": "Helped - Multilingual WhatsApp Broadcast",
   "flow": [
     {
       "id": 1,
@@ -9,12 +9,8 @@
       "mapper": {},
       "metadata": {
         "designer": { "x": 0, "y": 0 },
-        "restore": {
-          "parameters": {
-            "hook": { "data": { "editable": "true" }, "label": "Helped WhatsApp Broadcast" }
-          }
-        },
-        "notes": "After import, create/select a custom webhook, run the scenario once to learn the payload, then copy its URL into the Cloudflare Worker secret MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL. Payload fields: scenario, message, contacts[] (each has phone and optional name), contactCount, requestedAt, agencyId."
+        "restore": { "parameters": { "hook": { "data": { "editable": "true" }, "label": "Helped WhatsApp Broadcast" } } },
+        "notes": "Receives the source message and uploaded contacts from the Worker. Each contact includes name, phone, and preferred language."
       }
     },
     {
@@ -33,62 +29,118 @@
             "label": "Contacts",
             "spec": [
               { "name": "phone", "type": "text", "label": "Phone (E.164)" },
-              { "name": "name", "type": "text", "label": "Name" }
+              { "name": "name", "type": "text", "label": "Name" },
+              { "name": "language", "type": "text", "label": "Preferred language" }
             ]
           }
         ],
-        "notes": "Iterates through each validated spreadsheet contact. The page sends phone numbers with a leading + and removes duplicate numbers."
+        "notes": "Creates one bundle per uploaded contact."
       }
     },
     {
       "id": 3,
-      "module": "http:ActionSendData",
-      "version": 3,
-      "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
+      "module": "ai-local-agent:RunLocalAIAgent",
+      "version": 0,
+      "parameters": {},
       "mapper": {
-        "url": "https://graph.facebook.com/vXX.X/REPLACE_WITH_PHONE_NUMBER_ID/messages",
-        "serializeUrl": false,
-        "method": "post",
-        "headers": [
-          { "name": "Authorization", "value": "Bearer REPLACE_WITH_WHATSAPP_CLOUD_API_ACCESS_TOKEN" },
-          { "name": "Content-Type", "value": "application/json" }
-        ],
-        "qs": [],
-        "bodyType": "raw",
-        "parseResponse": true,
-        "authUser": "",
-        "authPass": "",
-        "timeout": "30",
-        "shareCookies": false,
-        "ca": "",
-        "rejectUnauthorized": true,
-        "followRedirect": true,
-        "useQuerystring": false,
-        "gzip": true,
-        "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{2.phone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"{{1.message}}\"}}"
+        "files": [],
+        "defaultModel": "gpt-4o-mini",
+        "reasoningEffort": "low",
+        "systemPrompt": "You are a professional WhatsApp communication agent for a Singapore domestic helper agency. Automatically detect the language of the agency's source message and write a natural, respectful WhatsApp message in the recipient's preferred language, {{2.language}}. Address the recipient by name when provided. Preserve facts, dates, prices, links, and contact details exactly. Do not invent offers or claims. Return only the finished message in the recipient's language, without explanation or quotation marks.",
+        "message": "Recipient language: {{2.language}}\nRecipient name: {{2.name}}\n\nAgency message (detect its language automatically):\n{{1.message}}",
+        "threadId": "broadcast-{{1.requestedAt}}-{{2.phone}}",
+        "outputType": "text",
+        "modelConfig": { "recursionLimit": 8, "iterationsFromHistoryCount": "0" }
       },
       "metadata": {
         "designer": { "x": 600, "y": 0 },
         "restore": {},
-        "notes": "Set a current Graph API version, your WhatsApp Business Phone Number ID, and a token with whatsapp_business_messaging permission. For recipients outside the 24-hour customer service window, replace the text payload with an approved WhatsApp message template and map the approved template variables. Configure an error handler on this module to log failed sends and continue with the remaining contacts."
-      }
+        "notes": "Connect the Make AI Provider and choose a model. The agent runs once per uploaded contact, translating and personalizing the message in that contact's preferred language. This uses one AI generation per contact."
+      },
+      "tools": []
+    },
+    {
+      "id": 4,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": { "designer": { "x": 900, "y": 0, "name": "Send text, image, or video" } },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 5,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "filter": { "name": "Text only", "conditions": [[{ "a": "{{1.mediaType}}", "o": "text:equal", "b": "text" }]] },
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
+              "mapper": {
+                "url": "https://graph.facebook.com/vXX.X/REPLACE_WITH_PHONE_NUMBER_ID/messages",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [{ "name": "Authorization", "value": "Bearer REPLACE_WITH_WHATSAPP_CLOUD_API_ACCESS_TOKEN" }, { "name": "Content-Type", "value": "application/json" }],
+                "qs": [], "bodyType": "raw", "parseResponse": true, "authUser": "", "authPass": "", "timeout": "30", "shareCookies": false, "ca": "", "rejectUnauthorized": true, "followRedirect": true, "useQuerystring": false, "gzip": true,
+                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{2.phone}}\",\"type\":\"text\",\"text\":{\"preview_url\":false,\"body\":\"{{escapeJSON(3.response)}}\"}}"
+              },
+              "metadata": { "designer": { "x": 1200, "y": -180 }, "restore": {}, "notes": "Set the current Graph API version, phone number ID, and WhatsApp Cloud API token. Use an approved WhatsApp template when required for business-initiated messages." }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 6,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "filter": { "name": "Image poster", "conditions": [[{ "a": "{{1.mediaType}}", "o": "text:equal", "b": "image" }]] },
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
+              "mapper": {
+                "url": "https://graph.facebook.com/vXX.X/REPLACE_WITH_PHONE_NUMBER_ID/messages",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [{ "name": "Authorization", "value": "Bearer REPLACE_WITH_WHATSAPP_CLOUD_API_ACCESS_TOKEN" }, { "name": "Content-Type", "value": "application/json" }],
+                "qs": [], "bodyType": "raw", "parseResponse": true, "authUser": "", "authPass": "", "timeout": "30", "shareCookies": false, "ca": "", "rejectUnauthorized": true, "followRedirect": true, "useQuerystring": false, "gzip": true,
+                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{2.phone}}\",\"type\":\"image\",\"image\":{\"link\":\"{{1.mediaUrl}}\",\"caption\":\"{{escapeJSON(3.response)}}\"}}"
+              },
+              "metadata": { "designer": { "x": 1200, "y": 0 }, "restore": {}, "notes": "Set the current Graph API version, phone number ID, and WhatsApp Cloud API token. Media URL comes from the Worker’s R2-backed upload endpoint." }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 7,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "filter": { "name": "Short video", "conditions": [[{ "a": "{{1.mediaType}}", "o": "text:equal", "b": "video" }]] },
+              "parameters": { "handleErrors": true, "useNewZLibDecompress": true },
+              "mapper": {
+                "url": "https://graph.facebook.com/vXX.X/REPLACE_WITH_PHONE_NUMBER_ID/messages",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [{ "name": "Authorization", "value": "Bearer REPLACE_WITH_WHATSAPP_CLOUD_API_ACCESS_TOKEN" }, { "name": "Content-Type", "value": "application/json" }],
+                "qs": [], "bodyType": "raw", "parseResponse": true, "authUser": "", "authPass": "", "timeout": "30", "shareCookies": false, "ca": "", "rejectUnauthorized": true, "followRedirect": true, "useQuerystring": false, "gzip": true,
+                "body": "{\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"{{2.phone}}\",\"type\":\"video\",\"video\":{\"link\":\"{{1.mediaUrl}}\",\"caption\":\"{{escapeJSON(3.response)}}\"}}"
+              },
+              "metadata": { "designer": { "x": 1200, "y": 180 }, "restore": {}, "notes": "Set the current Graph API version, phone number ID, and WhatsApp Cloud API token. Video URL comes from the Worker’s R2-backed upload endpoint." }
+            }
+          ]
+        }
+      ]
     }
   ],
   "metadata": {
     "instant": true,
     "version": 1,
-    "scenario": {
-      "roundtrips": 1,
-      "maxErrors": 10,
-      "autoCommit": true,
-      "autoCommitTriggerLast": true,
-      "sequential": true,
-      "confidential": false,
-      "dataloss": false,
-      "dlq": false,
-      "freshVariables": false
-    },
+    "scenario": { "roundtrips": 1, "maxErrors": 10, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": true, "confidential": true, "dataloss": false, "dlq": false },
     "designer": { "orphans": [] },
-    "zone": "eu1.make.com"
+    "zone": "eu1.make.com",
+    "notes": [
+      "Helped - Multilingual WhatsApp Broadcast.",
+      "Import as its own Make scenario. After import, select the existing Helped WhatsApp Broadcast webhook and connect the Make AI Provider.",
+      "The AI Agent generates one translated/personalized caption per uploaded contact. The same optional image or video is sent to every contact. AI usage scales with the number of contacts.",
+      "Replace the Graph API version, phone number ID, and access token in all three HTTP routes. Use approved WhatsApp templates for business-initiated broadcasts when required.",
+      "Set the scenario webhook URL as MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL in the Worker."
+    ]
   }
 }
