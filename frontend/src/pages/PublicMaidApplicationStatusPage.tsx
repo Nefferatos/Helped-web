@@ -1,12 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { fetchPublicAtsApplicationSummary } from "@/lib/ats";
-import { callAiAgent } from "@/lib/aiAgents";
-import { Bot, CheckCircle2, Clock3, FileCheck2, Mail, MessageSquareText } from "lucide-react";
+import { CheckCircle2, Clock3, FileCheck2, Mail, MessageSquareText } from "lucide-react";
 
 const formatDate = (value?: string) => {
   if (!value) return "N/A";
@@ -19,8 +17,6 @@ const PublicMaidApplicationStatusPage = () => {
   const { applicationId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
-  const [screeningReply, setScreeningReply] = useState("");
-  const [screeningLoading, setScreeningLoading] = useState(false);
 
   const summaryQuery = useQuery({
     queryKey: ["public-ats-application", applicationId, token],
@@ -29,22 +25,6 @@ const PublicMaidApplicationStatusPage = () => {
   });
 
   const summary = summaryQuery.data;
-
-  const runScreeningAssistant = async () => {
-    setScreeningLoading(true);
-    try {
-      const result = await callAiAgent("/api/ai/screen-applicant-public", {
-        applicationId,
-        applicantAccessToken: token,
-        message: "Review my application readiness and explain missing documents or incomplete fields.",
-      });
-      setScreeningReply(result.response || "");
-    } catch (error) {
-      setScreeningReply(error instanceof Error ? error.message : "Screening assistant is unavailable right now.");
-    } finally {
-      setScreeningLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc_0%,_#ecfdf5_100%)] px-4 py-8 sm:px-6 lg:px-8">
@@ -88,7 +68,7 @@ const PublicMaidApplicationStatusPage = () => {
         ) : null}
 
         {summary ? (
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid items-start gap-6 xl:grid-cols-2">
             <div className="space-y-6">
               <Card className="rounded-[2rem] border-slate-200 bg-white p-6">
                 <div className="flex items-center gap-3">
@@ -202,31 +182,6 @@ const PublicMaidApplicationStatusPage = () => {
                 </div>
               </Card>
 
-              <Card className="rounded-[2rem] border-emerald-200 bg-white p-6">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
-                    <Bot className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-black text-slate-950">Screening Assistant</h2>
-                    <p className="text-sm text-slate-600">Check readiness using only this application link.</p>
-                  </div>
-                </div>
-                <div className="mt-5">
-                  <Button
-                    className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
-                    onClick={() => void runScreeningAssistant()}
-                    disabled={screeningLoading}
-                  >
-                    {screeningLoading ? "Reviewing..." : "Review My Application"}
-                  </Button>
-                </div>
-                {screeningReply ? (
-                  <div className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-                    {screeningReply}
-                  </div>
-                ) : null}
-              </Card>
             </div>
           </div>
         ) : null}

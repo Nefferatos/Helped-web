@@ -56,7 +56,7 @@ const PublicSiteFooter = () => (
           <ul className="psf-list">
             <li className="psf-contact"><MapPin className="psf-icon" size={16}/><span>3 Jalan Kukoh, #01-115<br/>Singapore 161003</span></li>
             <li className="psf-contact"><Mail className="psf-icon" size={16}/><a className="psf-link" href="mailto:enquiries.j1@gmail.com">enquiries.j1@gmail.com</a></li>
-            <li className="psf-contact"><Phone className="psf-icon" size={16}/><a className="psf-link" href="tel:+6591813137">+65 9181 3137</a></li>
+            <li className="psf-contact"><Phone className="psf-icon" size={16}/><a className="psf-link" href="tel:+6580730757">+65 8073 0757</a></li>
           </ul>
         </div>
         <div>

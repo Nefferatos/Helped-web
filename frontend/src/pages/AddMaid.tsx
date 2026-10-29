@@ -17,6 +17,7 @@ import { defaultMaidProfile, getDialCodePrefillForNationality, type MaidProfile 
 import { startMaidSaveTask } from "@/lib/maidSaveProgress";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { compressImage, compressImageFile, getImageSizeInMB } from "@/lib/imageCompression";
+import { createMaidPhotoVariants } from "@/lib/maidPhotoVariants";
 
 import { PdfAutofillBanner } from "./PdfAutofill";
 
@@ -1076,31 +1077,31 @@ const AddMaid = () => {
     async (nextPhotos: string[]) => {
       const referenceCode = String(formData.referenceCode || "").trim();
       const cleaned = nextPhotos.filter(Boolean).slice(0, 5);
-      const optimistic: MaidProfile = {
-        ...formData,
-        referenceCode,
-        photoDataUrls: cleaned,
-        photoDataUrl: cleaned[0] || "",
-        hasPhoto: cleaned.length > 0,
-      };
-
-      if (!isCreated || !formData.id) {
-        setFormData(optimistic);
-        return;
-      }
-
       if (!referenceCode) {
         toast.error("Ref Code is required before uploading photos");
         return;
       }
 
       try {
+        const variants = await createMaidPhotoVariants(cleaned);
+        const optimistic: MaidProfile = {
+          ...formData,
+          referenceCode,
+          photoDataUrls: cleaned,
+          photoDataUrl: cleaned[0] || "",
+          ...variants,
+          hasPhoto: cleaned.length > 0,
+        };
+        if (!isCreated || !formData.id) {
+          setFormData(optimistic);
+          return;
+        }
         setIsUploadingPhoto(true);
         setFormData(optimistic);
         const response = await fetch(`/api/maids/${encodeURIComponent(referenceCode)}/photo-gallery`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-          body: JSON.stringify({ photoDataUrls: cleaned }),
+          body: JSON.stringify({ photoDataUrls: cleaned, ...variants }),
         });
         const data = (await response.json().catch(() => ({}))) as { error?: string; maid?: MaidProfile };
         if (!response.ok || !data.maid) throw new Error(data.error || "Failed to upload photos");
@@ -1195,6 +1196,8 @@ const AddMaid = () => {
     photoDataUrls: (Array.isArray(formData.photoDataUrls) ? formData.photoDataUrls : [])
       .map((item) => String(item || "").trim())
       .filter(Boolean),
+    photoThumbnailDataUrls: formData.photoThumbnailDataUrls ?? [],
+    photoPortraitDataUrls: formData.photoPortraitDataUrls ?? [],
     videoDataUrl: String(formData.videoDataUrl || "").trim(),
   }), [formData]);
 

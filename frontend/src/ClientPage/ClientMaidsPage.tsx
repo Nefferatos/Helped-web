@@ -1845,7 +1845,7 @@ const SiteFooter = () => (
             </li>
             <li style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <Phone size={16} color="var(--amber)" style={{ flexShrink: 0 }} />
-              <a href="tel:+6591813137" className="cm-footer-link">+65 9181 3137</a>
+              <a href="tel:+6580730757" className="cm-footer-link">+65 8073 0757</a>
             </li>
           </ul>
         </div>

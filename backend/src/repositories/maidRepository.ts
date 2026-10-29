@@ -61,6 +61,8 @@ export interface SqlMaidRecord {
   introduction: Record<string, unknown>
   agencyContact: Record<string, unknown>
   photoDataUrls: string[]
+  photoThumbnailDataUrls: string[]
+  photoPortraitDataUrls: string[]
   photoDataUrl: string
   videoDataUrl: string
   isPublic: boolean
@@ -95,6 +97,8 @@ type MaidRow = {
   introduction: Record<string, unknown> | null
   agency_contact: Record<string, unknown> | null
   photo_data_urls: string[] | null
+  photo_thumbnail_data_urls: string[] | null
+  photo_portrait_data_urls: string[] | null
   photo_data_url: string | null
   video_data_url: string | null
   is_public: boolean | null
@@ -144,6 +148,8 @@ const mapMaidRow = (row: MaidRow): SqlMaidRecord => {
     agencyContact:
       row.agency_contact && typeof row.agency_contact === 'object' ? row.agency_contact : {},
     photoDataUrls: normalizedPhotos,
+    photoThumbnailDataUrls: Array.isArray(row.photo_thumbnail_data_urls) ? row.photo_thumbnail_data_urls : [],
+    photoPortraitDataUrls: Array.isArray(row.photo_portrait_data_urls) ? row.photo_portrait_data_urls : [],
     photoDataUrl: normalizedPhotos[0] ?? row.photo_data_url ?? '',
     videoDataUrl: row.video_data_url ?? '',
     isPublic: Boolean(row.is_public),
@@ -191,6 +197,8 @@ const maidColumnsSql = `
   introduction,
   agency_contact,
   photo_data_urls,
+  photo_thumbnail_data_urls,
+  photo_portrait_data_urls,
   photo_data_url,
   video_data_url,
   is_public,
@@ -295,6 +303,8 @@ const maidValues = (payload: SqlMaidPayload, agencyId: number) => [
   serializeJsonbValue(payload.introduction ?? {}),
   serializeJsonbValue(payload.agencyContact ?? {}),
   serializeJsonbValue(payload.photoDataUrls ?? []),
+  serializeJsonbValue(payload.photoThumbnailDataUrls ?? []),
+  serializeJsonbValue(payload.photoPortraitDataUrls ?? []),
   payload.photoDataUrl ?? '',
   payload.videoDataUrl ?? '',
   payload.isPublic ?? false,
@@ -397,7 +407,7 @@ export const createMaidSql = async (payload: SqlMaidPayload, agencyId: number) =
         VALUES (
           $1, $2, $3, $4, $5, $6, $7::date, $8, $9, $10, $11, $12, $13, $14,
           $15, $16, $17, $18::jsonb, $19::jsonb, $20::jsonb, $21::jsonb, $22::jsonb,
-          $23::jsonb, $24::jsonb, $25, $26, $27, $28
+          $23::jsonb, $24::jsonb, $25::jsonb, $26::jsonb, $27::jsonb, $28, $29, $30
         )
         RETURNING *
       `,
@@ -451,10 +461,12 @@ export const updateMaidSql = async (
           introduction = $23::jsonb,
           agency_contact = $24::jsonb,
           photo_data_urls = $25::jsonb,
-          photo_data_url = $26,
-          video_data_url = $27,
-          is_public = $28,
-          has_photo = $29,
+          photo_thumbnail_data_urls = $26::jsonb,
+          photo_portrait_data_urls = $27::jsonb,
+          photo_data_url = $28,
+          video_data_url = $29,
+          is_public = $30,
+          has_photo = $31,
           updated_at = CURRENT_TIMESTAMP
         WHERE reference_code = $1 AND agency_id = $2
         RETURNING *
@@ -485,6 +497,8 @@ export const updateMaidSql = async (
         JSON.stringify(payload.introduction ?? {}),
         JSON.stringify(payload.agencyContact ?? {}),
         JSON.stringify(payload.photoDataUrls ?? []),
+        JSON.stringify(payload.photoThumbnailDataUrls ?? []),
+        JSON.stringify(payload.photoPortraitDataUrls ?? []),
         payload.photoDataUrl ?? '',
         payload.videoDataUrl ?? '',
         payload.isPublic ?? false,
@@ -527,6 +541,8 @@ export const updateMaidMediaSql = async (
   referenceCode: string,
   patch: {
     photoDataUrls?: string[]
+    photoThumbnailDataUrls?: string[]
+    photoPortraitDataUrls?: string[]
     photoDataUrl?: string
     videoDataUrl?: string
     hasPhoto?: boolean
@@ -538,6 +554,8 @@ export const updateMaidMediaSql = async (
       UPDATE maids
       SET
         photo_data_urls = COALESCE($3::jsonb, photo_data_urls),
+        photo_thumbnail_data_urls = COALESCE($7::jsonb, photo_thumbnail_data_urls),
+        photo_portrait_data_urls = COALESCE($8::jsonb, photo_portrait_data_urls),
         photo_data_url = COALESCE($4, photo_data_url),
         video_data_url = COALESCE($5, video_data_url),
         has_photo = COALESCE($6, has_photo),
@@ -552,6 +570,8 @@ export const updateMaidMediaSql = async (
       patch.photoDataUrl ?? null,
       patch.videoDataUrl ?? null,
       patch.hasPhoto ?? null,
+      patch.photoThumbnailDataUrls !== undefined ? JSON.stringify(patch.photoThumbnailDataUrls ?? []) : null,
+      patch.photoPortraitDataUrls !== undefined ? JSON.stringify(patch.photoPortraitDataUrls ?? []) : null,
     ]
   )) as { rows: MaidRow[] }
 
@@ -608,7 +628,7 @@ export const upsertMaidRecordsSql = async (
         const baseIndex = params.length
         params.push(...values)
         placeholders.push(
-          `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}::date, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, $${baseIndex + 12}, $${baseIndex + 13}, $${baseIndex + 14}, $${baseIndex + 15}, $${baseIndex + 16}, $${baseIndex + 17}, $${baseIndex + 18}::jsonb, $${baseIndex + 19}::jsonb, $${baseIndex + 20}::jsonb, $${baseIndex + 21}::jsonb, $${baseIndex + 22}::jsonb, $${baseIndex + 23}::jsonb, $${baseIndex + 24}::jsonb, $${baseIndex + 25}, $${baseIndex + 26}, $${baseIndex + 27}, $${baseIndex + 28})`
+          `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7}::date, $${baseIndex + 8}, $${baseIndex + 9}, $${baseIndex + 10}, $${baseIndex + 11}, $${baseIndex + 12}, $${baseIndex + 13}, $${baseIndex + 14}, $${baseIndex + 15}, $${baseIndex + 16}, $${baseIndex + 17}, $${baseIndex + 18}::jsonb, $${baseIndex + 19}::jsonb, $${baseIndex + 20}::jsonb, $${baseIndex + 21}::jsonb, $${baseIndex + 22}::jsonb, $${baseIndex + 23}::jsonb, $${baseIndex + 24}::jsonb, $${baseIndex + 25}::jsonb, $${baseIndex + 26}::jsonb, $${baseIndex + 27}, $${baseIndex + 28}, $${baseIndex + 29}, $${baseIndex + 30})`
         )
       }
 
@@ -645,6 +665,8 @@ export const upsertMaidRecordsSql = async (
             introduction = EXCLUDED.introduction,
             agency_contact = EXCLUDED.agency_contact,
             photo_data_urls = EXCLUDED.photo_data_urls,
+            photo_thumbnail_data_urls = EXCLUDED.photo_thumbnail_data_urls,
+            photo_portrait_data_urls = EXCLUDED.photo_portrait_data_urls,
             photo_data_url = EXCLUDED.photo_data_url,
             video_data_url = EXCLUDED.video_data_url,
             is_public = EXCLUDED.is_public,

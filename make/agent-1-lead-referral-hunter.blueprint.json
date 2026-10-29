@@ -1,0 +1,44 @@
+{
+  "name": "At The Agency - Agent 1 Lead and Referral Hunter",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": true, "confidential": true, "dataloss": false, "dlq": true },
+    "notes": ["New acquisition agent. Accept only consented leads from approved forms, partner referrals, and supported platform integrations. Do not scrape private data or send unsolicited messages. Connect the webhook to an approved lead source; do not connect or replace existing website features."]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create webhook At The Agency - Agent 1. Expected input: event_id and lead_id (stable opaque IDs), contact (only when consented), channel, source, campaign_id, referrer_id, preferred_language, consent (boolean), message. Never include identity documents or medical data." }
+    },
+    {
+      "id": 2,
+      "module": "ai-local-agent:RunLocalAIAgent",
+      "version": 0,
+      "parameters": {},
+      "mapper": {
+        "defaultModel": "small",
+        "reasoningEffort": "low",
+        "systemPrompt": "You are Agent 1, the lead and referral intake classifier for At The Agency. Work only with the lead data supplied in this request. Never search for or infer private personal data, and never initiate contact. If consent is not true, return eligible=false and route to staff or opt-out handling. Do not decide legal eligibility. Do not invent facts. Return ONLY valid JSON with this exact shape: {\"lead_id\":string|null,\"classification\":\"new_applicant\"|\"existing_applicant\"|\"referral\"|\"general_enquiry\"|\"unknown\",\"source\":string|null,\"campaign_id\":string|null,\"referrer_id\":string|null,\"preferred_language\":string|null,\"consent\":boolean,\"eligible_for_agent_2\":boolean,\"missing_fields\":string[],\"staff_review_required\":boolean}. Agent 2 may be selected only for a consented applicant or referral with enough contact details to continue. Preserve source attribution as supplied; never treat marketing consent as application or publication consent.",
+        "message": "Classify this submitted lead using only these fields. Return the required JSON object.\nlead_id: {{1.lead_id}}\ncontact: {{1.contact}}\nchannel: {{1.channel}}\nsource: {{1.source}}\ncampaign_id: {{1.campaign_id}}\nreferrer_id: {{1.referrer_id}}\npreferred_language: {{1.preferred_language}}\nconsent: {{1.consent}}\nmessage: {{1.message}}",
+        "threadId": "agent1-{{1.lead_id}}",
+        "modelConfig": { "recursionLimit": 10, "iterationsFromHistoryCount": "0" },
+        "outputType": "text"
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": {}, "notes": "Select a Make AI Provider connection. The AI classifies only; persist/deduplicate leads in the approved source system with deterministic code before routing." },
+      "tools": []
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{{2.response}}", "status": "200" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {}, "notes": "Returns the classification JSON to the approved lead-source caller. The caller must validate the schema and consent before persistence or Agent 2 routing." }
+    }
+  ]
+}

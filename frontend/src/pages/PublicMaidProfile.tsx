@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getStoredClient } from "@/lib/clientAuth";
-import { formatDate, getExperienceBucket, getMaidAge, getPublicIntro, MaidProfile } from "@/lib/maids";
+import { formatDate, getExperienceBucket, getMaidAge, getPortraitPhoto, getPublicIntro, MaidProfile } from "@/lib/maids";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import { toast } from "@/components/ui/sonner";
 import PublicSiteNavbar from "@/components/PublicSiteNavbar";
@@ -692,9 +692,10 @@ const PublicMaidProfile = ({ embedded = false }: PublicMaidProfileProps) => {
 
   const photos = useMemo(() => {
     if (!maid) return [] as string[];
-    return Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
+    const originals = Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0
       ? maid.photoDataUrls
       : maid.photoDataUrl ? [maid.photoDataUrl] : [];
+    return originals.map((photo, index) => index === 0 ? getPortraitPhoto(maid) : photo);
   }, [maid]);
 
   const otherLanguages = useMemo(() => {

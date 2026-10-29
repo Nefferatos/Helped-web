@@ -333,6 +333,10 @@ ALTER TABLE maids
   ADD COLUMN IF NOT EXISTS photo_data_urls JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 ALTER TABLE maids
+  ADD COLUMN IF NOT EXISTS photo_thumbnail_data_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS photo_portrait_data_urls JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE maids
   ADD COLUMN IF NOT EXISTS video_data_url TEXT NOT NULL DEFAULT '';
 
 ALTER TABLE agency_admins

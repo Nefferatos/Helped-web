@@ -1,0 +1,44 @@
+{
+  "name": "At The Agency - Agent 3 Profile Draft Builder",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": true, "confidential": true, "dataloss": false, "dlq": true },
+    "notes": ["New profile-drafting agent. It prepares an allowlisted draft for staff review; it does not publish. A future authenticated website API must validate applicant confirmation, publication consent, staff approval, and media before saving or publishing. Do not replace existing public profile or ATS functionality."]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create webhook At The Agency - Agent 3. Input only applicant-confirmed and allowlisted public fields, confirmation status, purpose-specific publication consent status, and staff-review status. Never send document scans, private contacts, medical records, or internal notes." }
+    },
+    {
+      "id": 2,
+      "module": "ai-local-agent:RunLocalAIAgent",
+      "version": 0,
+      "parameters": {},
+      "mapper": {
+        "defaultModel": "small",
+        "reasoningEffort": "low",
+        "systemPrompt": "You are Agent 3, the profile draft preparation assistant for At The Agency. Create a concise, accurate draft using only the supplied applicant-confirmed public fields. Do not infer or embellish facts, skills, experience, nationality, availability, or qualifications. Exclude personal contact details, address, date of birth, passport/work-permit information, medical details, and internal notes. If applicant confirmation is false or publication consent is absent/withdrawn, return publication_state=\"not_ready\" and explain which gate is missing. If both gates are active, create the draft and set publication_state=\"draft_created\"; the website must then move it to pending_staff_review. Do not decide whether the draft is actually saved. This agent never approves or publishes. Return ONLY valid JSON with exactly this shape: {\"applicant_id\":string,\"publication_state\":\"not_ready\"|\"draft_created\",\"public_profile\":{\"display_name\":string|null,\"summary\":string|null,\"skills\":string[],\"languages\":string[],\"experience_summary\":string|null,\"availability\":string|null,\"approved_media_ids\":string[]},\"excluded_fields\":string[],\"missing_gates\":string[],\"staff_review_notes\":string[]}. Never return pending_staff_review, approved_for_publication, or published; those states belong to deterministic website code and authorized staff actions.",
+        "message": "Applicant ID: {{1.applicant_id}}\nApplicant confirmed exact fields: {{1.applicant_confirmed}}\nActive purpose-specific consent to publish: {{1.publication_consent_active}}\nAllowlisted public fields (JSON): {{toJSON(1.public_fields)}}\nApproved media IDs only: {{toJSON(1.approved_media_ids)}}\nPrepare a reviewable draft and return the exact JSON contract.",
+        "threadId": "agent3-{{1.applicant_id}}",
+        "modelConfig": { "recursionLimit": 10, "iterationsFromHistoryCount": "0" },
+        "outputType": "text"
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": {}, "notes": "Select a Make AI Provider connection. The caller must reject malformed output, persist only drafts, and enforce approval/consent in server code. This scenario must not call public publishing endpoints." },
+      "tools": []
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{{2.response}}", "status": "200" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {}, "notes": "Returns a draft result only. Actual create, approve and publish API operations require implementation in the website Worker with authentication, consent checks and audit logging." }
+    }
+  ]
+}

@@ -37,12 +37,12 @@ const GLOBAL_CSS = `
 
   /* Readable enquiry content: use a 16px baseline and true black text on
      light surfaces. Light copy is retained only where the background is dark. */
-  .enq-root p,
-  .enq-root label,
-  .enq-root input,
-  .enq-root textarea,
-  .enq-root select,
-  .enq-root button {
+  .enq-root main p,
+  .enq-root main label,
+  .enq-root main input,
+  .enq-root main textarea,
+  .enq-root main select,
+  .enq-root main button {
     font-size: 16px !important;
     color: #000 !important;
   }

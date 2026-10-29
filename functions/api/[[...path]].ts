@@ -58,6 +58,8 @@ interface MaidRecord {
   introduction: Record<string, unknown>;
   agencyContact: Record<string, unknown>;
   photoDataUrls: string[];
+  photoThumbnailDataUrls?: string[];
+  photoPortraitDataUrls?: string[];
   photoDataUrl: string;
   videoDataUrl: string;
   isPublic: boolean;
@@ -338,6 +340,8 @@ type RecruitmentStage =
   | "Rejected";
 
 type AtsDocumentKind =
+  | "passport_photo"
+  | "full_body_photo"
   | "resume"
   | "passport"
   | "work_permit"
@@ -526,6 +530,7 @@ type Bindings = {
   SUPABASE_APP_DATA_ID?: string;
   SUPABASE_USE_NORMALIZED?: string;
   SUPABASE_STORAGE_BUCKET?: string;
+  SUPABASE_PRIVATE_STORAGE_BUCKET?: string;
   ANTHROPIC_API_KEY?: string;
   // Legacy alias for ANTHROPIC_API_KEY
   CLAUDE_API_KEY?: string;
@@ -551,6 +556,8 @@ type Bindings = {
   MAKE_WEBHOOK_URL_INQUIRY_PIPELINE?: string;
   MAKE_WEBHOOK_URL_LEAD_PIPELINE?: string;
   MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?: string;
+  MAKE_WEBHOOK_URL_GOOGLE_DRIVE_SYNC?: string;
+  MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE?: string;
   // Dedicated Make.com scenario for user-initiated WhatsApp broadcasts.
   // Keep this webhook URL server-side; set with wrangler secret put.
   MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?: string;
@@ -683,6 +690,20 @@ app.use(
 
 app.use("/api/*", async (c, next) => {
   await next();
+  const method = c.req.method.toUpperCase();
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
+  const statusCode = c.res.status;
+  if (admin && ["POST", "PUT", "PATCH", "DELETE"].includes(method) && c.req.path.startsWith("/api/") && !c.req.path.startsWith("/api/events")) {
+    const actionLabel = getDashboardActionLabel(method, c.req.path);
+    if (actionLabel) {
+      c.executionCtx.waitUntil(recordDashboardPortalAction(c.env, {
+        agencyId: admin.agencyId,
+        actor: admin.username || admin.email || "Agency staff",
+        actionLabel,
+        status: statusCode >= 200 && statusCode < 400 ? "completed" : "failed",
+      }));
+    }
+  }
   c.res.headers.set("X-Content-Type-Options", "nosniff");
   c.res.headers.set("X-Frame-Options", "DENY");
   c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -718,14 +739,14 @@ const defaultData = (): AppData => ({
     postal_code: "000000",
     country: "Singapore",
     contact_person: "Bala",
-    contact_phone: "80730757",
+    contact_phone: "+65 8073 0757",
     contact_email: "info@theagency.sg",
     contact_fax: "",
     contact_website: "",
     office_hours_regular: "Mon-Sat: 9:00am to 7:30pm",
     office_hours_other: "",
     social_facebook: "",
-    social_whatsapp_number: "80730757",
+    social_whatsapp_number: "+65 8073 0757",
     social_whatsapp_message: "Hello, I am interested in your agency profile.",
     branding_theme_color: "",
     branding_button_color: "",
@@ -784,6 +805,25 @@ const defaultData = (): AppData => ({
     employmentContracts: 1,
   },
 });
+
+const normalizeAgencyContactNumber = (value: unknown) => {
+  const phone = typeof value === "string" ? value.trim() : "";
+  const digits = phone.replace(/\D/g, "");
+  return digits === "80730757" || digits === "6580730757"
+    ? "+65 8073 0757"
+    : phone;
+};
+
+const normalizeAgencyCompanyProfile = (profile: CompanyProfileRecord): CompanyProfileRecord => ({
+  ...profile,
+  contact_phone: normalizeAgencyContactNumber(profile.contact_phone),
+  social_whatsapp_number: normalizeAgencyContactNumber(profile.social_whatsapp_number),
+});
+
+const normalizeAgencyCompanyContact = (data: AppData): AppData => {
+  data.companyProfile = normalizeAgencyCompanyProfile(data.companyProfile);
+  return data;
+};
 
 const nextCounter = (
   current: number | undefined,
@@ -1418,6 +1458,67 @@ const getSupabaseAppDataConfig = (
     table: env.SUPABASE_APP_DATA_TABLE?.trim() || "app_data",
     rowId: env.SUPABASE_APP_DATA_ID?.trim() || "default",
   };
+};
+
+const getDashboardActionLabel = (method: string, path: string): string | null => {
+  if (["/api/ats/applications/mark-viewed", "/api/enquiries/mark-viewed", "/api/requests/mark-viewed", "/api/ai/screen-applicant"].includes(path)) return null;
+  if (method === "POST" && path === "/api/maids") return "Added a maid profile";
+  if (method === "PUT" && path.startsWith("/api/maids/")) return "Updated a maid profile";
+  if (method === "DELETE" && path.startsWith("/api/maids/")) return "Removed a maid profile";
+  if (method === "POST" && path === "/api/ats/applications/delete") return "Deleted applicant records";
+  if (method === "POST" && path === "/api/ats/applications") return "Added an applicant";
+  if (method === "PATCH" && path.endsWith("/stage") && path.startsWith("/api/ats/applications/")) return "Updated an applicant's stage";
+  if (method === "POST" && path === "/api/ats/bulk-actions") return "Updated selected applicants";
+  if (method === "POST" && path === "/api/ats/match") return "Matched applicants to a request";
+  if (method === "POST" && path === "/api/ai/hr-interview/email") return "Sent an applicant email";
+  if (method === "PATCH" && path.startsWith("/api/enquiries/")) return "Updated an enquiry";
+  if (method === "DELETE" && path === "/api/enquiries/bulk") return "Deleted selected enquiries";
+  if (method === "DELETE" && path.startsWith("/api/enquiries/")) return "Deleted an enquiry";
+  if (method === "PUT" && path.startsWith("/api/employers/") && path.endsWith("/requirements")) return "Updated employer requirements";
+  if (method === "POST" && path === "/api/operations-board/placements") return "Started a placement";
+  if (method === "PUT" && path.includes("/operations-board/placements/") && path.endsWith("/notes")) return "Updated placement notes";
+  if (method === "POST" && path.includes("/contractor/tasks/") && path.endsWith("/complete")) return "Completed a contractor task";
+  if (method === "POST" && path.includes("/contractor/placements/") && path.includes("/milestones/")) return "Recorded a placement milestone";
+  if (method === "POST" && path === "/api/direct-sales") return "Added a sales lead";
+  if (path.includes("/direct-sales/") && path.endsWith("/interested")) return "Marked a lead as interested";
+  if (path.includes("/direct-sales/") && path.endsWith("/direct-hire")) return "Recorded a direct hire";
+  if (path.includes("/direct-sales/") && path.endsWith("/reject")) return "Closed a sales lead";
+  if (method === "POST" && path === "/api/whatsapp-broadcast") return "Sent a WhatsApp broadcast";
+  return null;
+};
+
+const recordDashboardPortalAction = async (
+  env: Bindings,
+  action: { agencyId: number; actor: string; actionLabel: string; status: "completed" | "failed" },
+) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) return;
+  try {
+    const response = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+      method: "POST",
+      headers: supabaseHeaders(config, {
+        "content-type": "application/json",
+        accept: "application/json",
+        prefer: "return=minimal",
+      }),
+      body: JSON.stringify([{
+        event_type: "portal.action",
+        entity_type: "portal",
+        entity_id: String(action.agencyId),
+        actor: `user:${action.actor}`,
+        payload: {
+          agencyId: action.agencyId,
+          actionLabel: action.actionLabel,
+          source: "agency-portal",
+        },
+        status: action.status,
+      }]),
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) console.error("Portal action tracking failed:", response.status);
+  } catch (error) {
+    console.error("Portal action tracking unavailable:", error);
+  }
 };
 
 const supabaseHeaders = (
@@ -2290,7 +2391,7 @@ const updateMaidVisibilityInSupabaseNormalized = async (
 const updateMaidMediaInSupabaseNormalized = async (
   config: SupabaseAppDataConfig,
   referenceCode: string,
-  media: Pick<MaidRecord, "photoDataUrl" | "photoDataUrls" | "hasPhoto" | "videoDataUrl">,
+  media: Pick<MaidRecord, "photoDataUrl" | "photoDataUrls" | "photoThumbnailDataUrls" | "photoPortraitDataUrls" | "hasPhoto" | "videoDataUrl">,
 ) => {
   const existing = await getMaidFromSupabaseNormalized(config, referenceCode);
   if (!existing) return null;
@@ -2588,6 +2689,105 @@ const getSupabaseStorageConfig = (
   };
 };
 
+const PRIVATE_EXTERNAL_SYNC_BUCKET = "helped-private";
+const MAX_EXTERNAL_SYNC_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+const getExternalSyncStorageConfig = (env: Bindings): SupabaseStorageConfig | null => {
+  const baseUrl = env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!baseUrl || !serviceRoleKey) return null;
+  return {
+    baseUrl,
+    serviceRoleKey,
+    bucket: env.SUPABASE_PRIVATE_STORAGE_BUCKET?.trim() || PRIVATE_EXTERNAL_SYNC_BUCKET,
+  };
+};
+
+const ensureExternalSyncPrivateBucket = async (config: SupabaseStorageConfig) => {
+  const bucketUrl = `${config.baseUrl}/storage/v1/bucket/${encodeURIComponent(config.bucket)}`;
+  let response = await fetch(bucketUrl, { headers: supabaseStorageHeaders(config) });
+  if (response.status === 404) {
+    const createResponse = await fetch(`${config.baseUrl}/storage/v1/bucket`, {
+      method: "POST",
+      headers: supabaseStorageHeaders(config, { "content-type": "application/json" }),
+      body: JSON.stringify({
+        id: config.bucket,
+        name: config.bucket,
+        public: false,
+        file_size_limit: MAX_EXTERNAL_SYNC_UPLOAD_BYTES,
+      }),
+    });
+    if (!createResponse.ok && createResponse.status !== 409) {
+      throw new Error("Private file storage bucket could not be created");
+    }
+    response = await fetch(bucketUrl, { headers: supabaseStorageHeaders(config) });
+  }
+  if (!response.ok) throw new Error("Private file storage bucket could not be verified");
+  const bucketInfo = (await response.json()) as { public?: boolean };
+  if (bucketInfo.public !== false) throw new Error("External sync storage bucket must be private");
+};
+
+const createExternalSyncSignedUrl = async (
+  config: SupabaseStorageConfig,
+  objectPath: string,
+) => {
+  const encodedPath = objectPath.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(
+    `${config.baseUrl}/storage/v1/object/sign/${encodeURIComponent(config.bucket)}/${encodedPath}`,
+    {
+      method: "POST",
+      headers: supabaseStorageHeaders(config, { "content-type": "application/json" }),
+      body: JSON.stringify({ expiresIn: 900 }),
+    },
+  );
+  if (!response.ok) throw new Error("Could not create a temporary private download link");
+  const result = (await response.json()) as { signedURL?: string };
+  if (!result.signedURL) throw new Error("Could not create a temporary private download link");
+  return `${config.baseUrl}/storage/v1${result.signedURL}`;
+};
+
+const persistExternalSyncJob = async (
+  config: SupabaseAppDataConfig,
+  job: { id: string; agencyId: number; provider: "GOOGLE_DRIVE" | "MAKE_MEDIA"; action: string; payload: Record<string, unknown> },
+) => {
+  const response = await fetch(`${config.baseUrl}/rest/v1/external_sync_jobs`, {
+    method: "POST",
+    headers: supabaseHeaders(config, {
+      "content-type": "application/json",
+      prefer: "return=minimal",
+    }),
+    body: JSON.stringify({
+      id: job.id,
+      agency_id: job.agencyId,
+      provider: job.provider,
+      action: job.action,
+      status: "PENDING",
+      payload: job.payload,
+    }),
+  });
+  if (!response.ok) throw new Error(`Could not record external sync job (${response.status})`);
+};
+
+const finishExternalSyncJob = async (
+  config: SupabaseAppDataConfig,
+  jobId: string,
+  status: "COMPLETED" | "FAILED",
+  result: Record<string, unknown>,
+) => {
+  const response = await fetch(
+    `${config.baseUrl}/rest/v1/external_sync_jobs?id=eq.${encodeURIComponent(jobId)}`,
+    {
+      method: "PATCH",
+      headers: supabaseHeaders(config, {
+        "content-type": "application/json",
+        prefer: "return=minimal",
+      }),
+      body: JSON.stringify({ status, result, completed_at: now() }),
+    },
+  );
+  if (!response.ok) throw new Error(`Could not update external sync job (${response.status})`);
+};
+
 const ensurePrivateEmployerContractBucket = async (config: SupabaseStorageConfig) => {
   const bucketUrl = `${config.baseUrl}/storage/v1/bucket/${encodeURIComponent(EMPLOYER_CONTRACT_BUCKET)}`;
   let response = await fetch(bucketUrl, {
@@ -2805,8 +3005,8 @@ const loadData = async (
 ): Promise<AppData> => {
   if (isKvBackend(env) && env.APP_DATA) {
     const hit = getAppDataCache();
-    if (hit) return hit;
-    const data = await loadDataFromKv(env.APP_DATA, options);
+    if (hit) return normalizeAgencyCompanyContact(hit);
+    const data = normalizeAgencyCompanyContact(await loadDataFromKv(env.APP_DATA, options));
     putAppDataCache(data);
     return data;
   }
@@ -2815,9 +3015,9 @@ const loadData = async (
     if (isNormalizedSupabaseEnabled(env)) {
       // Hot path: serve from in-memory cache
       const hit = getAppDataCache();
-      if (hit) return hit;
+      if (hit) return normalizeAgencyCompanyContact(hit);
       try {
-        const data = await loadDataFromSupabaseNormalized(supabase);
+        const data = normalizeAgencyCompanyContact(await loadDataFromSupabaseNormalized(supabase));
         putAppDataCache(data);
         return data;
       } catch (error) {
@@ -2828,8 +3028,10 @@ const loadData = async (
     // (non-enumerable property), so write paths still get a valid version for optimistic locking.
     // saveDataToSupabase retry logic handles conflicts if the version is stale.
     const hit = getAppDataCache();
-    if (hit && (options.readOnly || getSupabaseTrackedUpdatedAt(hit))) return hit;
-    const data = await loadDataFromSupabase(supabase, options);
+    if (hit && (options.readOnly || getSupabaseTrackedUpdatedAt(hit))) {
+      return normalizeAgencyCompanyContact(hit);
+    }
+    const data = normalizeAgencyCompanyContact(await loadDataFromSupabase(supabase, options));
     putAppDataCache(data);
     return data;
   }
@@ -2840,7 +3042,7 @@ const loadData = async (
     );
   }
 
-  return await loadDataFromKv(env.APP_DATA, options);
+  return normalizeAgencyCompanyContact(await loadDataFromKv(env.APP_DATA, options));
 };
 
 const saveData = async (env: Bindings, data: AppData) => {
@@ -3551,6 +3753,8 @@ const atsStageOrder: RecruitmentStage[] = [
 ];
 
 const publicAtsFileKinds: Array<[string, AtsDocumentKind]> = [
+  ["passportPhoto", "passport_photo"],
+  ["fullBodyPhoto", "full_body_photo"],
   ["resume", "resume"],
   ["passport", "passport"],
   ["workPermit", "work_permit"],
@@ -4045,6 +4249,7 @@ const createAtsListItem = (
   application: AtsApplicationRecord,
   profile: AtsApplicationProfileRecord | null,
   score: AtsScoreRecord | null,
+  documents: AtsDocumentRecord[],
 ) => {
   if (!profile) return null;
   return {
@@ -4063,6 +4268,8 @@ const createAtsListItem = (
       yearsOfExperience: profile.yearsOfExperience,
       expectedSalary: profile.expectedSalary,
       employmentPreference: profile.employmentPreference,
+      passportSizePhotoUrl: documents.find((document) => document.type === "passport_photo")?.url ?? "",
+      fullBodyPhotoUrl: documents.find((document) => document.type === "full_body_photo")?.url ?? "",
       languageSkills: profile.languageSkills,
       cookingSkills: profile.cookingSkills,
       childcareExperience: profile.childcareExperience,
@@ -4360,6 +4567,14 @@ const parseAtsFormData = async (env: Bindings, formData: FormData) => {
   if (!fullName) throw new Error("fullName is required");
   if (!contactNumber) throw new Error("contactNumber is required");
   if (!email) throw new Error("email is required");
+  for (const [field, label] of [["passportPhoto", "Passport-size photo"], ["fullBodyPhoto", "Full-body photo"]] as const) {
+    const photo = formData.get(field);
+    if (!(photo instanceof File) || photo.size <= 0) throw new Error(`${label} is required`);
+    if (photo.size > 5 * 1024 * 1024) throw new Error(`${label} must be no larger than 5 MB`);
+    const isJpegOrPng = ["image/jpeg", "image/png"].includes(photo.type)
+      || /\.(jpe?g|png)$/i.test(photo.name);
+    if (!isJpegOrPng) throw new Error(`${label} must be a JPG or PNG image`);
+  }
 
   const fdwFieldNames = [
     "placeOfBirth",
@@ -4455,7 +4670,7 @@ const parseAtsFormData = async (env: Bindings, formData: FormData) => {
         size: entry.size,
         url: uploadedAsset?.url ?? (await fileToDataUrl(entry)),
         storagePath: uploadedAsset?.storagePath,
-        required: kind === "resume" || kind === "passport",
+        required: kind === "resume" || kind === "passport" || kind === "passport_photo" || kind === "full_body_photo",
         uploadedAt: now(),
         status: "submitted",
       });
@@ -5139,6 +5354,12 @@ const toMaidRecordPayload = (
         ? (maid.agencyContact as Record<string, unknown>)
         : {},
     photoDataUrls: photoDataUrls,
+    photoThumbnailDataUrls: Array.isArray(maid.photoThumbnailDataUrls)
+      ? maid.photoThumbnailDataUrls.filter((item): item is string => typeof item === "string").slice(0, 5)
+      : [],
+    photoPortraitDataUrls: Array.isArray(maid.photoPortraitDataUrls)
+      ? maid.photoPortraitDataUrls.filter((item): item is string => typeof item === "string").slice(0, 5)
+      : [],
     photoDataUrl,
     videoDataUrl:
       typeof maid.videoDataUrl === "string" ? maid.videoDataUrl : "",
@@ -6048,6 +6269,104 @@ app.get("/api/diagnostics", requireAgencyAdminAuth, (c) => {
 });
 app.get("/api", (c) => c.json({ message: "Welcome to Helped Cloudflare API" }));
 
+// Agency staff knowledge library. Keep this on the Worker because the deployed
+// dashboard is served here (the legacy Express-only routes are not deployed).
+const knowledgeCollection = "agency_knowledge";
+const knowledgeVector = (text: string) => {
+  const vector = new Array<number>(64).fill(0);
+  const tokens = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  for (const token of tokens) {
+    let hash = 2166136261;
+    for (let i = 0; i < token.length; i += 1) {
+      hash ^= token.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const unsigned = hash >>> 0;
+    vector[unsigned % 64] += unsigned % 2 === 0 ? 1 : -1;
+  }
+  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  return magnitude ? vector.map((value) => value / magnitude) : vector;
+};
+const knowledgeSimilarity = (left: number[], right: number[]) => {
+  if (left.length !== right.length || !left.length) return 0;
+  const dot = left.reduce((sum, value, index) => sum + value * right[index], 0);
+  return Math.max(0, Math.min(1, (dot + 1) / 2));
+};
+const knowledgeChunks = (content: string) => {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  const chunks: string[] = [];
+  for (let i = 0; i < normalized.length; i += 900) chunks.push(normalized.slice(i, i + 900));
+  return chunks.filter(Boolean);
+};
+const knowledgeConfig = (c: any) => getSupabaseAppDataConfig(c.env);
+const knowledgeHeaders = (config: SupabaseAppDataConfig, extra?: HeadersInit) =>
+  supabaseHeaders(config, { "content-type": "application/json", ...extra });
+
+app.post("/api/knowledge/documents", requireAgencyAdminAuth, async (c) => {
+  const config = knowledgeConfig(c);
+  if (!config) return c.json({ error: "Knowledge storage is not configured" }, 503);
+  const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+  const sourceKey = typeof body?.sourceKey === "string" ? body.sourceKey.trim() : "";
+  const title = typeof body?.title === "string" ? body.title.trim() : "";
+  const content = typeof body?.content === "string" ? body.content.trim() : "";
+  const category = body?.category;
+  if (!sourceKey || !title || !content) return c.json({ error: "sourceKey, title, and content are required" }, 400);
+  if (category !== "SOP" && category !== "FAQ" && category !== "MOM") return c.json({ error: "category must be SOP, FAQ, or MOM" }, 400);
+  const agencyId = Number(c.get("agencyAdmin")?.agencyId ?? 1);
+  const documentUrl = `${config.baseUrl}/rest/v1/knowledge_documents?on_conflict=agency_id,collection,source_key`;
+  const saved = await fetch(documentUrl, {
+    method: "POST",
+    headers: knowledgeHeaders(config, { prefer: "resolution=merge-duplicates,return=representation" }),
+    body: JSON.stringify([{ agency_id: agencyId, collection: knowledgeCollection, source_key: sourceKey, title, category, content, metadata: body?.metadata && typeof body.metadata === "object" ? body.metadata : {}, active: true }]),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!saved.ok) return c.json({ error: await readSupabaseError(saved) }, saved.status as any);
+  const rows = await saved.json() as Array<{ id: string }>;
+  const documentId = rows[0]?.id;
+  if (!documentId) return c.json({ error: "Knowledge document was not saved" }, 502);
+  const deleteChunks = await fetch(`${config.baseUrl}/rest/v1/knowledge_chunks?document_id=eq.${encodeURIComponent(documentId)}`, {
+    method: "DELETE", headers: knowledgeHeaders(config, { prefer: "return=minimal" }), signal: AbortSignal.timeout(12_000),
+  });
+  if (!deleteChunks.ok) return c.json({ error: await readSupabaseError(deleteChunks) }, deleteChunks.status as any);
+  const chunks = knowledgeChunks(content);
+  if (chunks.length) {
+    const inserted = await fetch(`${config.baseUrl}/rest/v1/knowledge_chunks`, {
+      method: "POST", headers: knowledgeHeaders(config, { prefer: "return=minimal" }),
+      body: JSON.stringify(chunks.map((chunk, chunk_index) => ({ document_id: documentId, chunk_index, content: chunk, embedding: knowledgeVector(chunk) }))),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!inserted.ok) return c.json({ error: await readSupabaseError(inserted) }, inserted.status as any);
+  }
+  return c.json({ documentId }, 201);
+});
+
+app.get("/api/knowledge/search", requireAgencyAdminAuth, async (c) => {
+  const config = knowledgeConfig(c);
+  if (!config) return c.json({ error: "Knowledge storage is not configured" }, 503);
+  const text = c.req.query("q")?.trim() ?? "";
+  if (!text) return c.json({ error: "q is required" }, 400);
+  const agencyId = Number(c.get("agencyAdmin")?.agencyId ?? 1);
+  const docsResponse = await fetch(`${config.baseUrl}/rest/v1/knowledge_documents?select=id,title,category,source_key&agency_id=eq.${agencyId}&collection=eq.${knowledgeCollection}&active=eq.true`, {
+    headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(12_000),
+  });
+  if (!docsResponse.ok) return c.json({ error: await readSupabaseError(docsResponse) }, docsResponse.status as any);
+  const docs = await docsResponse.json() as Array<{ id: string; title: string; category: string; source_key: string }>;
+  if (!docs.length) return c.json({ snippets: [] });
+  const docById = new Map(docs.map((doc) => [doc.id, doc]));
+  const ids = docs.map((doc) => doc.id);
+  const chunksResponse = await fetch(`${config.baseUrl}/rest/v1/knowledge_chunks?select=document_id,content,embedding&document_id=in.(${ids.map(encodeURIComponent).join(",")})`, {
+    headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(12_000),
+  });
+  if (!chunksResponse.ok) return c.json({ error: await readSupabaseError(chunksResponse) }, chunksResponse.status as any);
+  const chunks = await chunksResponse.json() as Array<{ document_id: string; content: string; embedding: number[] }>;
+  const queryVector = knowledgeVector(text);
+  const snippets = chunks.map((chunk) => {
+    const doc = docById.get(chunk.document_id)!;
+    return { id: doc.id, title: doc.title, category: doc.category, sourceKey: doc.source_key, content: chunk.content, similarity: knowledgeSimilarity(queryVector, chunk.embedding ?? []) };
+  }).filter((item) => item.similarity >= 0.53).sort((a, b) => b.similarity - a.similarity).slice(0, 4);
+  return c.json({ snippets });
+});
+
 /**
  * Google-Maps-style rating summary for one agency: the mean whole-star score
  * (rounded to one decimal) plus a 5→1 star distribution for the bar chart.
@@ -6270,6 +6589,11 @@ const buildMakeAutomationInventory = (env: Bindings) => {
     evidence: "The Make.com scenario list showed its activation toggle green/on. This is screenshot evidence, not a live Make.com API check; recent successful runs were not verified.",
   }));
   const screenshotById = new Map(screenshotScenarios.map((scenario) => [scenario.scenarioId, scenario]));
+  const websiteAiWorkflowWebhook = env.MAKE_WEBHOOK_URL
+    || env.MAKE_WEBHOOK_URL_INQUIRY_PIPELINE
+    || env.MAKE_WEBHOOK_URL_LEAD_PIPELINE
+    || env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE
+    || env.MAKE_HR_EMAIL_WEBHOOK_URL;
   const makeHook = (url: string | undefined, variable: string, source = variable, scenarioId?: string) => ({
     webhookConfigured: Boolean(url?.trim()),
     webhookSource: url?.trim() ? source : null,
@@ -6354,6 +6678,12 @@ const buildMakeAutomationInventory = (env: Bindings) => {
       trigger: "Staff requests an HR interview email from the portal.",
       ...makeHook(env.MAKE_HR_EMAIL_WEBHOOK_URL || env.MAKE_WEBHOOK_URL, "MAKE_HR_EMAIL_WEBHOOK_URL", env.MAKE_HR_EMAIL_WEBHOOK_URL?.trim() ? "MAKE_HR_EMAIL_WEBHOOK_URL" : "MAKE_WEBHOOK_URL fallback"),
     },
+    {
+      id: "website-ai-workflow", name: "Website AI Workflow", mode: "automatic and staff initiated",
+      purpose: "Routes website inquiries and leads, HR interview email and calendar actions, and applicant interview completion events.",
+      trigger: "An inquiry or lead is submitted, an interview action is requested, or an applicant interview is completed.",
+      ...makeHook(websiteAiWorkflowWebhook, "MAKE_WEBHOOK_URL", undefined, "7111752"),
+    },
   ];
   return {
     checkedAt: new Date().toISOString(),
@@ -6378,9 +6708,33 @@ app.get(
   requireAgencyAdminAuth,
   (c) => {
     const inventory = buildMakeAutomationInventory(c.env);
-    return c.json({ ...inventory, workflows: inventory.workflows.slice(0, 5) });
+    return c.json(inventory);
   },
 );
+
+app.get("/api/dashboard/actions", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ actions: [], trackingAvailable: false });
+  const params = new URLSearchParams({
+    select: "id,actor,status,payload,created_at",
+    event_type: "eq.portal.action",
+    entity_type: "eq.portal",
+    entity_id: `eq.${admin.agencyId}`,
+    order: "created_at.desc",
+    limit: "30",
+  });
+  const response = await fetch(`${config.baseUrl}/rest/v1/workflow_events?${params}`, {
+    headers: supabaseHeaders(config, { accept: "application/json" }),
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) {
+    console.error("Portal action history query failed:", response.status);
+    return c.json({ error: "Portal action history is unavailable" }, 502);
+  }
+  const actions = await response.json().catch(() => []);
+  return c.json({ actions: Array.isArray(actions) ? actions : [], trackingAvailable: true });
+});
 
 app.get(
   "/api/company",
@@ -6393,6 +6747,7 @@ app.get(
         testimonials: TestimonialRecord[];
       }>(config, "get_helped_company_payload", { p_app_id: config.rowId });
       if (fastCompany) {
+        fastCompany.companyProfile = normalizeAgencyCompanyProfile(fastCompany.companyProfile);
         return c.json(fastCompany);
       }
     }
@@ -6773,8 +7128,8 @@ app.get(
     const pageSize = parsePositiveInt(c.req.query("pageSize"))
     const offset = parsePositiveInt(c.req.query("offset")) ?? 0
     const limit = pageSize ?? parsePositiveInt(c.req.query("limit"))
-    const stripPhotos = <T extends { photoDataUrl?: string; photoDataUrls?: string[] }>(list: T[]): T[] =>
-      noPhotos ? list.map((m) => ({ ...m, photoDataUrl: "", photoDataUrls: [] })) : list
+    const stripPhotos = <T extends { photoDataUrl?: string; photoDataUrls?: string[]; photoThumbnailDataUrls?: string[]; photoPortraitDataUrls?: string[] }>(list: T[]): T[] =>
+      noPhotos ? list.map((m) => ({ ...m, photoDataUrl: "", photoDataUrls: [], photoThumbnailDataUrls: [], photoPortraitDataUrls: [] })) : list
     const supabase = getSupabaseAppDataConfig(c.env)
     if (supabase) {
       const effectiveOffset = page != null && pageSize != null ? (page - 1) * pageSize : offset
@@ -7642,7 +7997,7 @@ app.put(
   "/api/maids/:referenceCode/photo-gallery",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
-    const body = await parseBody<{ photoDataUrls?: string[] }>(c.req.raw);
+    const body = await parseBody<{ photoDataUrls?: string[]; photoThumbnailDataUrls?: string[]; photoPortraitDataUrls?: string[] }>(c.req.raw);
     if (!Array.isArray(body?.photoDataUrls)) {
       return c.json({ error: "photoDataUrls array is required" }, 400);
     }
@@ -7671,12 +8026,16 @@ app.put(
             ),
           ),
         );
+        const photoThumbnailDataUrls = Array.isArray(body.photoThumbnailDataUrls) ? body.photoThumbnailDataUrls.slice(0, 5) : [];
+        const photoPortraitDataUrls = Array.isArray(body.photoPortraitDataUrls) ? body.photoPortraitDataUrls.slice(0, 5) : [];
         const maid = await updateMaidMediaInSupabaseNormalized(
           config,
           referenceCode,
           {
             photoDataUrl: photoDataUrls[0] ?? "",
             photoDataUrls,
+            photoThumbnailDataUrls,
+            photoPortraitDataUrls,
             hasPhoto: photoDataUrls.length > 0,
             videoDataUrl: existing.videoDataUrl,
           },
@@ -7712,11 +8071,15 @@ app.put(
         ),
       ),
     );
+    const photoThumbnailDataUrls = Array.isArray(body.photoThumbnailDataUrls) ? body.photoThumbnailDataUrls.slice(0, 5) : [];
+    const photoPortraitDataUrls = Array.isArray(body.photoPortraitDataUrls) ? body.photoPortraitDataUrls.slice(0, 5) : [];
 
     data.maids[index] = {
       ...data.maids[index],
       photoDataUrls,
       photoDataUrl: photoDataUrls[0] ?? "",
+      photoThumbnailDataUrls,
+      photoPortraitDataUrls,
       hasPhoto: photoDataUrls.length > 0,
       updatedAt: now(),
     };
@@ -11131,10 +11494,16 @@ function extractCommandCenterReply(value: unknown): string | null {
 }
 
 type CommandCenterAction = {
-  type: "approve_applicant" | "reject_applicant" | "schedule_interview" | "open_maid_profile";
+  type: "approve_applicant" | "reject_applicant" | "schedule_interview" | "open_maid_profile" | "draft_email";
   applicationId?: string;
   maidReferenceCode?: string;
   date?: string;
+  recipientKind?: "enquiry" | "applicant";
+  recipientId?: string;
+  recipientName?: string;
+  recipientEmail?: string;
+  subject?: string;
+  body?: string;
   label?: string;
 };
 
@@ -11157,6 +11526,16 @@ function extractCommandCenterActions(value: unknown, depth = 0): CommandCenterAc
     const maidReferenceCode = toTrimmedString(item.maidReferenceCode);
     if (type === "open_maid_profile" && maidReferenceCode) {
       return [{ type, maidReferenceCode, label: toTrimmedString(item.label) || undefined }];
+    }
+    if (type === "draft_email") {
+      const recipientKind = item.recipientKind === "enquiry" || item.recipientKind === "applicant"
+        ? item.recipientKind
+        : undefined;
+      const recipientId = toTrimmedString(item.recipientId);
+      const subject = toTrimmedString(item.subject).slice(0, 180);
+      const body = toTrimmedString(item.body).slice(0, 8000);
+      if (!recipientKind || !recipientId || !subject || !body) return [];
+      return [{ type, recipientKind, recipientId, subject, body, label: "Review email" }];
     }
     if (!applicationId || !["approve_applicant", "reject_applicant", "schedule_interview"].includes(type)) return [];
     const date = toTrimmedString(item.date);
@@ -11503,11 +11882,11 @@ app.post(
       "For website copy, public listings, or profiles intended for clients, use only maidCatalog entries whose visibility is public. Never include hidden/internal profile information in public-facing copy.",
       "For applicantHighlights, assess only included profile fields and recorded scores. Do not infer missing documents, medical fitness, eligibility, or readiness. For contractRecords, report recorded references and dates only; document-completeness status is not provided.",
       "Draft website copy from agencyProfile and supplied public profile facts. Mark copy as a draft; do not invent fees, timelines, services, or credentials.",
-      "Workflow automation actions create a plan only. Do not claim a workflow was sent, activated, or changed. Never make data changes or claim to have made them.",
+      "For email requests, draft only. If the staff member explicitly asks to send an email and identifies a record present in recentEnquiries or applicantHighlights, return one action {type:'draft_email',recipientKind:'enquiry'|'applicant',recipientId:'exact supplied record ID',subject:'...',body:'...'} using only that record and verified agency context. Do not invent an email address; the website resolves it from the record. If there is no exact matching record or address, ask for clarification. The dashboard will show the complete draft for staff review and confirmation. Never send an email or claim it was sent from chat.",
+      "Workflow actions only propose work. Do not claim a workflow was sent, activated, or changed. Never make data changes or claim to have made them. Return actions only for opening a helper profile when explicitly requested, or for the draft_email confirmation flow above. Never invent record IDs or statuses.",
       "For questions about Make.com or whether an automation is working, use makeAutomationInventory. Its screenshotEvidence lists the named Make scenarios and IDs whose toggles appeared green/on in screenshots the user supplied. Report this precisely as 'shown On in your screenshot', never as a current live status: the website does not query Make.com's API. For scenarioStatus=on_in_user_screenshot, mention that recent successful runs and end-to-end delivery were not verified. For scenarioStatus=unknown, do not infer a status. Separately report webhookConfigured as the Worker-side website connection only; a configured webhook does not prove the Make scenario is On or working, and a missing webhook means that website flow cannot dispatch through that Worker setting. To confirm operation, ask staff to open the scenario in Make.com, verify it is currently On, submit a safe test through the website, and inspect Make run history and the resulting delivery. Never expose webhook URLs, tokens, secret values, or configuration variables.",
       "Never disclose information belonging to another agency. Be concise, practical, and clear, and say when the supplied data is insufficient.",
       'When the user explicitly asks to open a maid profile, you may include an action with the exact reference code from maidCatalog: {"type":"open_maid_profile","maidReferenceCode":"exact reference","label":"Open maid profile"}.',
-      "Return actions only for opening a helper profile, and only when explicitly requested. Never invent reference codes or statuses.",
       `Verified agency data and Make.com configuration context (JSON; use this as the only source for live records and webhook setup): ${JSON.stringify(commandContext)}`,
     ].join("\n\n");
     const failures: string[] = [];
@@ -11564,11 +11943,37 @@ app.post(
             const allowedMaidReferences = new Set(
               staffTools.maidCatalog.map((maid) => String(maid.referenceCode || "")),
             );
-            const actions = extractCommandCenterActions(result).filter((action) =>
-              action.type === "open_maid_profile"
-                ? Boolean(action.maidReferenceCode && allowedMaidReferences.has(action.maidReferenceCode))
-                : false,
-            );
+            const actions = extractCommandCenterActions(result).flatMap((action) => {
+              if (action.type === "open_maid_profile") {
+                return action.maidReferenceCode && allowedMaidReferences.has(action.maidReferenceCode)
+                  ? [action]
+                  : [];
+              }
+              if (action.type !== "draft_email" || !action.recipientId || !action.recipientKind) return [];
+
+              let recipientEmail = "";
+              let recipientName = "";
+              if (action.recipientKind === "enquiry") {
+                const enquiryId = Number(action.recipientId);
+                const enquiry = Number.isSafeInteger(enquiryId)
+                  ? data.enquiries.find((item) => item.id === enquiryId && (!item.agencyId || item.agencyId === admin.agencyId))
+                  : null;
+                recipientEmail = enquiry?.email ?? "";
+                recipientName = enquiry?.username ?? "";
+              } else {
+                const application = data.ats.applications.find(
+                  (item) => item.id === action.recipientId && item.agencyId === admin.agencyId,
+                );
+                const profile = application
+                  ? data.ats.profiles.find((item) => item.applicationId === application.id)
+                  : null;
+                recipientEmail = profile?.email ?? "";
+                recipientName = profile?.fullName ?? "";
+              }
+
+              if (!isEmailLike(recipientEmail)) return [];
+              return [{ ...action, recipientEmail, recipientName }];
+            });
             return c.json({ reply, actions });
           }
           failures.push(
@@ -11603,6 +12008,73 @@ app.post(
     );
   }),
 );
+
+app.post(
+  "/api/ai/command-center/send-email",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const body = await parseBody<{
+      recipientKind?: string;
+      recipientId?: string;
+      expectedRecipientEmail?: string;
+      subject?: string;
+      body?: string;
+    }>(c.req.raw);
+    const recipientKind = body?.recipientKind;
+    const recipientId = toTrimmedString(body?.recipientId);
+    const subject = toTrimmedString(body?.subject);
+    const text = typeof body?.body === "string" ? body.body.trim() : "";
+    if ((recipientKind !== "enquiry" && recipientKind !== "applicant") || !recipientId) {
+      return c.json({ error: "Select a valid enquiry or applicant record" }, 400);
+    }
+    if (!subject || subject.length > 180 || /[\r\n]/.test(subject)) {
+      return c.json({ error: "Enter a subject of up to 180 characters on one line" }, 400);
+    }
+    if (!text || text.length > 8000) {
+      return c.json({ error: "Email message must be between 1 and 8,000 characters" }, 400);
+    }
+
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const data = await loadData(c.env, { readOnly: true });
+    let recipientEmail = "";
+    if (recipientKind === "enquiry") {
+      const enquiryId = Number(recipientId);
+      const enquiry = Number.isSafeInteger(enquiryId)
+        ? data.enquiries.find((item) => item.id === enquiryId && (!item.agencyId || item.agencyId === admin.agencyId))
+        : null;
+      recipientEmail = enquiry?.email ?? "";
+    } else {
+      const application = data.ats.applications.find(
+        (item) => item.id === recipientId && item.agencyId === admin.agencyId,
+      );
+      const profile = application
+        ? data.ats.profiles.find((item) => item.applicationId === application.id)
+        : null;
+      recipientEmail = profile?.email ?? "";
+    }
+
+    if (!isEmailLike(recipientEmail)) {
+      return c.json({ error: "The selected record has no valid email address" }, 400);
+    }
+    if (normalizeEmail(toTrimmedString(body?.expectedRecipientEmail)) !== normalizeEmail(recipientEmail)) {
+      return c.json({ error: "The contact email changed after this draft was created. Ask the AI to prepare a fresh draft." }, 409);
+    }
+    const result = await sendEmailViaResend(c.env, recipientEmail, subject, text);
+    if (!result.ok) {
+      const status = result.error === "RESEND_NOT_CONFIGURED" ? 503 : 502;
+      return c.json({ error: result.error === "RESEND_NOT_CONFIGURED" ? "Email sending is not configured" : "Email could not be sent" }, status);
+    }
+
+    console.info("AI Command Center email sent", {
+      agencyId: admin.agencyId,
+      staffId: admin.id,
+      recipientKind,
+      recipientId,
+    });
+    return c.json({ ok: true, message: "Email sent", recipientKind, recipientId });
+  }),
+);
+
 app.post(
   "/api/ai/hr-interview/chat",
   requireAgencyAdminAuth,
@@ -11824,8 +12296,10 @@ app.post(
     // Interview invitations must go through the Make calendar workflow first
     // so it can create the event/Meet link and return that link to the page.
     if (emailType === "interview_invitation") {
-      const makeUrl = c.env.MAKE_WEBHOOK_URL?.trim();
-      if (!makeUrl) return c.json({ error: "Interview calendar workflow is not configured" }, 503);
+      const makeUrl =
+        c.env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim() ||
+        c.env.MAKE_WEBHOOK_URL?.trim();
+      if (!makeUrl) return c.json({ error: "Interview calendar workflow is not configured. Set MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE or MAKE_WEBHOOK_URL." }, 503);
       try {
         const makeResponse = await fetch(makeUrl, {
           method: "POST",
@@ -11872,9 +12346,11 @@ app.post(
     }
 
     // Forward other structured HR messages to the dedicated email workflow,
-    // falling back to the shared Make router when the dedicated URL is unset.
+    // then the configured interview pipeline router, then the shared Make router.
     const makeUrl =
-      c.env.MAKE_HR_EMAIL_WEBHOOK_URL?.trim() || c.env.MAKE_WEBHOOK_URL?.trim();
+      c.env.MAKE_HR_EMAIL_WEBHOOK_URL?.trim() ||
+      c.env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim() ||
+      c.env.MAKE_WEBHOOK_URL?.trim();
     if (makeUrl) {
       try {
         // Forward the entire body so Make.com can use the structured HR fields.
@@ -11904,7 +12380,7 @@ app.post(
     }
 
     // Neither Resend nor Make.com available
-    return c.json({ error: "Email service is not configured. Set RESEND_API_KEY or MAKE_WEBHOOK_URL." }, 503);
+    return c.json({ error: "Email service is not configured. Set RESEND_API_KEY, MAKE_HR_EMAIL_WEBHOOK_URL, or MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE." }, 503);
   }),
 );
 
@@ -16248,6 +16724,7 @@ app.get("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
         item,
         profilesByApplicationId.get(item.id) ?? null,
         data.ats.scores[item.id] ?? null,
+        data.ats.documents[item.id] ?? [],
       ),
     )
     .filter((item): item is Exclude<typeof item, null> => Boolean(item));
@@ -16378,6 +16855,35 @@ app.post("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
 
 app.get("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, async (c) => {
   return c.json({ error: "Method not allowed" }, 405);
+});
+
+app.post("/api/ats/applications/delete", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{ applicationIds?: string[] }>(c.req.raw);
+  const applicationIds = Array.isArray(body?.applicationIds)
+    ? [...new Set(body.applicationIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0))]
+    : [];
+  if (applicationIds.length === 0) return c.json({ error: "Select at least one applicant to delete" }, 400);
+  if (applicationIds.length > 100) return c.json({ error: "Delete up to 100 applicants at a time" }, 400);
+
+  const data = await loadData(c.env);
+  const removable = new Set(
+    data.ats.applications
+      .filter((item) => item.agencyId === admin.agencyId && item.source === "resume_upload" && applicationIds.includes(item.id))
+      .map((item) => item.id),
+  );
+  if (removable.size === 0) return c.json({ error: "No selected applicants were found for this agency" }, 404);
+
+  data.ats.applications = data.ats.applications.filter((item) => !removable.has(item.id));
+  data.ats.profiles = data.ats.profiles.filter((item) => !removable.has(item.applicationId));
+  for (const applicationId of removable) {
+    delete data.ats.scores[applicationId];
+    delete data.ats.history[applicationId];
+    delete data.ats.documents[applicationId];
+    delete data.ats.notifications[applicationId];
+  }
+  await saveData(c.env, data);
+  return c.json({ deleted: removable.size });
 });
 
 app.patch("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, async (c) => {
@@ -17434,6 +17940,181 @@ app.post("/api/whatsapp-broadcast", requireAgencyAdminAuth, async (c) => {
     return c.json({ error: error instanceof Error ? `${error.message} No broadcast was sent.` : "Could not prepare or send the broadcast. No messages were sent." }, 502);
   }
 });
+
+const uploadOperationFileToPrivateStorage = async (
+  config: SupabaseStorageConfig,
+  file: File,
+  agencyId: number,
+  prefix: "google-drive-sync" | "media-transcription",
+) => {
+  await ensureExternalSyncPrivateBucket(config);
+  const safeName = sanitizeStoragePathSegment(file.name, "upload.bin");
+  const objectPath = `${prefix}/agency-${agencyId}/${crypto.randomUUID()}-${safeName}`;
+  const response = await fetch(
+    `${config.baseUrl}/storage/v1/object/${encodeURIComponent(config.bucket)}/${objectPath
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/")}`,
+    {
+      method: "POST",
+      headers: supabaseStorageHeaders(config, {
+        "content-type": file.type || "application/octet-stream",
+        "x-upsert": "false",
+      }),
+      body: await file.arrayBuffer(),
+    },
+  );
+  if (!response.ok) throw new Error(`Private upload failed (${response.status})`);
+  return { objectPath, storageRef: `storage://${config.bucket}/${objectPath}` };
+};
+
+const postExternalSyncWebhook = async (webhookUrl: string, payload: Record<string, unknown>) => {
+  let url: URL;
+  try {
+    url = new URL(webhookUrl);
+  } catch {
+    throw new Error("Make webhook URL is invalid");
+  }
+  if (url.protocol !== "https:") throw new Error("Make webhook must use HTTPS");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(55_000),
+  });
+  const rawBody = await response.text();
+  let result: Record<string, unknown>;
+  try {
+    result = JSON.parse(rawBody) as Record<string, unknown>;
+  } catch {
+    throw new Error("Make returned an invalid response");
+  }
+  if (!response.ok || result.ok === false || typeof result.error === "string") {
+    throw new Error(`Make workflow failed (${response.status})`);
+  }
+  return result;
+};
+
+app.post(
+  "/api/integrations/google-drive/upload-and-sync",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const webhookUrl = c.env.MAKE_WEBHOOK_URL_GOOGLE_DRIVE_SYNC?.trim();
+    const storageConfig = getExternalSyncStorageConfig(c.env);
+    const appDataConfig = getSupabaseAppDataConfig(c.env);
+    if (!webhookUrl) return c.json({ error: "Google Drive workflow is not configured" }, 503);
+    if (!storageConfig || !appDataConfig) return c.json({ error: "Private document storage is not configured" }, 503);
+
+    const formData = await c.req.raw.formData().catch(() => null);
+    if (!formData) return c.json({ error: "A document upload is required" }, 400);
+    const file = formData.get("file");
+    if (!(file instanceof File) || !file.name.trim()) return c.json({ error: "Choose a document to upload" }, 400);
+    if (file.size < 1 || file.size > MAX_EXTERNAL_SYNC_UPLOAD_BYTES) {
+      return c.json({ error: "Document must be between 1 byte and 25 MB" }, 400);
+    }
+    const allowedExtensions = new Set([".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".jpg", ".jpeg", ".png"]);
+    const extension = file.name.match(/\.[^.]+$/)?.[0]?.toLowerCase() ?? "";
+    if (!allowedExtensions.has(extension)) return c.json({ error: "Choose a supported document format" }, 400);
+
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    if (!Number.isInteger(admin.agencyId)) return c.json({ error: "Agency account is required" }, 401);
+    const { objectPath, storageRef } = await uploadOperationFileToPrivateStorage(
+      storageConfig, file, admin.agencyId, "google-drive-sync",
+    );
+    const jobId = crypto.randomUUID();
+    const fileName = sanitizeStoragePathSegment(file.name, "document");
+    const folderKey = toTrimmedString(formData.get("folderKey"));
+    const jobPayload = { storageRef, fileName, folderKey, entityType: "operations_upload" };
+    await persistExternalSyncJob(appDataConfig, {
+      id: jobId, agencyId: admin.agencyId, provider: "GOOGLE_DRIVE", action: "upload", payload: jobPayload,
+    });
+
+    let result: Record<string, unknown>;
+    try {
+      result = await postExternalSyncWebhook(webhookUrl, {
+        agencyId: admin.agencyId,
+        storageRef,
+        fileName,
+        ...(folderKey ? { folderKey } : {}),
+        entityType: "operations_upload",
+        downloadUrl: await createExternalSyncSignedUrl(storageConfig, objectPath),
+        syncJobId: jobId,
+      });
+    } catch (error) {
+      await finishExternalSyncJob(appDataConfig, jobId, "FAILED", {
+        error: error instanceof Error ? error.message : "Google Drive workflow failed",
+      }).catch((persistError) => console.error("Could not mark Google Drive sync failed", persistError));
+      return c.json({ error: error instanceof Error ? error.message : "Google Drive sync failed" }, 502);
+    }
+    await finishExternalSyncJob(appDataConfig, jobId, "COMPLETED", result)
+      .catch((error) => console.error("Could not mark Google Drive sync complete", error));
+    return c.json({ jobId, result, fileName });
+  }),
+);
+
+app.post(
+  "/api/integrations/media/upload-and-transcribe",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const webhookUrl = c.env.MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE?.trim();
+    const storageConfig = getExternalSyncStorageConfig(c.env);
+    const appDataConfig = getSupabaseAppDataConfig(c.env);
+    if (!webhookUrl) return c.json({ error: "Media transcription workflow is not configured" }, 503);
+    if (!storageConfig || !appDataConfig) return c.json({ error: "Private media storage is not configured" }, 503);
+
+    const formData = await c.req.raw.formData().catch(() => null);
+    if (!formData) return c.json({ error: "An audio or video file is required" }, 400);
+    const file = formData.get("file");
+    if (!(file instanceof File) || !file.name.trim()) return c.json({ error: "Choose an audio or video file" }, 400);
+    if (file.size < 1 || file.size > MAX_EXTERNAL_SYNC_UPLOAD_BYTES) {
+      return c.json({ error: "Media must be between 1 byte and 25 MB" }, 400);
+    }
+    const allowedExtensions = new Set([".m4a", ".mp3", ".wav", ".aac", ".mp4", ".mov", ".webm", ".ogg"]);
+    const extension = file.name.match(/\.[^.]+$/)?.[0]?.toLowerCase() ?? "";
+    if (!file.type.toLowerCase().startsWith("audio/") && !file.type.toLowerCase().startsWith("video/") && !allowedExtensions.has(extension)) {
+      return c.json({ error: "Choose a supported audio or video format" }, 400);
+    }
+    const language = toTrimmedString(formData.get("language"));
+    const supportedLanguages = new Set(["da-DK", "de-DE", "en-GB", "en-IN", "en-US", "es-ES", "es-MX", "fi-FI", "fr-FR", "he-IL", "hi-IN", "id-ID", "it-IT", "ja-JP", "ko-KR", "pl-PL", "pt-BR", "pt-PT", "sv-SE", "zh-CN"]);
+    if (language && !supportedLanguages.has(language)) return c.json({ error: "Select a supported transcription language" }, 400);
+
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    if (!Number.isInteger(admin.agencyId)) return c.json({ error: "Agency account is required" }, 401);
+    const { objectPath, storageRef } = await uploadOperationFileToPrivateStorage(
+      storageConfig, file, admin.agencyId, "media-transcription",
+    );
+    const jobId = crypto.randomUUID();
+    await persistExternalSyncJob(appDataConfig, {
+      id: jobId,
+      agencyId: admin.agencyId,
+      provider: "MAKE_MEDIA",
+      action: "transcribe",
+      payload: { storageRef, language },
+    });
+
+    let result: Record<string, unknown>;
+    let transcript: string;
+    try {
+      result = await postExternalSyncWebhook(webhookUrl, {
+        agencyId: admin.agencyId,
+        storageRef,
+        ...(language ? { language } : {}),
+        mediaUrl: await createExternalSyncSignedUrl(storageConfig, objectPath),
+        syncJobId: jobId,
+      });
+      transcript = toTrimmedString(result.transcript ?? result.text);
+      if (!transcript) throw new Error("Make returned an empty transcript");
+    } catch (error) {
+      await finishExternalSyncJob(appDataConfig, jobId, "FAILED", {
+        error: error instanceof Error ? error.message : "Media transcription failed",
+      }).catch((persistError) => console.error("Could not mark media transcription failed", persistError));
+      return c.json({ error: error instanceof Error ? error.message : "Media transcription failed" }, 502);
+    }
+    await finishExternalSyncJob(appDataConfig, jobId, "COMPLETED", { transcriptLength: transcript.length })
+      .catch((error) => console.error("Could not mark media transcription complete", error));
+    return c.json({ jobId, transcript, result });
+  }),
+);
 
 app.all("/api/*", (c) => c.json({ error: "Not found" }, 404));
 

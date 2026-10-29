@@ -18,16 +18,22 @@ export const getWorkflowDashboardMetrics = async (_req: Request, res: Response) 
 /** Sanitized Make setup status for the agency dashboard. A webhook URL only
  * proves configuration, not that the scenario is switched on in Make. */
 export const getAutomationMonitor = async (_req: Request, res: Response) => {
-  const workflows = [
-    { id: 'applicant-intake', name: 'Applicant Intake & Screening', env: 'MAKE_WEBHOOK_URL_APPLICANT_INTAKE', mode: 'automatic' },
-    { id: 'placement-alerts', name: 'Placement Milestone Alerts', env: 'MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT', mode: 'automatic' },
-    { id: 'interview-alerts', name: 'Interview Scheduling Alerts', env: 'MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT', mode: 'automatic' },
-    { id: 'arrival-alerts', name: 'Contractor Arrival Alerts', env: 'MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT', mode: 'automatic' },
-  ].map(({ env, ...workflow }) => ({
-    ...workflow,
-    status: process.env[env]?.trim() ? 'active' : 'inactive',
-  }))
-  res.json({ workflows })
+  const workflowDefinitions: Array<{ id: string; name: string; env: string; fallbackEnv?: string[]; mode: string; purpose: string; trigger: string }> = [
+    { id: 'applicant-intake', name: 'Applicant Intake & Screening', env: 'MAKE_WEBHOOK_URL_APPLICANT_INTAKE', mode: 'automatic', purpose: 'Receives and screens new public maid applications.', trigger: 'A public maid application is submitted.' },
+    { id: 'placement-alerts', name: 'Placement Milestone Alerts', env: 'MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT', mode: 'automatic', purpose: 'Notifies staff when placement milestones are recorded.', trigger: 'A flight, medical, SIP, or handover milestone is completed.' },
+    { id: 'interview-alerts', name: 'Interview Scheduling Alerts', env: 'MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT', mode: 'automatic', purpose: 'Sends interview scheduling notifications.', trigger: 'An interview is scheduled.' },
+    { id: 'arrival-alerts', name: 'Contractor Arrival Alerts', env: 'MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT', mode: 'automatic', purpose: 'Notifies staff when an arrival task is completed.', trigger: 'A contractor arrival task is completed.' },
+    { id: 'whatsapp-broadcast', name: 'WhatsApp Broadcast', env: 'MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL', mode: 'staff initiated', purpose: 'Forwards an approved contact list and message for broadcast.', trigger: 'Staff confirms a broadcast.' },
+    { id: 'ai-command-center', name: 'AI Command Center', env: 'MAKE_AI_COMMAND_CENTER_WEBHOOK_URL', fallbackEnv: ['MAKE_AI_ENGINE_WEBHOOK_URL'], mode: 'staff initiated', purpose: 'Generates AI assistant replies with agency context.', trigger: 'Staff sends a message in the command center.' },
+    { id: 'ai-receptionist', name: 'AI Receptionist', env: 'MAKE_AI_RECEPTIONIST_WEBHOOK_URL', mode: 'visitor initiated', purpose: 'Routes public receptionist conversations to the AI scenario.', trigger: 'A visitor sends a receptionist message.' },
+    { id: 'fdw-application-chat', name: 'FDW Application Chat & Referral', env: 'MAKE_WEBHOOK_URL_FDW_CHATBOT', mode: 'visitor initiated', purpose: 'Handles the FDW application chat and referral flow.', trigger: 'A visitor uses FDW application chat or referral.' },
+    { id: 'maid-referral', name: 'Maid Referral', env: 'MAKE_WEBHOOK_URL_MAID_REFERRAL', mode: 'visitor initiated', purpose: 'Forwards submitted maid referrals to the configured workflow.', trigger: 'A user submits a maid referral.' },
+    { id: 'pdf-biodata', name: 'PDF Biodata Autofill', env: 'MAKE_PDF_AUTOFILL_WEBHOOK_URL', mode: 'staff initiated', purpose: 'Sends an uploaded biodata PDF for data extraction.', trigger: 'Staff requests PDF autofill.' },
+    { id: 'hr-email', name: 'HR Interview Email Notifications', env: 'MAKE_HR_EMAIL_WEBHOOK_URL', fallbackEnv: ['MAKE_WEBHOOK_URL'], mode: 'staff initiated', purpose: 'Sends HR interview email requests through Make.', trigger: 'Staff requests an HR interview email.' },
+    { id: 'website-ai-workflow', name: 'Website AI Workflow', env: 'MAKE_WEBHOOK_URL', fallbackEnv: ['MAKE_WEBHOOK_URL_INQUIRY_PIPELINE', 'MAKE_WEBHOOK_URL_LEAD_PIPELINE', 'MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE', 'MAKE_HR_EMAIL_WEBHOOK_URL'], mode: 'automatic and staff initiated', purpose: 'Routes website inquiries and leads, HR interview email and calendar actions, and applicant interview completion events.', trigger: 'An inquiry or lead is submitted, an interview action is requested, or an applicant interview is completed.' },
+  ]
+  const workflows = workflowDefinitions.map(({ env, fallbackEnv, ...workflow }) => ({ ...workflow, configured: Boolean(process.env[env]?.trim() || fallbackEnv?.some((name) => process.env[name]?.trim())), scenarioStatus: 'unknown' }))
+  res.json({ checkedAt: new Date().toISOString(), workflows })
 }
 
 /** Placement-centred airport/arrival operations board. */

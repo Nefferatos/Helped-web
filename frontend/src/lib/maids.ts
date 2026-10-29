@@ -51,6 +51,8 @@ export interface MaidProfile {
   introduction: Record<string, unknown>;
   agencyContact: Record<string, unknown>;
   photoDataUrls?: string[];
+  photoThumbnailDataUrls?: string[];
+  photoPortraitDataUrls?: string[];
   photoDataUrl?: string;
   videoDataUrl?: string;
   isPublic?: boolean;
@@ -120,6 +122,12 @@ export const formatDate = (value?: string) => {
 
 export const getPrimaryPhoto = (maid: MaidProfile) =>
   Array.isArray(maid.photoDataUrls) && maid.photoDataUrls.length > 0 ? maid.photoDataUrls[0] : maid.photoDataUrl || "";
+
+export const getPortraitPhoto = (maid: MaidProfile) =>
+  maid.photoPortraitDataUrls?.[0] || getPrimaryPhoto(maid);
+
+export const getThumbnailPhoto = (maid: MaidProfile) =>
+  maid.photoThumbnailDataUrls?.[0] || getPrimaryPhoto(maid);
 
 export const getPublicIntro = (maid: MaidProfile) => String((maid.introduction as Record<string, unknown>)?.publicIntro || "").trim();
 

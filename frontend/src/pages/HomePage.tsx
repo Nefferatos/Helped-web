@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { ClipboardList, FileText, MessageSquareText, RefreshCw, Users, UserRoundSearch, Zap } from "lucide-react";
+import { Activity, CheckCircle2, CircleAlert, ClipboardList, FileText, History, MessageSquareText, RefreshCw, Users, UserRoundSearch, Zap } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
@@ -16,7 +16,8 @@ type Employer = { createdAt?: string; updatedAt?: string };
 type RequestCounts = { pending: number; interested: number; direct_hire: number; rejected: number };
 type MetricData = { maids: Maid[]; maidCount: number; applicants: Applicant[]; applicantCount: number; enquiries: Enquiry[]; enquiryCount: number; contracts: Employer[]; requests: RequestCounts };
 type ListPage<T> = { items: T[]; total: number };
-type MonitoredWorkflow = { id: string; name: string; configured: boolean; scenarioStatus: "unknown"; mode: string };
+type MonitoredWorkflow = { id: string; name: string; configured: boolean; scenarioStatus: string; scenarioStatusEvidence?: string; mode: string; purpose?: string; trigger?: string; checkedAt?: string };
+type PortalAction = { id: string; actor: string; created_at: string; status: "completed" | "failed"; payload: { actionLabel?: string } };
 
 const links = {
   maids: adminPath("/edit-maids"), contracts: adminPath("/employment-contracts"),
@@ -81,6 +82,11 @@ const HomePage = () => {
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
   const [automations, setAutomations] = useState<MonitoredWorkflow[]>([]);
   const [automationUnavailable, setAutomationUnavailable] = useState(false);
+  const [automationRefreshing, setAutomationRefreshing] = useState(false);
+  const [automationFilter, setAutomationFilter] = useState<"all" | "configured" | "setup">("all");
+  const [portalActions, setPortalActions] = useState<PortalAction[]>([]);
+  const [portalActionsUnavailable, setPortalActionsUnavailable] = useState(false);
+  const [portalActionsRefreshing, setPortalActionsRefreshing] = useState(false);
   const admin = getStoredAgencyAdmin();
 
   const refresh = useCallback(async (quiet = false) => {
@@ -114,17 +120,36 @@ const HomePage = () => {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => {
-    let mounted = true;
-    fetch("/api/dashboard/automations", apiRequestInit())
-      .then(async (response) => {
-        const payload = await readSafeJson<{ workflows?: MonitoredWorkflow[] }>(response);
-        if (!response.ok) throw new Error("Could not load automation status");
-        if (mounted) { setAutomations(payload.workflows || []); setAutomationUnavailable(false); }
-      })
-      .catch(() => { if (mounted) setAutomationUnavailable(true); });
-    return () => { mounted = false; };
+  const refreshAutomations = useCallback(async () => {
+    setAutomationRefreshing(true);
+    try {
+      const response = await fetch("/api/dashboard/automations", apiRequestInit());
+      const payload = await readSafeJson<{ workflows?: MonitoredWorkflow[]; error?: string }>(response);
+      if (!response.ok) throw new Error("Could not load automation status");
+      setAutomations(payload.workflows || []);
+      setAutomationUnavailable(false);
+    } catch {
+      setAutomationUnavailable(true);
+    } finally {
+      setAutomationRefreshing(false);
+    }
   }, []);
+  useEffect(() => { void refreshAutomations(); }, [refreshAutomations]);
+  const refreshPortalActions = useCallback(async () => {
+    setPortalActionsRefreshing(true);
+    try {
+      const response = await fetch("/api/dashboard/actions", apiRequestInit());
+      const payload = await readSafeJson<{ actions?: PortalAction[]; trackingAvailable?: boolean; error?: string }>(response);
+      if (!response.ok) throw new Error(payload.error || "Could not load portal actions");
+      setPortalActions((payload.actions || []).filter((action) => Boolean(action.payload?.actionLabel)));
+      setPortalActionsUnavailable(payload.trackingAvailable === false);
+    } catch {
+      setPortalActionsUnavailable(true);
+    } finally {
+      setPortalActionsRefreshing(false);
+    }
+  }, []);
+  useEffect(() => { void refreshPortalActions(); }, [refreshPortalActions]);
 
   const chartData = useMemo(() => {
     const months = Array.from({ length: 6 }, (_, index) => {
@@ -168,6 +193,9 @@ const HomePage = () => {
       return `${label} ${chartData.reduce((sum, month) => sum + month[key], 0)}`;
     })
     .join(", ");
+  const dashboardAutomations = automations.filter((workflow) => !["hr-email", "fdw-application-chat"].includes(workflow.id));
+  const configuredAutomations = dashboardAutomations.filter((workflow) => workflow.configured).length;
+  const visibleAutomations = dashboardAutomations.filter((workflow) => automationFilter === "all" || (automationFilter === "configured" ? workflow.configured : !workflow.configured));
   return <main className="admin-dashboard">
     <header className="dash-head"><div><p className="dash-kicker">Agency overview</p><h1>Good day{admin?.agencyName ? `, ${admin.agencyName}` : ""}</h1><p>Your agency at a glance. Updated {syncedAt ? syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "when data loads"}.</p></div><button className="dash-refresh" onClick={() => void refresh(true)} disabled={refreshing}><RefreshCw size={15} className={refreshing ? "animate-spin" : ""}/>{refreshing ? "Refreshing" : "Refresh data"}</button></header>
     {errors.length > 0 && <div className="dash-error" role="alert">Some figures could not be loaded. {Array.from(new Set(errors)).join(" · ")}</div>}
@@ -175,11 +203,17 @@ const HomePage = () => {
       {cards.map((card) => <Link key={card.title} to={card.href} className="dash-card" style={{textDecoration:"none",color:"inherit","--card-accent":card.color,"--card-surface":card.surface} as CSSProperties}><div className="dash-card-top"><span className="dash-icon" style={{background:card.surface,color:card.color}}><card.icon size={20}/></span><span className="dash-card-label">{card.title}</span></div>{loading ? <div className="dash-value-loading" aria-hidden /> : <div className="dash-value">{failed.has(card.index) ? "—" : card.value.toLocaleString()}</div>}<div className="dash-note">{card.note}</div></Link>)}
     </section>
     <section className="dash-automation" aria-labelledby="dash-automation-title">
-      <div className="dash-automation-head"><div><p className="dash-kicker">Agency operations</p><h2 id="dash-automation-title">Workflow Monitor</h2><p>Check the Worker webhook setup for your Make.com scenarios.</p><p className="dash-monitor-note">Scenario on/off status is managed in Make.com and cannot be read from the webhook URL.</p></div><Zap size={22} aria-hidden="true" /></div>
-      {automationUnavailable ? <p className="dash-automation-empty">Automation status is temporarily unavailable. Refresh the dashboard to try again.</p> : <div className="dash-automation-list">{automations.map((workflow) => {
+      <div className="dash-automation-head"><div><p className="dash-kicker"><Activity size={14}/> Automation health</p><h2 id="dash-automation-title">Workflow monitor</h2><p>Review website connections for every tracked automation.</p><p className="dash-monitor-note">Connection status checks the website webhook only. Make.com scenario switches and run history are not available to the website.</p></div><div className="dash-automation-tools"><Zap size={22} aria-hidden="true"/><button type="button" className="dash-automation-refresh" onClick={() => void refreshAutomations()} disabled={automationRefreshing}><RefreshCw size={15} className={automationRefreshing ? "animate-spin" : ""}/>{automationRefreshing ? "Checking" : "Check connections"}</button></div></div>
+      {dashboardAutomations.length > 0 && <div className="dash-automation-filters" role="group" aria-label="Filter automations">{([ ["all", `All ${dashboardAutomations.length}`], ["configured", `Connected ${configuredAutomations}`], ["setup", `Needs setup ${dashboardAutomations.length - configuredAutomations}`] ] as const).map(([key, label]) => <button type="button" key={key} onClick={() => setAutomationFilter(key)} aria-pressed={automationFilter === key} className={automationFilter === key ? "is-selected" : ""}>{label}</button>)}</div>}
+      {automationUnavailable ? <p className="dash-automation-empty" role="alert">Automation status is temporarily unavailable. Check connections to try again.</p> : <div className="dash-automation-list">{visibleAutomations.map((workflow) => {
         const configured = workflow.configured;
-        return <article className="dash-automation-item" key={workflow.id}><span className={`dash-automation-indicator ${configured ? "is-ready" : "is-off"}`} aria-hidden="true"/><div className="dash-automation-name">{workflow.name}<small>{configured ? "Webhook URL is set; check the scenario toggle in Make.com." : "Webhook URL is not configured in the Worker."}</small></div><span className={`dash-automation-status ${configured ? "is-ready" : "is-off"}`}>{configured ? "Webhook set" : "Needs setup"}</span></article>;
-      })}</div>}
+        return <article className="dash-automation-item" key={workflow.id}><span className={`dash-automation-indicator ${configured ? "is-ready" : "is-off"}`} aria-hidden="true"/><div className="dash-automation-name">{workflow.name}<small>{workflow.purpose || (configured ? "Website webhook is configured." : "Website webhook needs configuration.")}</small>{workflow.trigger && <small className="dash-automation-trigger"><strong>Runs when:</strong> {workflow.trigger}</small>}</div><span className={`dash-automation-status ${configured ? "is-ready" : "is-off"}`}>{configured ? <><CheckCircle2 size={13}/> Connected</> : <><CircleAlert size={13}/> Needs setup</>}</span></article>;
+      })}{!automationUnavailable && visibleAutomations.length === 0 && <p className="dash-automation-empty">No workflows match this filter.</p>}</div>}
+      <p className="dash-monitor-footnote">This monitor does not confirm that a Make.com scenario is switched on or that a recent run succeeded. Verify those in Make.com run history.</p>
+    </section>
+    <section className="dash-portal-actions" aria-labelledby="dash-portal-actions-title">
+      <div className="dash-portal-actions-head"><div><p className="dash-kicker"><History size={14}/> Staff activity</p><h2 id="dash-portal-actions-title">Recent portal actions</h2><p>See what staff changed in applicant, maid, enquiry, and placement records.</p></div><button type="button" className="dash-automation-refresh" onClick={() => void refreshPortalActions()} disabled={portalActionsRefreshing}><RefreshCw size={15} className={portalActionsRefreshing ? "animate-spin" : ""}/>{portalActionsRefreshing ? "Refreshing" : "Refresh actions"}</button></div>
+      {portalActionsUnavailable ? <p className="dash-automation-empty" role="alert">Portal action history is currently unavailable. Refresh to try again.</p> : portalActions.length === 0 ? <p className="dash-automation-empty">No staff actions are recorded yet. Adding or updating a maid, reviewing applicants, and managing enquiries will appear here.</p> : <ol className="dash-portal-actions-list">{portalActions.map((action) => <li key={action.id}><span className={`dash-action-result ${action.status === "completed" ? "is-complete" : "is-failed"}`}>{action.status === "completed" ? <CheckCircle2 size={14}/> : <CircleAlert size={14}/>} {action.status === "completed" ? "Completed" : "Failed"}</span><span className="dash-action-description"><strong>{action.payload.actionLabel}</strong><span>By {action.actor.replace(/^user:/, "") || "agency staff"}</span></span><time dateTime={action.created_at}>{new Date(action.created_at).toLocaleString()}</time></li>)}</ol>}
     </section>
     <section className="dash-content">
       <article className="dash-panel dash-activity-panel"><div className="dash-panel-head"><div><h2>Agency activity</h2><p className="dash-panel-sub">Public and hidden maid profiles, plus other records added over the last six months</p></div><div className="dash-legend">{series.map(([label,color])=><span key={label}><i className="dash-dot" style={{background:color}}/>{label}</span>)}</div></div>{!loading && !hasChartData ? <div className="dash-empty">{chartFailed ? "Activity data could not be loaded. Use Refresh data to try again." : "No records added in the last six months yet. New maids, contracts, enquiries and applicants will show up here."}</div> : <div className="dash-chart" role="img" aria-label={`Agency activity over the last six months — ${chartSummary}`}><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData} margin={{top:8,right:8,left:-22,bottom:0}}><defs>{series.map(([label,color])=>{const id=fillId[label];return <linearGradient key={id} id={`fill-${id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={.18}/><stop offset="90%" stopColor={color} stopOpacity={0}/></linearGradient>;})}</defs><CartesianGrid stroke="#cbd5e1" vertical={false}/><XAxis dataKey="month" tickLine={false} axisLine={false} tick={{fontSize:16,fill:"#000"}}/><YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{fontSize:16,fill:"#000"}}/><Tooltip contentStyle={{borderRadius:12,border:"1px solid #d1d5db",fontSize:16,color:"#000"}}/>{series.map(([label,color,dash])=><Area key={label} type="monotone" dataKey={label} stroke={color} fill={`url(#fill-${fillId[label]})`} strokeWidth={3} strokeDasharray={dash || undefined}/>)}</AreaChart></ResponsiveContainer></div>}</article>

@@ -1344,12 +1344,19 @@ export const replaceMaidPhotos = async (req: Request, res: Response) => {
   try {
     const agencyId = await getRequestAgencyId(req)
     const { referenceCode } = req.params
-    const { photoDataUrls } = req.body as { photoDataUrls?: string[] }
+    const { photoDataUrls, photoThumbnailDataUrls, photoPortraitDataUrls } = req.body as {
+      photoDataUrls?: string[]
+      photoThumbnailDataUrls?: string[]
+      photoPortraitDataUrls?: string[]
+    }
     if (!Array.isArray(photoDataUrls)) {
       return res.status(400).json({ error: 'photoDataUrls array is required' })
     }
 
-    const result = await replaceMaidPhotosStore(referenceCode, photoDataUrls, agencyId)
+    const result = await replaceMaidPhotosStore(referenceCode, photoDataUrls, agencyId, {
+      photoThumbnailDataUrls,
+      photoPortraitDataUrls,
+    })
     if (!result) {
       return res.status(404).json({ error: 'Maid not found' })
     }

@@ -955,7 +955,7 @@ const MaidProfilePage = () => {
               Please call <span className="font-bold">{String(agencyContact.contactPerson || "Bala/Ricky")}</span>
             </p>
             <p className="text-sm text-black">
-              at <span className="font-bold text-blue-700 text-base">{String(agencyContact.phone || "80730757")}</span>
+              at <span className="font-bold text-blue-700 text-base">{String(agencyContact.phone || "+65 8073 0757")}</span>
             </p>
           </div>
 

@@ -47,7 +47,7 @@ OUTPUT FORMAT — STRICT RULES (follow these in every single response):
 1. Never use markdown syntax. Do not use asterisks (**bold**, *italic*), hash signs (## headings), or dashes as bullet points. Write in plain sentences and paragraphs.
 2. Use numbered lists (1. 2. 3.) only when listing multiple helpers or steps. Separate each item with a blank line.
 3. For contact details, list each item on its own line with a clear label, for example:
-   Phone: 80730757
+   Phone: +65 8073 0757
    Email: info@theagency.sg
    WhatsApp: https://wa.me/6580730757
    Office Hours: Monday to Saturday, 9:00am to 7:30pm

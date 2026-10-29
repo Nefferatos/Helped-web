@@ -22,6 +22,7 @@ import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
 import {
   bulkAtsAction,
+  deleteAtsApplications,
   fetchAtsApplication,
   fetchAtsApplications,
   fetchAtsDashboard,
@@ -56,6 +57,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   Users,
   Video,
   X,
@@ -78,6 +80,7 @@ type ApplicantWorkflowTarget = {
   id: string;
   name: string;
   email: string;
+  status: string;
 };
 
 type WorkflowActivity = {
@@ -458,6 +461,8 @@ const AtsRecruitmentPage = () => {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteApplicantsOpen, setDeleteApplicantsOpen] = useState(false);
+  const [deletingApplicants, setDeletingApplicants] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [sopModalOpen, setSopModalOpen] = useState(false);
   const [calendarDialogOpen, setCalendarDialogOpen] = useState(false);
@@ -587,6 +592,7 @@ const AtsRecruitmentPage = () => {
     id: applicant.id,
     name: getApplicantDisplayName(applicant),
     email: applicant.profile.email?.trim() || "",
+    status: applicant.status,
   });
 
   const refreshApplicantData = () => {
@@ -665,6 +671,7 @@ const AtsRecruitmentPage = () => {
       const scheduleData = await scheduleResponse.json().catch(() => ({})) as { error?: string; interview?: { id?: number | string } };
       if (!scheduleResponse.ok) throw new Error(scheduleData.error || "Could not save the interview schedule");
       await updateAtsStage(interviewTarget.id, "Screening Interview", `Interview scheduled for ${interviewDateTime.replace("T", " ")}`);
+      setActiveStageTab((current) => current === interviewTarget.status ? "Screening Interview" : current);
       setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: interviewMeetingLink.trim() || undefined });
       interviewSaved = true;
       if (sendApplicantEmail && interviewTarget.email) {
@@ -755,6 +762,8 @@ const AtsRecruitmentPage = () => {
     try {
       await bulkAtsAction({ applicationIds: [decisionTarget.id], action: decisionTarget.decision });
       decisionSaved = true;
+      const resultingStage = approved ? "Approved" : "Rejected";
+      setActiveStageTab((current) => current === decisionTarget.status ? resultingStage : current);
       if (sendApplicantEmail && decisionTarget.email) {
         await deliverApplicantEmail({
           to: decisionTarget.email,
@@ -1011,6 +1020,26 @@ const AtsRecruitmentPage = () => {
       )
     );
   const clearSelection = () => setSelectedIds([]);
+
+  const confirmDeleteApplicants = async () => {
+    if (selectedIds.length === 0) return;
+    setDeletingApplicants(true);
+    try {
+      const result = await deleteAtsApplications(selectedIds);
+      toast.success(`Deleted ${result.deleted} applicant${result.deleted === 1 ? "" : "s"}`);
+      setSelectedIds([]);
+      setDeleteApplicantsOpen(false);
+      if (selectedId && selectedIds.includes(selectedId)) {
+        setSelectedId(null);
+        setProfileModalOpen(false);
+      }
+      refreshApplicantData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete applicants");
+    } finally {
+      setDeletingApplicants(false);
+    }
+  };
 
   // ─── Render ───────────────────────────────────────────────────────────────────
 
@@ -1620,6 +1649,16 @@ const AtsRecruitmentPage = () => {
                 ))}
                 <Button
                   size="sm"
+                  variant="destructive"
+                  className="h-7 text-xs"
+                  onClick={() => setDeleteApplicantsOpen(true)}
+                  disabled={bulkMutation.isPending || deletingApplicants}
+                >
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  Delete selected
+                </Button>
+                <Button
+                  size="sm"
                   variant="ghost"
                   className="h-7 text-xs"
                   onClick={clearSelection}
@@ -2157,6 +2196,26 @@ const AtsRecruitmentPage = () => {
         </Card>
       </section>
 
+      <Dialog open={deleteApplicantsOpen} onOpenChange={(open) => !deletingApplicants && setDeleteApplicantsOpen(open)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700">
+              <Trash2 className="h-5 w-5" /> Delete selected applicants?
+            </DialogTitle>
+            <DialogDescription>
+              This permanently removes {selectedIds.length} selected applicant record{selectedIds.length === 1 ? "" : "s"} and their related recruitment data. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteApplicantsOpen(false)} disabled={deletingApplicants}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteApplicants()} disabled={deletingApplicants}>
+              {deletingApplicants ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              {deletingApplicants ? "Deleting…" : "Permanently delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(interviewTarget)} onOpenChange={(open) => !open && !workflowSaving && setInterviewTarget(null)}>
         <DialogContent className="max-w-lg rounded-2xl border-slate-200 bg-white p-0 overflow-hidden">
           <div className="border-b border-violet-100 bg-violet-50 px-6 py-5">
@@ -2244,27 +2303,12 @@ const AtsRecruitmentPage = () => {
         */}
         <DialogContent className="applicant-review-page flex h-[100dvh] max-h-none w-screen max-w-none flex-col overflow-hidden rounded-none border-0 bg-slate-50 p-0 shadow-none [&>button]:hidden">
           <style>{`
-            .applicant-review-page :is(p, span, label, button, input, select, textarea, li, a) {
-              font-size: max(1rem, 1em) !important;
-            }
             .applicant-review-page [class*="text-slate-"] { color: #172033 !important; }
             .applicant-review-page [class*="text-emerald-7"],
             .applicant-review-page [class*="text-emerald-8"],
             .applicant-review-page [class*="text-emerald-9"] { color: #065f46 !important; }
             .applicant-review-page [class*="text-rose-"] { color: #be123c !important; }
             .applicant-review-page .applicant-document-viewer [class*="text-slate-"] { color: #cbd5e1 !important; }
-            .applicant-review-page .truncate {
-              overflow: visible !important;
-              white-space: normal !important;
-              text-overflow: clip !important;
-              overflow-wrap: anywhere;
-            }
-            .applicant-review-page .line-clamp-3 {
-              display: block !important;
-              -webkit-line-clamp: unset !important;
-              overflow: visible !important;
-            }
-            .applicant-review-page :is(p, span, a, h4, div) { overflow-wrap: anywhere; }
           `}</style>
           {/* Modal header — always visible, never scrolls */}
             <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
@@ -2276,7 +2320,7 @@ const AtsRecruitmentPage = () => {
                     "Applicant Profile"
                 )}
               </DialogTitle>
-              <DialogDescription className="mt-1 text-[11px] leading-6 text-slate-500">
+              <DialogDescription className="mt-1 text-xs leading-snug text-slate-500">
                 {detail
                   ? `${String(
                       detail.profile?.nationality ||
@@ -2418,7 +2462,7 @@ const AtsRecruitmentPage = () => {
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-semibold leading-6 text-slate-900">
+                            <p className="text-xs font-semibold leading-snug text-slate-900">
                               {doc.name}
                             </p>
                             <p className="text-[10px] text-slate-400">
@@ -2453,7 +2497,7 @@ const AtsRecruitmentPage = () => {
             <div className="flex min-h-[34rem] min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
               {/* Doc nav bar — fixed */}
               <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="min-w-0 flex-1 text-[11px] leading-6 text-slate-600">
+                <p className="min-w-0 flex-1 text-xs leading-snug text-slate-600">
                   {activeDocument
                     ? `${activeDocumentIndex + 1} / ${documents.length} — ${activeDocument.name}`
                     : "Select a document from the list"}

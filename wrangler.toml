@@ -1,6 +1,14 @@
 name = "findmaid"
 main = "functions/api/[[...path]].ts"
 compatibility_date = "2024-10-01"
+workers_dev = false
+preview_urls = false
+
+# Keep the production domain attached when deploying from this configuration.
+[[routes]]
+pattern = "rinzinagency.com"
+zone_name = "rinzinagency.com"
+custom_domain = true
 
 [assets]
 directory = "./frontend/dist"
@@ -9,7 +17,6 @@ binding = "ASSETS"
 [[kv_namespaces]]
 binding = "APP_DATA"
 id = "62a5ada5801547b5b0895fec94ab0b12"
-preview_id = "595830971f4f4125975ddcdeb627de67"
 
 # Optional: WhatsApp broadcast media uploads require Cloudflare R2. Add the
 # WHATSAPP_MEDIA R2 binding here after R2 is enabled on the Cloudflare account.
@@ -93,6 +100,14 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 # import make/helped-placement-milestone-alert.blueprint.json, then set:
 #   npx wrangler secret put MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT
 
+# Operations Center private document upload and media transcription:
+# configure each Make custom webhook URL as a Worker secret. Both flows use
+# SUPABASE_SERVICE_ROLE_KEY to store files privately in helped-private (or the
+# optional SUPABASE_PRIVATE_STORAGE_BUCKET) and send Make a 15-minute signed URL.
+#   npx wrangler secret put MAKE_WEBHOOK_URL_GOOGLE_DRIVE_SYNC
+#   npx wrangler secret put MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE
+# SUPABASE_SERVICE_ROLE_KEY is also required; set it only if it is not already present.
+
 # Shared Make AI gateway for Worker AI routes such as the HR interviewer.
 # Set with: npx wrangler secret put MAKE_AI_ENGINE_WEBHOOK_URL
 # Use the webhook created from make/helped-ai-gateway.blueprint.json.
@@ -112,7 +127,7 @@ DEV_EXPOSE_CONFIRMATION_CODE = "false"
 # TIKTOK_CLIENT_SECRET = ""
 
 [observability.logs]
-enabled = false
+enabled = true
 invocation_logs = true
 
 [ai]

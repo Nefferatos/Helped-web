@@ -20,18 +20,32 @@ const getPasswordResetRequestError = (error: unknown) => {
   const normalized = message.toLowerCase();
 
   if (/redirect|redirect_to|not allowed/.test(normalized)) {
-    return "The password-reset destination is not allowed by Supabase. Add https://rinzinagency.com/client/change-password to Authentication → URL Configuration → Redirect URLs.";
+    return "The password reset link could not be created. Please try again later or contact agency support.";
   }
   if (/rate limit|too many requests|email.*limit/.test(normalized)) {
     return "Too many reset emails were requested. Wait a few minutes before trying again.";
   }
   if (/smtp|email.*send|sending.*email|mailer/.test(normalized)) {
-    return "Supabase could not send the reset email. Check the project's authentication email provider and Reset Password template.";
+    return "We couldn't send the password reset email from the website. Please try again later or contact agency support.";
   }
   if (/fetch|network|connection/.test(normalized)) {
     return "We couldn't reach the password service. Check your connection and try again.";
   }
   return "We couldn't send the reset link right now. Please try again shortly. If it keeps failing, contact agency support.";
+};
+
+const getPasswordUpdateError = (error: unknown) => {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (/password.*(weak|short|length)|should be at least|minimum.*characters/.test(message)) {
+    return "Choose a stronger password with at least 8 characters.";
+  }
+  if (/rate limit|too many requests/.test(message)) {
+    return "Too many attempts. Please wait a few minutes and try again.";
+  }
+  if (/fetch|network|connection/.test(message)) {
+    return "We couldn't reach the password service. Check your connection and try again.";
+  }
+  return "We couldn't update your password right now. Please try again or contact agency support.";
 };
 
 const ClientChangePasswordPage = () => {
@@ -195,7 +209,8 @@ const ClientChangePasswordPage = () => {
       setPassword("");
       setConfirmPassword("");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update password");
+      console.error("Password update failed:", error);
+      toast.error(getPasswordUpdateError(error));
     } finally {
       setIsSaving(false);
     }

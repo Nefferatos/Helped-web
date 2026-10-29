@@ -122,6 +122,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [knowledge, setKnowledge] = useState({ sourceKey: '', title: '', category: 'SOP', content: '' })
   const [knowledgeQuery, setKnowledgeQuery] = useState('')
   const [snippets, setSnippets] = useState<KnowledgeSnippet[]>([])
+  const [expandedKnowledgeSnippetId, setExpandedKnowledgeSnippetId] = useState<string | null>(null)
   const [driveFile, setDriveFile] = useState<File | null>(null)
   const [driveFolderKey, setDriveFolderKey] = useState('')
   const [driveSyncing, setDriveSyncing] = useState(false)
@@ -638,13 +639,23 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
                 </div>
                 {snippets.length > 0 && (
                   <div className="mt-3 space-y-2">
-                    {snippets.map((snippet) => (
-                      <article key={snippet.id} className="rounded-xl bg-card p-3">
+                    {snippets.map((snippet, index) => (
+                      <article key={`${snippet.id}-${index}`} className="rounded-xl bg-card p-3">
                         <div className="flex items-center justify-between gap-2">
                           <b className="text-sm text-foreground">{snippet.title}</b>
                           <span className="shrink-0 text-xs text-black">{snippet.category}</span>
                         </div>
-                        <p className="mt-1 line-clamp-2 text-sm text-black">{snippet.content}</p>
+                        <p className={`mt-1 text-sm text-black ${expandedKnowledgeSnippetId === `${snippet.id}-${index}` ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>{snippet.content}</p>
+                        {snippet.content.length > 180 && (
+                          <button
+                            type="button"
+                            aria-expanded={expandedKnowledgeSnippetId === `${snippet.id}-${index}`}
+                            onClick={() => setExpandedKnowledgeSnippetId(expandedKnowledgeSnippetId === `${snippet.id}-${index}` ? null : `${snippet.id}-${index}`)}
+                            className="mt-2 text-sm font-semibold text-primary underline-offset-2 hover:underline"
+                          >
+                            {expandedKnowledgeSnippetId === `${snippet.id}-${index}` ? 'Read less' : 'Read full'}
+                          </button>
+                        )}
                       </article>
                     ))}
                   </div>

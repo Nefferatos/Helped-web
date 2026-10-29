@@ -232,16 +232,39 @@ const photoUploadConfig = [
   { key: "fullBodyPhoto", kind: "full_body_photo", title: "SLOT 2 · FULL BODY", label: "Full-body photo", width: 240, height: 400 },
 ] as const;
 
+const photoMinimumDimensions: Record<string, { width: number; height: number }> = {
+  passportPhoto: { width: 300, height: 375 },
+  fullBodyPhoto: { width: 480, height: 800 },
+};
+
+const readImageDimensions = (file: File) => new Promise<{ width: number; height: number }>((resolve, reject) => {
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  const cleanup = () => URL.revokeObjectURL(url);
+  image.onload = () => {
+    const dimensions = { width: image.naturalWidth, height: image.naturalHeight };
+    cleanup();
+    resolve(dimensions);
+  };
+  image.onerror = () => {
+    cleanup();
+    reject(new Error("This file could not be opened as an image."));
+  };
+  image.src = url;
+});
+
 type PhotoUploadCardProps = {
   title: string;
   label: string;
   width: number;
   height: number;
+  minimumWidth: number;
+  minimumHeight: number;
   file?: File;
   onChange: (file: File | undefined) => void;
 };
 
-const PhotoUploadCard = ({ title, label, width, height, file, onChange }: PhotoUploadCardProps) => {
+const PhotoUploadCard = ({ title, label, width, height, minimumWidth, minimumHeight, file, onChange }: PhotoUploadCardProps) => {
   const [previewUrl, setPreviewUrl] = useState("");
 
   useEffect(() => {
@@ -257,6 +280,7 @@ const PhotoUploadCard = ({ title, label, width, height, file, onChange }: PhotoU
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="mb-4 text-sm font-bold tracking-[0.12em] text-teal-700">{title}</p>
+      <p className="mb-3 text-xs font-medium text-slate-600">Use a clear image at least {minimumWidth} × {minimumHeight} pixels. The form will crop and resize it.</p>
       <div className="flex flex-wrap items-center gap-5">
         <div className={`flex ${width === 100 ? "h-[240px] w-[192px]" : "h-[250px] w-[150px]"} shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-100`}>
           {previewUrl ? (
@@ -1054,13 +1078,25 @@ const PublicMaidApplicationPage = () => {
   const handleFileChange = async (field: string, fileList: FileList | File[] | null) => {
     const next = fileList ? Array.from(fileList) : [];
 
-    if (photoUploadConfig.some((photo) => photo.key === field) && next[0]) {
+    const photoConfig = photoUploadConfig.find((photo) => photo.key === field);
+    if (photoConfig && next[0]) {
       const photo = next[0];
       const isJpegOrPng =
         ["image/jpeg", "image/png"].includes(photo.type) ||
         /\.(jpe?g|png)$/i.test(photo.name);
       if (!isJpegOrPng || photo.size > 5 * 1024 * 1024) {
         toast.error("Photos must be JPG or PNG files no larger than 5 MB.");
+        return;
+      }
+      try {
+        const dimensions = await readImageDimensions(photo);
+        const minimum = photoMinimumDimensions[field];
+        if (dimensions.width < minimum.width || dimensions.height < minimum.height) {
+          toast.error(`${photoConfig.label} must be at least ${minimum.width} × ${minimum.height} pixels. This image is ${dimensions.width} × ${dimensions.height} pixels.`);
+          return;
+        }
+      } catch {
+        toast.error("This file could not be opened as an image. Please choose a valid JPG or PNG photo.");
         return;
       }
       setFiles((current) => ({ ...current, [field]: [photo] }));
@@ -2174,6 +2210,8 @@ const PublicMaidApplicationPage = () => {
                         label={photo.label}
                         width={photo.width}
                         height={photo.height}
+                        minimumWidth={photoMinimumDimensions[photo.key].width}
+                        minimumHeight={photoMinimumDimensions[photo.key].height}
                         file={files[photo.key]?.[0]}
                         onChange={(file) => {
                           void handleFileChange(photo.key, file ? [file] : null);

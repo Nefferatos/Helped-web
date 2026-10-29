@@ -1776,10 +1776,16 @@ interface CommandCenterMessage {
 }
 
 interface CommandCenterAction {
-  type: "approve_applicant" | "reject_applicant" | "schedule_interview" | "open_maid_profile";
+  type: "approve_applicant" | "reject_applicant" | "schedule_interview" | "open_maid_profile" | "draft_email";
   applicationId?: string;
   maidReferenceCode?: string;
   date?: string;
+  recipientKind?: "enquiry" | "applicant";
+  recipientId?: string;
+  recipientName?: string;
+  recipientEmail?: string;
+  subject?: string;
+  body?: string;
   label?: string;
 }
 
@@ -1931,6 +1937,8 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState<CommandCenterAction | null>(null);
+  const [emailSending, setEmailSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const analytics = useMemo(() => {
@@ -1979,7 +1987,13 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
   }, [isOpen, messages, isSubmitting]);
 
   useEffect(() => {
-    try { window.localStorage.setItem(COMMAND_CENTER_HISTORY_KEY, JSON.stringify(messages.slice(-40))); } catch { /* storage unavailable */ }
+    try {
+      const safeHistory = messages.slice(-40).map((item) => ({
+        ...item,
+        actions: item.actions?.filter((action) => action.type !== "draft_email"),
+      }));
+      window.localStorage.setItem(COMMAND_CENTER_HISTORY_KEY, JSON.stringify(safeHistory));
+    } catch { /* storage unavailable */ }
   }, [messages]);
 
   useEffect(() => {
@@ -1987,7 +2001,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
       setMessages([{
         id: `welcome-${Date.now()}`,
         role: "assistant",
-        content: `Welcome to your agency operations assistant. I can summarize this dashboard, review the latest enquiries and pending requests, compare maid profiles with recorded requirements, and draft replies or website copy. You can ask about Make.com workflows too: I can report which scenarios appeared On in the screenshots you shared and whether the website webhook is configured. Screenshot status is not a live Make.com check, and I cannot confirm successful runs without checking Make history. I cannot update records or activate workflows.`,
+        content: `Welcome to your agency operations assistant. I can summarize this dashboard, review the latest enquiries and pending requests, compare maid profiles with recorded requirements, and draft replies or website copy. If you ask me to email a specific enquiry or applicant, I can prepare a draft for you to review and confirm before sending. You can ask about Make.com workflows too: I can report which scenarios appeared On in the screenshots you shared and whether the website webhook is configured. Screenshot status is not a live Make.com check, and I cannot confirm successful runs without checking Make history.`,
       }]);
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2028,6 +2042,39 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
     const data = await readSafeJson<{ error?: string }>(response);
     if (!response.ok) throw new Error(data.error || "Could not update applicant");
     setMessages((previous) => previous.map((message) => message.actions?.includes(action) ? { ...message, actions: [] } : message));
+  };
+
+  const sendCommandCenterEmail = async () => {
+    if (!emailDraft?.recipientKind || !emailDraft.recipientId || !emailDraft.recipientEmail) return;
+    setEmailSending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/ai/command-center/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+        body: JSON.stringify({
+          recipientKind: emailDraft.recipientKind,
+          recipientId: emailDraft.recipientId,
+          expectedRecipientEmail: emailDraft.recipientEmail,
+          subject: emailDraft.subject,
+          body: emailDraft.body,
+        }),
+      });
+      const result = await readSafeJson<{ error?: string }>(response);
+      if (!response.ok) throw new Error(result.error || "Email could not be sent");
+      setMessages((previous) => previous.map((item) => ({
+        ...item,
+        actions: item.actions?.filter((action) =>
+          !(action.type === "draft_email" && action.recipientKind === emailDraft.recipientKind && action.recipientId === emailDraft.recipientId),
+        ),
+      })));
+      setEmailDraft(null);
+      toast.success("Email sent successfully");
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Email could not be sent");
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   const openMaidProfile = (action: CommandCenterAction) => {
@@ -2244,14 +2291,16 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
                           </div>
                           {!isUser && msg.actions?.map((action) => (
                             <button
-                              key={`${action.type}-${action.applicationId || action.maidReferenceCode || action.label}`}
+                              key={`${action.type}-${action.applicationId || action.maidReferenceCode || action.recipientId || action.label}`}
                               type="button"
                               onClick={() => action.type === "open_maid_profile"
                                 ? openMaidProfile(action)
-                                : void runApplicantAction(action).catch((err) => setError(err instanceof Error ? err.message : "Could not update applicant"))}
+                                : action.type === "draft_email"
+                                  ? setEmailDraft(action)
+                                  : void runApplicantAction(action).catch((err) => setError(err instanceof Error ? err.message : "Could not update applicant"))}
                               className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold ${action.type === "reject_applicant" ? "border-red-200 bg-red-50 text-red-700" : "border-violet-200 bg-violet-50 text-violet-700"}`}
                             >
-                              {action.label || (action.type === "open_maid_profile" ? "Open maid profile" : action.type === "approve_applicant" ? "Confirm approval" : action.type === "reject_applicant" ? "Confirm rejection" : `Set interview${action.date ? `: ${action.date}` : ""}`)}
+                              {action.label || (action.type === "draft_email" ? "Review email" : action.type === "open_maid_profile" ? "Open maid profile" : action.type === "approve_applicant" ? "Confirm approval" : action.type === "reject_applicant" ? "Confirm rejection" : `Set interview${action.date ? `: ${action.date}` : ""}`)}
                             </button>
                           ))}
                         </div>
@@ -2389,6 +2438,51 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
           </div>
         </div>
       )}
+      <Dialog open={Boolean(emailDraft)} onOpenChange={(open) => { if (!open && !emailSending) setEmailDraft(null); }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Review email before sending</DialogTitle>
+            <DialogDescription>
+              Check the recipient and edit the message. It will be sent only after you click Send email.
+            </DialogDescription>
+          </DialogHeader>
+          {emailDraft && (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-slate-50 p-3 text-sm">
+                <p className="font-semibold text-slate-900">To: {emailDraft.recipientName || "Contact"}</p>
+                <p className="text-slate-600">{emailDraft.recipientEmail}</p>
+                <p className="mt-1 text-xs text-slate-500">Source record: {emailDraft.recipientKind} {emailDraft.recipientId}</p>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="command-center-email-subject" className="text-sm font-medium">Subject</label>
+                <Input
+                  id="command-center-email-subject"
+                  maxLength={180}
+                  value={emailDraft.subject || ""}
+                  onChange={(event) => setEmailDraft((current) => current ? { ...current, subject: event.target.value } : current)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="command-center-email-body" className="text-sm font-medium">Message</label>
+                <Textarea
+                  id="command-center-email-body"
+                  rows={9}
+                  maxLength={8000}
+                  value={emailDraft.body || ""}
+                  onChange={(event) => setEmailDraft((current) => current ? { ...current, body: event.target.value } : current)}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEmailDraft(null)} disabled={emailSending}>Cancel</Button>
+                <Button onClick={() => void sendCommandCenterEmail()} disabled={emailSending || !emailDraft.subject?.trim() || !emailDraft.body?.trim()}>
+                  {emailSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  {emailSending ? "Sending…" : "Send email"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

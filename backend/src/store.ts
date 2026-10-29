@@ -107,6 +107,8 @@ export interface MaidRecord {
   introduction: Record<string, unknown>
   agencyContact: Record<string, unknown>
   photoDataUrls: string[]
+  photoThumbnailDataUrls?: string[]
+  photoPortraitDataUrls?: string[]
   photoDataUrl: string
   videoDataUrl: string
   isPublic: boolean
@@ -417,6 +419,8 @@ const defaultMaidRecordValues = {
   introduction: {},
   agencyContact: {},
   photoDataUrls: [] as string[],
+  photoThumbnailDataUrls: [] as string[],
+  photoPortraitDataUrls: [] as string[],
   photoDataUrl: '',
   videoDataUrl: '',
   isPublic: false,
@@ -631,6 +635,8 @@ const toSqlMaidPayload = (
   introduction: maid.introduction,
   agencyContact: maid.agencyContact,
   photoDataUrls: maid.photoDataUrls,
+  photoThumbnailDataUrls: maid.photoThumbnailDataUrls ?? [],
+  photoPortraitDataUrls: maid.photoPortraitDataUrls ?? [],
   photoDataUrl: maid.photoDataUrl,
   videoDataUrl: maid.videoDataUrl,
   isPublic: maid.isPublic,
@@ -912,6 +918,8 @@ const compactMaidRecordForStorage = (maid: MaidRecord) => {
   const normalizedPhotos = Array.isArray(maid.photoDataUrls)
     ? maid.photoDataUrls.filter((item) => typeof item === 'string' && item.trim().length > 0)
     : []
+  const photoThumbnailDataUrls = Array.isArray(maid.photoThumbnailDataUrls) ? maid.photoThumbnailDataUrls : []
+  const photoPortraitDataUrls = Array.isArray(maid.photoPortraitDataUrls) ? maid.photoPortraitDataUrls : []
   const compactLanguageSkills = compactObject(maid.languageSkills)
   const compactSkillsPreferences = compactObject(maid.skillsPreferences)
   const compactWorkAreas = compactObject(maid.workAreas)
@@ -955,6 +963,8 @@ const compactMaidRecordForStorage = (maid: MaidRecord) => {
           hasPhoto: true,
         }
       : {}),
+    ...(photoThumbnailDataUrls.length > 0 ? { photoThumbnailDataUrls } : {}),
+    ...(photoPortraitDataUrls.length > 0 ? { photoPortraitDataUrls } : {}),
     ...(maid.videoDataUrl ? { videoDataUrl: maid.videoDataUrl } : {}),
     ...(maid.isPublic ? { isPublic: true } : {}),
     createdAt: maid.createdAt,
@@ -1641,6 +1651,8 @@ const mergeAppData = (raw: Partial<AppData>): AppData => {
         introduction: isPlainObject(maid.introduction) ? maid.introduction : {},
         agencyContact: isPlainObject(maid.agencyContact) ? maid.agencyContact : {},
         photoDataUrls: normalizedPhotos.slice(0, 5),
+        photoThumbnailDataUrls: Array.isArray(maid.photoThumbnailDataUrls) ? maid.photoThumbnailDataUrls.slice(0, 5) : [],
+        photoPortraitDataUrls: Array.isArray(maid.photoPortraitDataUrls) ? maid.photoPortraitDataUrls.slice(0, 5) : [],
         photoDataUrl: normalizedPhotos[0] ?? maid.photoDataUrl ?? '',
         videoDataUrl: maid.videoDataUrl ?? '',
         hasPhoto: normalizedPhotos.length > 0,
@@ -2572,7 +2584,8 @@ export const addMaidPhotoStore = async (
 export const replaceMaidPhotosStore = async (
   referenceCode: string,
   photoDataUrls: string[],
-  agencyId: number = DEFAULT_AGENCY_ID
+  agencyId: number = DEFAULT_AGENCY_ID,
+  variants: { photoThumbnailDataUrls?: string[]; photoPortraitDataUrls?: string[] } = {},
 ) => {
   const normalizedPhotos = photoDataUrls
     .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
@@ -2590,6 +2603,8 @@ export const replaceMaidPhotosStore = async (
       {
         photoDataUrls: persistedPhotos,
         photoDataUrl: persistedPhotos[0] ?? '',
+      photoThumbnailDataUrls: variants.photoThumbnailDataUrls ?? [],
+      photoPortraitDataUrls: variants.photoPortraitDataUrls ?? [],
         hasPhoto: persistedPhotos.length > 0,
       },
       agencyId
@@ -2611,6 +2626,8 @@ export const replaceMaidPhotosStore = async (
     ...data.maids[index],
     photoDataUrls: persistedPhotos,
     photoDataUrl: persistedPhotos[0] ?? '',
+    photoThumbnailDataUrls: variants.photoThumbnailDataUrls ?? [],
+    photoPortraitDataUrls: variants.photoPortraitDataUrls ?? [],
     hasPhoto: persistedPhotos.length > 0,
     updatedAt: now(),
   }
@@ -2720,6 +2737,8 @@ export const syncMaidsToSqlStore = async () => {
       introduction: maid.introduction,
       agencyContact: maid.agencyContact,
       photoDataUrls: maid.photoDataUrls,
+      photoThumbnailDataUrls: maid.photoThumbnailDataUrls ?? [],
+      photoPortraitDataUrls: maid.photoPortraitDataUrls ?? [],
       photoDataUrl: maid.photoDataUrl,
       videoDataUrl: maid.videoDataUrl,
       isPublic: maid.isPublic,

@@ -177,6 +177,18 @@ export const bulkAtsAction = async (payload: {
   return ensureOk<{ updated: number; data: AtsApplicationBundle[]; error?: string }>(response);
 };
 
+export const deleteAtsApplications = async (applicationIds: string[]) => {
+  const response = await fetch("/api/ats/applications/delete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAgencyAdminAuthHeaders(),
+    },
+    body: JSON.stringify({ applicationIds }),
+  });
+  return ensureOk<{ deleted: number; error?: string }>(response);
+};
+
 export const matchAtsCandidates = async (payload: { requirementText: string; requestId?: string; inquiryId?: number; top?: number }) => {
   const response = await fetch("/api/ats/match", {
     method: "POST",

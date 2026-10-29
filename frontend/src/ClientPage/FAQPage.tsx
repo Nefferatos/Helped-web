@@ -620,7 +620,7 @@ const FAQPage = ({ embedded = false }: FAQPageProps) => {
                 </p>
               </div>
               <div className="fq-contact-btns">
-                <a href="tel:+6591813137" className="fq-contact-btn fq-contact-btn--ghost">
+                <a href="tel:+6580730757" className="fq-contact-btn fq-contact-btn--ghost">
                   <Phone size={14} />
                   Call Us
                 </a>

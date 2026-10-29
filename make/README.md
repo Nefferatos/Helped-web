@@ -10,6 +10,9 @@ Importable blueprints that wire the marketing → application → recruiter → 
 | `helped-applicant-assistant.blueprint.json` | Webhook → AI → Tracker/Google Docs → response | Custom Webhook (from Backend) |
 | `helped-pdf-autofill.blueprint.json` | Webhook → Router (auth) → Make AI Agent → response | Custom Webhook (from Worker) |
 | `helped-maid-referrals-to-google-sheets.blueprint.json` | Referral chatbot → Google Sheets | Custom Webhook (from Worker) |
+| `agent-1-lead-referral-hunter.blueprint.json` | Consented acquisition lead → classify and route | New custom webhook |
+| `agent-2-applicant-profile-collector.blueprint.json` | Applicant message + saved profile state → next question / extraction | New custom webhook |
+| `agent-3-profile-draft-builder.blueprint.json` | Confirmed, consented public fields → profile draft | New custom webhook |
 
 Both use HTTP + Gmail/Sheets modules (the module family the existing `Helped Maids – Full Agentic Dispatcher` blueprint already imports), so they target the real REST surface instead of relying on per-network Make apps.
 
@@ -88,6 +91,10 @@ How it works: module 20 looks up the `application_id`; the `onerror → Resume` 
 
 ### Schedule
 Every 15 minutes (module 1 polls a 20-min window; the dedupe makes the overlap safe).
+
+## 2a. The three new applicant agents
+
+The new acquisition, profile-collection, and profile-draft agents have separate blueprints. They do not replace the existing ATS, applicant assistant, or applicant form. Their contracts, boundaries, and the website APIs still needed to connect them to live records are documented in [`docs/THREE_APPLICANT_AGENTS.md`](../docs/THREE_APPLICANT_AGENTS.md). Import each into its own disabled scenario and use synthetic payloads until the Worker adapters are implemented. Do not reuse the existing applicant-intake webhook URL.
 
 ---
 
