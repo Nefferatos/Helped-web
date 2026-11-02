@@ -3571,6 +3571,9 @@ const safeApi =
       if (/helped_ats_applicant_workflows/i.test(message) && /PGRST205|schema cache|could not find the table/i.test(message)) {
         return jsonError("Applicant profile workflow storage is not installed yet. Apply supabase/20261031_ats_agent_workflows.sql, then retry.", 503);
       }
+      if (/consents/i.test(message) && /PGRST205|schema cache|could not find the table/i.test(message)) {
+        return jsonError("Marketing consent storage is not installed yet. Apply supabase/20261116_marketing_consents.sql, then retry.", 503);
+      }
       if (/contractor_jobs/i.test(message) && /acknowledgement_token_hash|PGRST204|schema cache|could not find the table|column .* does not exist/i.test(message)) {
         return jsonError("Contractor acknowledgement storage is not installed yet. Apply supabase/20261101_contractor_self_service_acknowledgement.sql after the contractor assignment migration, then retry.", 503);
       }
@@ -3820,9 +3823,20 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
 
 const requireAgencyAdminRoleAuth = (...allowed: string[]) => async (c: any, next: () => Promise<void>) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
-  const rawRole = admin?.role?.trim() ?? "";
-  const role = ["admin", "agency", "staff", "contractor"].includes(rawRole)
-    ? rawRole : rawRole.toUpperCase() || "RECRUITER";
+  const rawRole = admin?.role?.trim().toLowerCase().replace(/[\s-]+/g, "_") ?? "";
+  const roleAliases: Record<string, string> = {
+    admin: "admin",
+    agency: "agency",
+    agency_admin: "agency",
+    agency_administrator: "agency",
+    agency_owner: "agency",
+    staff: "staff",
+    contractor: "contractor",
+    recruiter: "RECRUITER",
+    super_admin: "SUPER_ADMIN",
+    document_reviewer: "DOCUMENT_REVIEWER",
+  };
+  const role = (roleAliases[rawRole] ?? rawRole.toUpperCase()) || "RECRUITER";
   if (!admin || !allowed.includes(role)) return c.json({ error: "Insufficient role" }, 403);
   await next();
 };
@@ -6764,6 +6778,8 @@ const buildMakeAutomationInventory = (env: Bindings) => {
       id: "marketing-campaign-events", name: "Marketing Campaign Events", mode: "automatic",
       purpose: "Notifies Make when a staff-generated campaign draft is ready for review; recipient details are excluded.",
       trigger: "Staff generates a campaign draft in AI Marketing.",
+      blueprintUrl: "/make/helped-marketing-campaign-events.blueprint.json",
+      setupInstructions: "Import this scenario in Make, create its webhook, connect Gmail, replace the internal recipient, turn the scenario on, then set the webhook URL as the Worker secret MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS.",
       ...makeHook(env.MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS, "MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS"),
     },
     {
@@ -6833,7 +6849,17 @@ const buildMakeAutomationInventory = (env: Bindings) => {
       id: "hr-email", name: "HR Interview Email Notifications", mode: "staff initiated",
       purpose: "Sends HR interview email requests through the dedicated Make email scenario or shared fallback.",
       trigger: "Staff requests an HR interview email from the portal.",
-      ...makeHook(env.MAKE_HR_EMAIL_WEBHOOK_URL || env.MAKE_WEBHOOK_URL, "MAKE_HR_EMAIL_WEBHOOK_URL", env.MAKE_HR_EMAIL_WEBHOOK_URL?.trim() ? "MAKE_HR_EMAIL_WEBHOOK_URL" : "MAKE_WEBHOOK_URL fallback"),
+      ...makeHook(
+        env.MAKE_HR_EMAIL_WEBHOOK_URL?.trim()
+          || env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim()
+          || env.MAKE_WEBHOOK_URL?.trim(),
+        "MAKE_HR_EMAIL_WEBHOOK_URL",
+        env.MAKE_HR_EMAIL_WEBHOOK_URL?.trim()
+          ? "MAKE_HR_EMAIL_WEBHOOK_URL"
+          : env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim()
+            ? "MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE fallback"
+            : "MAKE_WEBHOOK_URL fallback",
+      ),
     },
     {
       id: "website-ai-workflow", name: "Website AI Workflow", mode: "automatic and staff initiated",
@@ -10347,8 +10373,10 @@ app.get("/api/operations-board/summary", requireAgencyAdminAuth, canReviewAgency
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const currentIso = now();
   const next72Hours = new Date(Date.now() + 72 * 60 * 60_000).toISOString();
-  const data = await loadData(c.env, { readOnly: true });
-  const [tasks, interviewsResponse, flightsResponse] = await Promise.all([
+  // Keep each source independent: a missing/permission-blocked checklist table
+  // must not hide applicant, employer, interview, or placement counts.
+  const [dataResult, tasksResult, interviewsResult, flightsResult, placementsResult] = await Promise.allSettled([
+    loadData(c.env, { readOnly: true }),
     fetchSupabaseTableRows<{ task_key: string; status: string; due_at: string | null }>(config, "deployment_tasks", {
       select: "task_key,status,due_at", filters: { agency_id: admin.agencyId }, limit: 5000,
     }),
@@ -10365,28 +10393,50 @@ app.get("/api/operations-board/summary", requireAgencyAdminAuth, canReviewAgency
       if (!response.ok) throw new Error(`Unable to load upcoming arrivals (${response.status}): ${await readSupabaseError(response)}`);
       return await response.json() as Array<{ id: string; arrival_at: string; status: string }>;
     })(),
+    fetchSupabaseTableRows<{ id: string; status: string }>(config, "placements", {
+      select: "id,status", filters: { agency_id: admin.agencyId }, limit: 2000,
+    }),
   ]);
-  const unfinished = (taskKey: string) => tasks.filter((task) => task.task_key === taskKey && !["VERIFIED", "NOT_APPLICABLE"].includes(task.status));
-  const openTasks = tasks.filter((task) => !["VERIFIED", "NOT_APPLICABLE"].includes(task.status));
+  const unavailable: string[] = [];
+  const noteUnavailable = (label: string, result: PromiseSettledResult<unknown>) => {
+    if (result.status === "rejected") {
+      unavailable.push(label);
+      console.error(`Operations summary source failed (${label}):`, result.reason);
+    }
+  };
+  noteUnavailable("applicant, employer, and enquiry counts", dataResult);
+  noteUnavailable("checklist task counts", tasksResult);
+  noteUnavailable("upcoming interview count", interviewsResult);
+  noteUnavailable("arrival count", flightsResult);
+  noteUnavailable("active placement count", placementsResult);
+  const data = dataResult.status === "fulfilled" ? dataResult.value : null;
+  const tasks = tasksResult.status === "fulfilled" ? tasksResult.value : null;
+  const interviewsResponse = interviewsResult.status === "fulfilled" ? interviewsResult.value : null;
+  const flightsResponse = flightsResult.status === "fulfilled" ? flightsResult.value : null;
+  const placements = placementsResult.status === "fulfilled" ? placementsResult.value : null;
+  const taskRows = tasks ?? [];
+  const unfinished = (taskKey: string) => taskRows.filter((task) => task.task_key === taskKey && !["VERIFIED", "NOT_APPLICABLE"].includes(task.status));
+  const openTasks = taskRows.filter((task) => !["VERIFIED", "NOT_APPLICABLE"].includes(task.status));
   const hasKey = (pattern: RegExp) => openTasks.filter((task) => pattern.test(task.task_key));
   return c.json({
     generatedAt: currentIso,
-    totalApplicants: data.ats.applications.filter((item) => item.agencyId === admin.agencyId).length,
-    totalEmployers: data.employers.filter((item) => (item.agencyId ?? 1) === admin.agencyId).length,
-    activePlacements: (await fetchSupabaseTableRows<{ id: string; status: string }>(config, "placements", { select: "id,status", filters: { agency_id: admin.agencyId }, limit: 2000 })).filter((item) => !["COMPLETED", "CANCELLED", "WITHDRAWN"].includes(item.status.toUpperCase())).length,
-    newInquiries: data.enquiries.filter((item) => (item.agencyId ?? 1) === admin.agencyId && (!item.status || item.status === "new")).length,
-    upcomingInterviews: interviewsResponse.length,
-    contractsAwaitingSignatures: unfinished("contract_signature").length,
-    momApplicationsPending: hasKey(/^mom_application/).length,
-    ipaApprovalsPending: unfinished("ipa_approval").length,
-    upcomingArrivals: flightsResponse.length,
-    airportPickupsPending: hasKey(/^airport_pickup/).length,
-    medicalExaminationsPending: hasKey(/^medical_exam/).length,
-    sipPending: hasKey(/^sip/).length,
-    workPermitsPending: hasKey(/work_permit|mom_registration|fingerprint_photo/).length,
-    completedHandovers: tasks.filter((task) => task.task_key === "employer_handover" && task.status === "VERIFIED").length,
-    overdueTasks: openTasks.filter((task) => task.due_at && Date.parse(task.due_at) < Date.parse(currentIso)).length,
-    openChecklistTasks: openTasks.length,
+    unavailable,
+    totalApplicants: data ? data.ats.applications.filter((item) => item.agencyId === admin.agencyId).length : null,
+    totalEmployers: data ? data.employers.filter((item) => (item.agencyId ?? 1) === admin.agencyId).length : null,
+    activePlacements: placements ? placements.filter((item) => !["COMPLETED", "CANCELLED", "WITHDRAWN"].includes(item.status.toUpperCase())).length : null,
+    newInquiries: data ? data.enquiries.filter((item) => (item.agencyId ?? 1) === admin.agencyId && (!item.status || item.status === "new")).length : null,
+    upcomingInterviews: interviewsResponse?.length ?? null,
+    contractsAwaitingSignatures: tasks ? unfinished("contract_signature").length : null,
+    momApplicationsPending: tasks ? hasKey(/^mom_application/).length : null,
+    ipaApprovalsPending: tasks ? unfinished("ipa_approval").length : null,
+    upcomingArrivals: flightsResponse?.length ?? null,
+    airportPickupsPending: tasks ? hasKey(/^airport_pickup/).length : null,
+    medicalExaminationsPending: tasks ? hasKey(/^medical_exam/).length : null,
+    sipPending: tasks ? hasKey(/^sip/).length : null,
+    workPermitsPending: tasks ? hasKey(/work_permit|mom_registration|fingerprint_photo/).length : null,
+    completedHandovers: tasks ? taskRows.filter((task) => task.task_key === "employer_handover" && task.status === "VERIFIED").length : null,
+    overdueTasks: tasks ? openTasks.filter((task) => task.due_at && Date.parse(task.due_at) < Date.parse(currentIso)).length : null,
+    openChecklistTasks: tasks ? openTasks.length : null,
   });
 }));
 
@@ -12837,12 +12887,12 @@ app.post(
     const body = await parseAiBody(c.req.raw);
     if (body.healthCheck === true) {
       return c.json({
-        online: Boolean(
-          c.env.MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT ||
-            c.env.MAKE_APPLICANT_ASSISTANT_WEBHOOK_URL ||
-            c.env.CLINE_API_KEY ||
-            c.env.ANTHROPIC_API_KEY,
-        ),
+        configured: [
+          c.env.MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT,
+          c.env.MAKE_APPLICANT_ASSISTANT_WEBHOOK_URL,
+          c.env.CLINE_API_KEY,
+          c.env.ANTHROPIC_API_KEY,
+        ].some((value) => Boolean(value?.trim())),
       });
     }
     const data = await loadData(c.env, { readOnly: true });
@@ -13762,6 +13812,7 @@ When concluding (isComplete=true), include:
 
 app.post(
   "/api/ai/hr-interview/email",
+  requireAgencyAdminAuth,
   safeApi(async (c) => {
     const body = await parseBody<{
       to?: string;
@@ -14571,7 +14622,10 @@ const callMakeMarketingAiEngine = async (
 ): Promise<string | null> => {
   if (env.MARKETING_AI_ENABLED?.trim().toLowerCase() !== "true") return null;
   const webhookUrl = env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim();
-  if (!webhookUrl) return null;
+  if (!webhookUrl) {
+    console.error("AI Marketing is enabled but the Make AI gateway is not configured");
+    return null;
+  }
   try {
     const response = await fetch(webhookUrl, {
       method: "POST",
@@ -14585,17 +14639,26 @@ const callMakeMarketingAiEngine = async (
       }),
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error("Make AI Marketing gateway returned HTTP", response.status);
+      return null;
+    }
     const responseBody = (await response.text()).trim();
-    if (!responseBody) return null;
+    if (!responseBody) {
+      console.error("Make AI Marketing gateway returned an empty response");
+      return null;
+    }
     let parsed: unknown = responseBody;
     try {
       parsed = JSON.parse(responseBody) as unknown;
     } catch {
       // Make's AI gateway may return a plain-text answer.
     }
-    return extractMakeMarketingTemplate(parsed);
+    const template = extractMakeMarketingTemplate(parsed);
+    if (!template) console.error("Make AI Marketing gateway response did not contain usable copy");
+    return template;
   } catch {
+    console.error("Make AI Marketing gateway request failed");
     return null;
   }
 };
@@ -14608,7 +14671,7 @@ const generateMarketingTemplate = async (
   agencyPhone: string,
   featuredNames: string[],
   customNote?: string,
-): Promise<string> => {
+): Promise<{ template: string; aiUsed: boolean }> => {
   const meta = goalMetaMarketing(goal, agencyName);
   const emojiPrefix = tone === "professional" ? "" : `${meta.emoji} `;
   const highlight = featuredNames.slice(0, 2).join(" and ");
@@ -14625,11 +14688,14 @@ const generateMarketingTemplate = async (
   const userPrompt = `Goal: ${meta.subject}. Tone: ${toneMap[tone] ?? toneMap.warm}. Agency: ${agencyName}. Phone: ${agencyPhone || "our number"}.${highlight ? ` Available helpers: ${highlight}.` : ""}${customNote?.trim() ? ` Additional instructions from the agency (follow these closely): ${customNote.trim()}` : ""}`;
 
   const text = await callMakeMarketingAiEngine(env, systemPrompt, userPrompt);
-  if (text && text.includes("{{name}}")) return text;
+  if (text && text.includes("{{name}}")) return { template: text, aiUsed: true };
   if (text && text.trim() && text.trim().toLowerCase() !== "accepted") {
-    return `Hi {{name}},\n\n${text.trim()}\n\nContact us at {{agencyPhone}}.`;
+    return {
+      template: `Hi {{name}},\n\n${text.trim()}\n\nContact us at {{agencyPhone}}.`,
+      aiUsed: true,
+    };
   }
-  return fallback;
+  return { template: fallback, aiUsed: false };
 };
 
 const detectMarketingOpportunities = (data: AppData) => {
@@ -14725,7 +14791,7 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
   const result: MarketingDispatchResult = {
     scannedAt,
     opportunitiesFound: opportunities.length,
-    aiUsed: env.MARKETING_AI_ENABLED?.trim().toLowerCase() === "true" && Boolean(env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim()),
+    aiUsed: false,
     model: MARKETING_ENGINE,
     campaigns: [],
     emailsTotal: 0,
@@ -14748,10 +14814,12 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
     // Generate the campaign copy via the Make.com AI gateway ONCE per campaign,
     // then personalise the {{name}}/{{agencyPhone}} placeholders per contact.
     // Make/Resend relay the finished text — Make.com is the only AI engine.
-    const template = await generateMarketingTemplate(
+    const generated = await generateMarketingTemplate(
       env, opp.goal, opp.tone, agencyName, agencyPhone,
       featuredMaids.map((m) => m.fullName),
     );
+    const template = generated.template;
+    result.aiUsed ||= generated.aiUsed;
     let emailsSent = 0, whatsappQueued = 0, skipped = 0;
     const errorSet = new Set<string>();
 
@@ -14850,6 +14918,7 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
 
 app.get(
   "/api/ai/direct-marketing/autonomous/status",
+  requireAgencyAdminAuth,
   requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
     if (!c.env.APP_DATA) return c.json({ lastRun: null });
@@ -14967,7 +15036,8 @@ const buildDmCampaign = async (
   const featured = maidRefs.length > 0
     ? data.maids.filter((m) => maidRefs.includes(m.referenceCode))
     : data.maids.filter((m) => m.isPublic).slice(0, 2);
-  const template = await generateMarketingTemplate(env, goal, tone, agencyName, agencyPhone, featured.map((m) => m.fullName), customNote);
+  const generated = await generateMarketingTemplate(env, goal, tone, agencyName, agencyPhone, featured.map((m) => m.fullName), customNote);
+  const template = generated.template;
   const meta = goalMetaMarketing(goal, agencyName);
   const contacts = buildDetailedContacts(data, audienceType);
   const config = getSupabaseAppDataConfig(env);
@@ -14990,7 +15060,7 @@ const buildDmCampaign = async (
     whatsappReadyCount: messages.filter((m) => m.whatsappReady).length,
     emailOnlyCount: messages.filter((m) => !m.whatsappReady && m.contactEmail).length,
     generatedAt: new Date().toISOString(),
-    aiUsed: env.MARKETING_AI_ENABLED?.trim().toLowerCase() === "true" && Boolean(env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim()),
+    aiUsed: generated.aiUsed,
   };
 };
 
@@ -15042,6 +15112,7 @@ const updateSupabaseMarketingEmail = async (config: SupabaseAppDataConfig, agenc
 
 app.get(
   "/api/ai/direct-marketing/audience",
+  requireAgencyAdminAuth,
   requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
     const type = c.req.query("type") ?? "all_contacts";
@@ -15049,13 +15120,15 @@ app.get(
     const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const data = await loadData(c.env, { readOnly: true });
     const allContacts = buildDetailedContacts(data, type);
-    const consented = await getMarketingConsentFlags(getSupabaseAppDataConfig(c.env), admin.agencyId, allContacts);
+    const consentConfig = getSupabaseAppDataConfig(c.env);
+    if (!consentConfig) return c.json({ error: "Marketing consent storage is not configured" }, 503);
+    const consented = await getMarketingConsentFlags(consentConfig, admin.agencyId, allContacts);
     const contacts = c.req.query("manage") === "true" ? consented : consented.filter((contact) => contact.whatsappConsent || contact.emailConsent);
     return c.json({ contacts, total: allContacts.length, eligibleTotal: consented.filter((contact) => contact.whatsappConsent || contact.emailConsent).length });
   }),
 );
 
-app.post("/api/ai/direct-marketing/audience/consent", requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"), safeApi(async (c) => {
+app.post("/api/ai/direct-marketing/audience/consent", requireAgencyAdminAuth, requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"), safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Marketing consent storage is not configured" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -15093,6 +15166,7 @@ app.post("/api/ai/direct-marketing/audience/consent", requireAgencyAdminRoleAuth
 
 app.get(
   "/api/ai/direct-marketing/campaigns",
+  requireAgencyAdminAuth,
   requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
     if (!c.env.APP_DATA) return c.json({ campaigns: [] });
@@ -15105,7 +15179,7 @@ app.get(
 
 // ─── GET /api/ai/direct-marketing/autonomous/scan ────────────────────────────
 
-app.post("/api/ai/direct-marketing/send-email", requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"), safeApi(async (c) => {
+app.post("/api/ai/direct-marketing/send-email", requireAgencyAdminAuth, requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"), safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const config = getSupabaseAppDataConfig(c.env);
   if (!config || !c.env.APP_DATA) return c.json({ error: "Campaign delivery storage is not configured" }, 503);
@@ -15152,11 +15226,14 @@ app.post("/api/ai/direct-marketing/send-email", requireAgencyAdminRoleAuth("SUPE
 
 app.get(
   "/api/ai/direct-marketing/autonomous/scan",
+  requireAgencyAdminAuth,
   requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
     const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const data = await loadData(c.env, { readOnly: true });
     const rawOps = detectMarketingOpportunities(data);
+    const consentConfig = getSupabaseAppDataConfig(c.env);
+    if (!consentConfig) return c.json({ error: "Marketing consent storage is not configured" }, 503);
     const goalToTrigger: Record<string, string> = { new_arrivals: "new_helpers", follow_up: "stale_enquiries", re_engage: "cold_leads", holiday: "upcoming_holiday" };
     const goalToTitle: Record<string, string> = { new_arrivals: "New Helpers Available", follow_up: "Follow Up on Enquiries", re_engage: "Re-engage Cold Leads", holiday: "Holiday Greeting Campaign", promotion: "Promotion Campaign", custom: "Custom Campaign" };
     const goalToPriority: Record<string, string> = { new_arrivals: "high", follow_up: "medium", re_engage: "medium", holiday: "high", promotion: "low", custom: "low" };
@@ -15165,7 +15242,7 @@ app.get(
     const now = new Date().toISOString();
     const opportunities = (await Promise.all(rawOps.map(async (op) => {
       const audienceType = audToType[op.audience] ?? "all_contacts";
-      const audience = await getMarketingConsentFlags(getSupabaseAppDataConfig(c.env), admin.agencyId, buildDetailedContacts(data, audienceType));
+      const audience = await getMarketingConsentFlags(consentConfig, admin.agencyId, buildDetailedContacts(data, audienceType));
       const eligibleCount = audience.filter((contact) => contact.whatsappConsent || contact.emailConsent).length;
       if (eligibleCount === 0) return null;
       return {
@@ -15190,6 +15267,7 @@ app.get(
 
 app.post(
   "/api/ai/direct-marketing/autonomous/run",
+  requireAgencyAdminAuth,
   requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
     const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -15213,6 +15291,7 @@ app.post(
 
 app.post(
   "/api/ai/direct-marketing/generate",
+  requireAgencyAdminAuth,
   requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
     const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -18965,10 +19044,19 @@ app.get("/api/ats/referral-leads", requireAgencyAdminAuth, async (c) => {
   };
   const query = (c.req.query("q") || "").trim().toLowerCase();
   const country = (c.req.query("country") || "").trim().toLowerCase();
+  const segment = c.req.query("segment") || "all";
+  if (!["all", "eligible", "awaiting", "optedOut", "review"].includes(segment)) {
+    return c.json({ error: "Unsupported referral lead segment" }, 400);
+  }
   const filtered = withConsent.filter((lead) => {
     const matchesQuery = !query || `${lead.name} ${lead.phone} ${lead.country} ${lead.source} ${lead.referrerName}`.toLowerCase().includes(query);
     const matchesCountry = !country || toTrimmedString(lead.country).toLowerCase() === country;
-    return matchesQuery && matchesCountry;
+    const matchesSegment = segment === "all" ||
+      (segment === "eligible" && lead.whatsappConsentActive) ||
+      (segment === "awaiting" && !lead.whatsappConsentActive && !lead.whatsappOptedOut) ||
+      (segment === "optedOut" && lead.whatsappOptedOut) ||
+      (segment === "review" && lead.staffReviewRequired);
+    return matchesQuery && matchesCountry && matchesSegment;
   });
   const pageSize = Math.min(200, Math.max(1, Number(c.req.query("pageSize")) || 100));
   const page = Math.max(1, Number(c.req.query("page")) || 1);
@@ -19342,7 +19430,7 @@ app.get("/api/ats/public/applications/:applicationId/data-requests", safeApi(asy
   const found = await readPublicAtsApplication(c.env, applicationId, token);
   if (!found) return c.json({ error: "Application not found" }, 404);
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant data request tracking requires normalized ATS storage" }, 503);
+  if (!config) return c.json({ error: "Applicant data request tracking requires Supabase storage" }, 503);
   const requests = await getApplicantDataSubjectRequests(config, applicationId, found.application.agencyId);
   return c.json({ requests: requests.map(({ id, request_type, status, applicant_note, resolution_note, submitted_at, resolved_at }) => ({ id, requestType: request_type, status, applicantNote: applicant_note, resolutionNote: resolution_note, submittedAt: submitted_at, resolvedAt: resolved_at })) });
 }));
@@ -19359,7 +19447,7 @@ app.post("/api/ats/public/applications/:applicationId/data-requests", safeApi(as
   const note = typeof body?.note === "string" ? body.note.trim() : "";
   if (note.length > 500) return c.json({ error: "Request details must be 500 characters or fewer" }, 400);
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant data request tracking requires normalized ATS storage" }, 503);
+  if (!config) return c.json({ error: "Applicant data request tracking requires Supabase storage" }, 503);
   const existing = await getApplicantDataSubjectRequests(config, applicationId, found.application.agencyId);
   const activeRequest = existing.find((item) => item.request_type === requestType && ["PENDING", "IN_REVIEW"].includes(item.status));
   if (activeRequest) return c.json({ request: { id: activeRequest.id, requestType: activeRequest.request_type, status: activeRequest.status, applicantNote: activeRequest.applicant_note, resolutionNote: activeRequest.resolution_note, submittedAt: activeRequest.submitted_at, resolvedAt: activeRequest.resolved_at }, alreadyOpen: true }, 200);
@@ -19449,7 +19537,7 @@ app.get("/api/ats/public/applications/:applicationId/profile-agent", safeApi(asy
   const found = await readPublicAtsApplication(c.env, applicationId, token);
   if (!found) return c.json({ error: "Application not found" }, 404);
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant profile assistant requires normalized ATS storage" }, 503);
+  if (!config) return c.json({ error: "Applicant profile assistant requires Supabase storage" }, 503);
   const workflow = await getApplicantProfileWorkflow(config, applicationId, found.application.agencyId);
   return c.json({ workflow: workflow ? {
     profileState: workflow.profile_state, missingFields: workflow.missing_fields,
@@ -19472,7 +19560,7 @@ app.post("/api/ats/public/applications/:applicationId/profile-agent", safeApi(as
   const found = await readPublicAtsApplication(c.env, applicationId, token);
   if (!found) return c.json({ error: "Application not found" }, 404);
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant profile assistant requires normalized ATS storage" }, 503);
+  if (!config) return c.json({ error: "Applicant profile assistant requires Supabase storage" }, 503);
   const action = toTrimmedString(body?.action);
   const current = await getApplicantProfileWorkflow(config, applicationId, found.application.agencyId);
   const timestamp = now();
@@ -19661,7 +19749,7 @@ app.post("/api/ats/public/applications/:applicationId/profile-agent", safeApi(as
 app.get("/api/ats/data-subject-requests", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant data request tracking requires normalized ATS storage" }, 503);
+  if (!config) return c.json({ error: "Applicant data request tracking requires Supabase storage" }, 503);
   const requests = await fetchSupabaseTableRows<AtsDataSubjectRequestRow>(config, "ats_data_subject_requests", {
     select: "id,application_id,agency_id,request_type,status,applicant_note,resolution_note,submitted_at,resolved_at,resolved_by,updated_at",
     filters: { app_id: config.rowId, agency_id: admin.agencyId }, orderBy: "submitted_at.desc", limit: 200,
@@ -19680,7 +19768,7 @@ app.patch("/api/ats/data-subject-requests/:requestId", requireAgencyAdminAuth, c
   if (resolutionNote.length > 1000) return c.json({ error: "Resolution notes must be 1,000 characters or fewer" }, 400);
   if (["FULFILLED", "DECLINED"].includes(status) && resolutionNote.length < 10) return c.json({ error: "Record how the request was handled before closing it" }, 400);
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant data request tracking requires normalized ATS storage" }, 503);
+  if (!config) return c.json({ error: "Applicant data request tracking requires Supabase storage" }, 503);
   const rows = await fetchSupabaseTableRows<AtsDataSubjectRequestRow>(config, "ats_data_subject_requests", {
     select: "id,application_id,agency_id,request_type,status,applicant_note,resolution_note,submitted_at,resolved_at,resolved_by,updated_at",
     filters: { id: requestId, app_id: config.rowId, agency_id: admin.agencyId }, limit: 1,

@@ -1261,7 +1261,74 @@ DROP POLICY IF EXISTS "external_sync_jobs_service_role_only" ON public.external_
 CREATE POLICY "external_sync_jobs_service_role_only" ON public.external_sync_jobs FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- ---------------------------------------------------------------------------
--- 13. STORAGE BUCKET
+-- 13. ATS APPLICANT WORKFLOW TABLES
+-- ---------------------------------------------------------------------------
+-- Agent 2/3 consent, conversation, and profile-draft state. This is separate
+-- from the app_data ATS blob and therefore has no FK to normalized ATS tables.
+CREATE TABLE IF NOT EXISTS public.helped_ats_applicant_workflows (
+  app_id TEXT NOT NULL,
+  application_id TEXT NOT NULL,
+  agency_id INTEGER NOT NULL,
+  conversation_id UUID NOT NULL DEFAULT gen_random_uuid(),
+  profile_state JSONB NOT NULL DEFAULT '{}'::JSONB CHECK (jsonb_typeof(profile_state) = 'object'),
+  missing_fields TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  last_reply TEXT NOT NULL DEFAULT '',
+  confirmation_summary TEXT NOT NULL DEFAULT '',
+  profile_ready_for_confirmation BOOLEAN NOT NULL DEFAULT FALSE,
+  processing_consent_at TIMESTAMPTZ,
+  processing_consent_source TEXT NOT NULL DEFAULT '',
+  applicant_confirmed_at TIMESTAMPTZ,
+  publication_consent_at TIMESTAMPTZ,
+  publication_consent_source TEXT NOT NULL DEFAULT '',
+  publication_consent_withdrawn_at TIMESTAMPTZ,
+  public_profile_draft JSONB CHECK (public_profile_draft IS NULL OR jsonb_typeof(public_profile_draft) = 'object'),
+  draft_status TEXT NOT NULL DEFAULT 'not_started'
+    CHECK (draft_status IN ('not_started', 'not_ready', 'pending_staff_review', 'approved', 'rejected', 'published', 'withdrawn')),
+  staff_review_note TEXT NOT NULL DEFAULT '',
+  reviewed_by TEXT,
+  reviewed_at TIMESTAMPTZ,
+  published_reference_code TEXT NOT NULL DEFAULT '',
+  published_at TIMESTAMPTZ,
+  published_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (app_id, application_id)
+);
+CREATE INDEX IF NOT EXISTS helped_ats_applicant_workflows_review_idx
+  ON public.helped_ats_applicant_workflows (agency_id, draft_status, updated_at DESC);
+ALTER TABLE public.helped_ats_applicant_workflows ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.helped_ats_applicant_workflows FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.helped_ats_applicant_workflows TO service_role;
+
+-- Applicant privacy requests are private and are resolved by staff processes.
+CREATE TABLE IF NOT EXISTS public.ats_data_subject_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_id TEXT NOT NULL,
+  application_id TEXT NOT NULL,
+  agency_id INTEGER NOT NULL,
+  request_type TEXT NOT NULL CHECK (request_type IN ('ACCESS', 'CORRECTION', 'ERASURE')),
+  status TEXT NOT NULL DEFAULT 'PENDING'
+    CHECK (status IN ('PENDING', 'IN_REVIEW', 'FULFILLED', 'DECLINED')),
+  applicant_note TEXT NOT NULL DEFAULT '',
+  resolution_note TEXT NOT NULL DEFAULT '',
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  resolved_by TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ats_data_subject_requests_agency_status_idx
+  ON public.ats_data_subject_requests (agency_id, status, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS ats_data_subject_requests_application_idx
+  ON public.ats_data_subject_requests (app_id, application_id, submitted_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS ats_data_subject_requests_one_open_per_type_idx
+  ON public.ats_data_subject_requests (app_id, application_id, request_type)
+  WHERE status IN ('PENDING', 'IN_REVIEW');
+ALTER TABLE public.ats_data_subject_requests ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.ats_data_subject_requests FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ats_data_subject_requests TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- 14. STORAGE BUCKET
 -- ---------------------------------------------------------------------------
 DO $$
 BEGIN
@@ -1289,6 +1356,19 @@ BEGIN
     INSERT INTO storage.buckets (id, name, public, file_size_limit)
     VALUES ('helped-private', 'helped-private', FALSE, 104857600)
     ON CONFLICT (id) DO UPDATE SET public = FALSE, file_size_limit = EXCLUDED.file_size_limit;
+
+    INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    VALUES (
+      'helped-employer-contracts',
+      'helped-employer-contracts',
+      FALSE,
+      52428800,
+      ARRAY['application/pdf']
+    )
+    ON CONFLICT (id) DO UPDATE
+      SET public = FALSE,
+          file_size_limit = EXCLUDED.file_size_limit,
+          allowed_mime_types = EXCLUDED.allowed_mime_types;
   END IF;
 END
 $$;

@@ -528,24 +528,29 @@ const AtsRecruitmentPage = () => {
     setProfileModalOpen(true);
   }, [applicantId]);
 
-  // AI Health Check — ping the screening endpoint to verify AI is working
+  // This checks for configured credentials or a webhook, not live service availability.
   const aiHealthQuery = useQuery({
     queryKey: ["ats-ai-health"],
     queryFn: async () => {
-      try {
-        const res = await fetch("/api/ai/screen-applicant", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAgencyAdminAuthHeaders(),
-          },
-          body: JSON.stringify({ healthCheck: true }),
-        });
-        // If endpoint responds at all (even with auth error), the AI service is reachable
-        return { online: true, status: res.status, ok: res.ok };
-      } catch {
-        return { online: false, status: 0, ok: false };
+      const response = await fetch("/api/ai/screen-applicant", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAgencyAdminAuthHeaders(),
+        },
+        body: JSON.stringify({ healthCheck: true }),
+      });
+      if (!response.ok) throw new Error("Could not check AI configuration");
+      const data: unknown = await response.json();
+      if (
+        typeof data !== "object" ||
+        data === null ||
+        !("configured" in data) ||
+        typeof data.configured !== "boolean"
+      ) {
+        throw new Error("AI configuration check returned an invalid response");
       }
+      return { configured: data.configured };
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     refetchInterval: 5 * 60 * 1000, // Re-check every 5 minutes
@@ -553,7 +558,8 @@ const AtsRecruitmentPage = () => {
   });
 
   const aiStatus = aiHealthQuery.data;
-  const aiIsOnline = aiStatus?.online ?? false;
+  const aiIsConfigured = aiStatus?.configured ?? false;
+  const aiStatusUnavailable = aiHealthQuery.isError;
   const aiIsLoading = aiHealthQuery.isLoading;
 
   const stageMutation = useMutation({
@@ -1197,25 +1203,35 @@ const AtsRecruitmentPage = () => {
               className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
                 aiIsLoading
                   ? "border-slate-200 bg-slate-50 text-slate-500"
-                  : aiIsOnline
+                  : aiIsConfigured && !aiStatusUnavailable
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                   : "border-amber-200 bg-amber-50 text-amber-700"
               }`}
-              title={aiIsOnline ? "AI scoring & screening service is online" : "AI service is not responding — scores may be from cache"}
+              title={
+                aiIsLoading
+                  ? "Checking whether AI credentials or a screening webhook are configured"
+                  : aiStatusUnavailable
+                    ? "Could not check AI configuration"
+                    : aiIsConfigured
+                      ? "AI credentials or a screening webhook are configured; live service availability is not checked"
+                      : "No AI credentials or screening webhook are configured"
+              }
             >
               {aiIsLoading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : aiIsOnline ? (
+              ) : aiIsConfigured && !aiStatusUnavailable ? (
                 <Zap className="h-3.5 w-3.5" />
               ) : (
                 <AlertTriangle className="h-3.5 w-3.5" />
               )}
               <span className="hidden sm:inline">
                 {aiIsLoading
-                  ? "Checking AI…"
-                  : aiIsOnline
-                  ? "AI Active"
-                  : "AI Offline"}
+                  ? "Checking AI setup…"
+                  : aiStatusUnavailable
+                    ? "AI status unavailable"
+                    : aiIsConfigured
+                      ? "AI Configured"
+                      : "AI Not Configured"}
               </span>
               {!aiIsLoading && (
                 <button

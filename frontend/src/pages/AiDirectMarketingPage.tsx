@@ -709,6 +709,7 @@ export default function AiDirectMarketingPage() {
   >({});
   const [manualCampaign, setManual] = useState<Campaign | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [scanError, setScanError] = useState("");
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // ── Load maids ────────────────────────────────────────────────────────────
@@ -834,9 +835,11 @@ export default function AiDirectMarketingPage() {
       const res = await fetch("/api/ai/direct-marketing/autonomous/scan", {
         headers: getAgencyAdminAuthHeaders(),
       });
-      if (!res.ok) throw new Error(`Scan failed (${res.status})`);
-      const data = (await res.json()) as ScanResult;
+      const responseBody = await res.json().catch(() => ({})) as ScanResult & { error?: string };
+      if (!res.ok) throw new Error(responseBody.error || `Scan failed (${res.status})`);
+      const data = responseBody as ScanResult;
       setScanResult(data);
+      setScanError("");
       if (notify && data.opportunities.length === 0) {
         toast.success("All clear — no campaigns needed right now");
       } else if (notify) {
@@ -853,7 +856,9 @@ export default function AiDirectMarketingPage() {
         );
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Scan failed");
+      const message = err instanceof Error ? err.message : "Scan failed";
+      setScanError(message);
+      if (notify) toast.error(message);
     } finally {
       setScanning(false);
     }
@@ -1092,6 +1097,7 @@ export default function AiDirectMarketingPage() {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
                 Suggestions refresh every 30 minutes while this page is open. Campaigns are drafts only; staff choose whether to open WhatsApp or email drafts.
               </div>
+              {scanError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">Could not scan marketing opportunities: {scanError}. If this is a permission error, ask an agency administrator to check your account role. If it mentions consent storage, apply the marketing consent SQL migration, then select Scan Now to retry.</div>}
 
 
               {scanning && !scanResult && (

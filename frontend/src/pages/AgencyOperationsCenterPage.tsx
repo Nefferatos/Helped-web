@@ -92,7 +92,7 @@ const STATS = [
   { key: 'openChecklistTasks', label: 'Open checklist tasks', icon: ClipboardList },
 ] as const
 
-type OperationsSummary = Record<(typeof STATS)[number]['key'], number> & { generatedAt: string }
+type OperationsSummary = Record<(typeof STATS)[number]['key'], number | null> & { generatedAt: string; unavailable?: string[] }
 
 // Layout note: the five sections below used to be stacked in one long
 // scroll. They're grouped into tabs instead — Overview, Matching,
@@ -149,16 +149,26 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [transcriptResult, setTranscriptResult] = useState<TranscriptResult | null>(null)
 
   const loadPlacements = async () => {
+    setNotice('')
     const [placementsResult, summaryResult] = await Promise.allSettled([
       api<{ placements: Placement[] }>('/api/operations-board'),
       api<OperationsSummary>('/api/operations-board/summary'),
     ])
     if (placementsResult.status === 'fulfilled') setPlacements(placementsResult.value.placements ?? [])
     else setNotice(placementsResult.reason instanceof Error ? placementsResult.reason.message : 'Unable to load operations board')
-    if (summaryResult.status === 'fulfilled') setOperationsSummary(summaryResult.value)
+    if (summaryResult.status === 'fulfilled') {
+      setOperationsSummary(summaryResult.value)
+      if (summaryResult.value.unavailable?.length) {
+        setNotice(`Some dashboard counts are unavailable: ${summaryResult.value.unavailable.join(', ')}. Check the Supabase schema and service-role access for those sources.`)
+      }
+    }
     else {
       setOperationsSummary(null)
-      if (placementsResult.status === 'fulfilled') setNotice(summaryResult.reason instanceof Error ? `Some dashboard counts are unavailable: ${summaryResult.reason.message}` : 'Some dashboard counts are unavailable.')
+      const summaryError = summaryResult.reason instanceof Error ? summaryResult.reason.message : 'the summary request failed'
+      const boardError = placementsResult.status === 'rejected'
+        ? placementsResult.reason instanceof Error ? ` The placement board also failed: ${placementsResult.reason.message}` : ' The placement board also failed.'
+        : ''
+      setNotice(`Dashboard counts are unavailable: ${summaryError}.${boardError}`)
     }
   }
   useEffect(() => { void loadPlacements() }, [])
@@ -416,7 +426,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
           {STATS.map(({ key, label, icon: Icon }) => (
             <div key={key} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Icon className="h-5 w-5" /></span>
-              <div><p className="text-2xl font-bold leading-none text-foreground">{operationsSummary?.[key] ?? '—'}</p><p className="mt-1 text-xs font-medium text-black">{label}</p></div>
+              <div><p className="text-2xl font-bold leading-none text-foreground">{!operationsSummary ? '—' : operationsSummary[key] == null ? 'N/A' : operationsSummary[key]}</p><p className="mt-1 text-xs font-medium text-black">{label}</p></div>
             </div>
           ))}
         </div>

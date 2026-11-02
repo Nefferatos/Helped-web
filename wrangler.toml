@@ -47,8 +47,8 @@ SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 AI_AUTOPILOT_ENABLED = "true"
 # Scheduled autonomous campaign scanning and dispatch; set true to enable.
 AUTONOMOUS_MARKETING_ENABLED = "false"
-# Marketing uses deterministic message templates unless explicitly enabled.
-MARKETING_AI_ENABLED = "false"
+# Marketing copy uses the configured Make AI gateway when available.
+MARKETING_AI_ENABLED = "true"
 
 # Claude model for AI Marketing copy (and other Anthropic calls that read it).
 # Defaults to claude-haiku-4-5 in code when unset — cheap/fast, suited to short

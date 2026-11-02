@@ -224,6 +224,13 @@ Common causes:
 - `SUPABASE_SERVICE_ROLE_KEY` is missing/incorrect
 - You did not run `supabase/app_data.sql` yet
 
+### Problem: "Server Temporarily Unavailable" when uploading contract PDFs
+
+Run `supabase/20261102_employer_contract_storage_bucket.sql` in the Supabase SQL
+Editor. It creates or repairs the private `helped-employer-contracts` bucket
+used by the Cloudflare Worker. Confirm that the Worker has a valid
+`SUPABASE_SERVICE_ROLE_KEY` for the same Supabase project, then retry the upload.
+
 ### Problem: "Wrangler gives login, auth, or permission errors"
 
 Try:

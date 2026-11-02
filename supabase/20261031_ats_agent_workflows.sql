@@ -1,6 +1,7 @@
--- Workflow state for the existing ATS applications. Applicant profile data
--- remains in helped_ats_profiles; this table stores only consent, conversation
--- progress, and reviewable draft state keyed to that application.
+-- Workflow state for existing ATS applications. This table deliberately has
+-- no foreign key to the normalized ATS tables: the website's authoritative
+-- ATS applications may still be stored in app_data while this workflow state
+-- is stored in Supabase. The Worker validates application and agency ownership.
 
 CREATE TABLE IF NOT EXISTS public.helped_ats_applicant_workflows (
   app_id TEXT NOT NULL,
@@ -29,11 +30,7 @@ CREATE TABLE IF NOT EXISTS public.helped_ats_applicant_workflows (
   published_by TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (app_id, application_id),
-  CONSTRAINT helped_ats_applicant_workflows_application_fk
-    FOREIGN KEY (app_id, application_id)
-    REFERENCES public.helped_ats_applications (app_id, record_id)
-    ON DELETE CASCADE
+  PRIMARY KEY (app_id, application_id)
 );
 
 CREATE INDEX IF NOT EXISTS helped_ats_applicant_workflows_review_idx

@@ -1,0 +1,77 @@
+{
+  "name": "Helped - Marketing Campaign Events",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": true,
+      "dataloss": false,
+      "dlq": true
+    },
+    "notes": [
+      "Receives privacy-minimized marketing campaign lifecycle events from the website's durable Make outbox. Create the webhook, connect Gmail, and replace the recipient with an internal marketing review inbox. Events contain no recipient identities, addresses, or campaign message text. The same event_id may be retried by the outbox; use it to identify duplicate notifications in Make run history."
+    ]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 0,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": -300, "y": 0 },
+        "restore": {
+          "parameters": {
+            "hook": { "data": { "editable": "true" } }
+          }
+        },
+        "notes": "Create webhook: Helped Marketing Campaign Events. Supported event_type values include marketing.campaign.draft_created, marketing.email.approved, marketing.email.sent, and marketing.email.failed. Payloads contain event_id, agency_id, campaign_id, and limited campaign/event metadata only."
+      }
+    },
+    {
+      "id": 2,
+      "module": "google-email:ActionSendEmail",
+      "version": 2,
+      "parameters": { "account": "" },
+      "mapper": {
+        "cc": [],
+        "bcc": [],
+        "from": "",
+        "to": ["replace-with-your-internal-marketing-inbox@example.com"],
+        "subject": "Marketing workflow: {{1.event_type}}",
+        "html": "<div style=\"font-family:Arial,sans-serif;color:#172033;max-width:640px\"><h2>Marketing workflow update</h2><p>A campaign draft or campaign email event was recorded by the website.</p><table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"padding:8px;font-weight:bold\">Event</td><td style=\"padding:8px\">{{1.event_type}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Event ID</td><td style=\"padding:8px\">{{1.event_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Agency ID</td><td style=\"padding:8px\">{{1.agency_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Campaign ID</td><td style=\"padding:8px\">{{1.campaign_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Goal / audience</td><td style=\"padding:8px\">{{1.goal}} / {{1.audience_type}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Eligible contact count</td><td style=\"padding:8px\">{{1.contact_count}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Recorded at</td><td style=\"padding:8px\">{{1.generated_at}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Failure code</td><td style=\"padding:8px\">{{1.error_code}}</td></tr></table><p>For draft-created events, open AI Marketing in the Agency Portal to review the campaign before using it. This alert contains no recipient information or campaign copy.</p></div>",
+        "attachments": []
+      },
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": {
+          "parameters": {
+            "account": { "data": { "scoped": "true", "connection": "google-restricted" } }
+          }
+        },
+        "notes": "After import, select a Gmail connection and replace the placeholder with an internal marketing inbox. The same privacy-minimized alert handles draft-created, email-approved, email-sent, and email-failed events."
+      }
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{\"ok\":true}", "status": "200" },
+      "metadata": {
+        "designer": { "x": 300, "y": 0 },
+        "restore": {},
+        "notes": "Returns success only after the internal notification succeeds, allowing the website outbox to retry transient delivery failures."
+      }
+    }
+  ]
+}

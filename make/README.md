@@ -8,6 +8,7 @@ Importable blueprints that wire the marketing → application → recruiter → 
 | `helped-applicant-intake.blueprint.json` | Application form → Supabase → recruiter | Poll Supabase every 15 min |
 | `helped-ai-receptionist.blueprint.json` | Webhook → AI Agent → response | Custom Webhook (from Worker) |
 | `helped-applicant-assistant.blueprint.json` | Webhook → AI → Tracker/Google Docs → response | Custom Webhook (from Backend) |
+| `helped-marketing-campaign-events.blueprint.json` | Webhook → internal Gmail notification → response | Custom Webhook (from Worker durable outbox) |
 | `helped-pdf-autofill.blueprint.json` | Webhook → Router (auth) → Make AI Agent → response | Custom Webhook (from Worker) |
 | `helped-maid-referrals-to-google-sheets.blueprint.json` | Referral chatbot → Google Sheets | Custom Webhook (from Worker) |
 | `agent-1-lead-referral-hunter.blueprint.json` | Consented acquisition lead → classify and route | New custom webhook |

@@ -42,6 +42,16 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
+      // Employer contract records and private document uploads use the
+      // Cloudflare Worker storage path, not the legacy PostgreSQL API.
+      "/api/employers": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
+      "/api/employer-files": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       // Referral intake and lead management are implemented by the Worker.
       // Keep these more-specific routes above the generic Express `/api` proxy.
       "/api/ats/referral-leads": {

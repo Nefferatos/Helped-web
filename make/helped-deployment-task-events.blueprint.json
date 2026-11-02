@@ -1,0 +1,43 @@
+{
+  "name": "Helped - Deployment Task Events",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": true },
+    "notes": ["Receives privacy-minimized verified deployment task and private integration outcome events from the website's durable Make outbox. Create the webhook, connect Gmail, and set an internal operations recipient after import. Make should deduplicate by event_id because the website retries transient delivery failures."]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": -300, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" } } } }, "notes": "Create webhook: Helped Deployment Task Events. Payloads include event_id, event_type, agency_id, and event-specific opaque IDs/status. Do not expect document contents, signed URLs, applicant messages, or transcript text." }
+    },
+    {
+      "id": 2,
+      "module": "google-email:ActionSendEmail",
+      "version": 2,
+      "parameters": { "account": "" },
+      "mapper": {
+        "cc": [],
+        "bcc": [],
+        "from": "",
+        "to": ["replace-with-your-internal-operations-email@example.com"],
+        "subject": "Operations workflow event: {{1.event_type}}",
+        "html": "<div style=\"font-family:Arial,sans-serif;color:#172033;max-width:640px\"><h2>Operations workflow update</h2><p>A verified task or private integration outcome was recorded by the website.</p><table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"padding:8px;font-weight:bold\">Event</td><td style=\"padding:8px\">{{1.event_type}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Event ID</td><td style=\"padding:8px\">{{1.event_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Agency ID</td><td style=\"padding:8px\">{{1.agency_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Placement ID</td><td style=\"padding:8px\">{{1.placement_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Task ID</td><td style=\"padding:8px\">{{1.task_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Task</td><td style=\"padding:8px\">{{1.task_key}} - {{1.title}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Status</td><td style=\"padding:8px\">{{1.status}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Recorded at</td><td style=\"padding:8px\">{{1.verified_at}}</td></tr></table><p>Review the Operations Center for the current record. This notification reflects the website event; use the stored staff verification/evidence for operational decisions.</p></div>",
+        "attachments": []
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": { "parameters": { "account": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "Choose a Gmail connection and replace the recipient with the internal operations inbox. Do not add applicant or employer personal details to this alert." }
+    },
+    {
+      "id": 3,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "body": "{\"ok\":true}", "status": "200" },
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {}, "notes": "Acknowledges the event after the staff alert module succeeds. Website outbox retries delivery on non-success responses." }
+    }
+  ]
+}

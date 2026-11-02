@@ -50,6 +50,22 @@ type BroadcastContact = { name: string; phone: string; language: string; whatsap
 const BROADCAST_HANDOFF_KEY = "referral-leads:broadcast:v1";
 const normalizeHeader = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 const phoneHeader = (value: string) => /^(phone|phoneno|phonenumber|mobile|mobileno|mobilenumber|whatsapp|whatsappno|whatsappnumber|contact|contactno|contactnumber|contactphone|telephone|tel|maidphone|maidphoneno|maidphonenumber|maidmobile|maidmobilenumber|maidwhatsapp|maidwhatsappno|maidwhatsappnumber|referredphone|referredphonenumber)$/.test(value);
+const embeddedPhonePattern = /\+?\d[\d\s().-]*\d/g;
+const parseEmbeddedContact = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  const matches = [...text.matchAll(embeddedPhonePattern)]
+    .map((match) => ({ value: match[0], index: match.index ?? 0 }))
+    .filter((match) => {
+      const digits = match.value.replace(/\D/g, "").length;
+      return digits >= 8 && digits <= 15;
+    });
+  if (matches.length !== 1) return null;
+  const phone = matches[0];
+  const name = `${text.slice(0, phone.index)} ${text.slice(phone.index + phone.value.length)}`
+    .replace(/^[\s,;|:+-]+|[\s,;|:+-]+$/g, "")
+    .trim();
+  return name ? { name, phone: phone.value.trim() } : null;
+};
 const yesValue = (value: unknown) => /^(yes|true|1|active|opted.?in|consented|granted)$/i.test(String(value ?? "").trim());
 const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
 const formatDate = (value: string | null) => value ? new Date(value).toLocaleDateString() : "—";
@@ -99,12 +115,13 @@ export default function ReferralLeadsPage() {
       const params = new URLSearchParams({ page: String(page), pageSize: "100" });
       if (search.trim()) params.set("q", search.trim());
       if (country) params.set("country", country);
+      if (segment !== "all") params.set("segment", segment);
       setData(await request<ReferralLeadResponse>(`/api/ats/referral-leads?${params}`));
       setError("");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load referral leads");
     } finally { setLoading(false); }
-  }, [country, page, search]);
+  }, [country, page, search, segment]);
 
   const loadAutomation = useCallback(async () => {
     setAutomationLoading(true);
@@ -124,28 +141,57 @@ export default function ReferralLeadsPage() {
       if (matrix.length < 2) throw new Error("Add a header row and at least one contact.");
       const headers = matrix[0].map(normalizeHeader);
       const findColumn = (...names: string[]) => headers.findIndex((header) => names.includes(header));
-      const nameColumn = findColumn("name", "fullname", "contactname", "referralname", "maidname", "maidfullname", "referredname", "referredpersonname");
+      let nameColumn = findColumn("name", "fullname", "contactname", "referralname", "maidname", "maidfullname", "referredname", "referredpersonname");
       const phoneColumn = headers.findIndex(phoneHeader);
       const countryColumn = findColumn("country", "nationality", "countryoforigin", "maidnationality");
       const sourceColumn = findColumn("source", "referralsource", "leadsource");
       const languageColumn = findColumn("language", "preferredlanguage", "nativelanguage");
       const consentColumn = findColumn("whatsappconsent", "marketingconsent", "consent", "optin", "whatsappoptin");
       const consentSourceColumn = findColumn("consentsource", "whatsappconsentsource", "optinsource", "consentevidence");
-      if (nameColumn < 0 || phoneColumn < 0) {
-        const headerless = nameColumn < 0 && phoneColumn < 0 && matrix[0].some((value) => String(value ?? "").trim());
-        throw new Error(headerless
-          ? "This sheet appears to have no header row and no phone-number column. Add a header row with Name and Phone, then include a phone number for each person. A name and date alone cannot be imported as a referral lead."
-          : "Include Name (or Maid Name) and Phone (or Maid Phone) columns, with a phone number for each person. Country, Language, WhatsApp Consent, and Consent Source are optional.");
+      let rows = matrix.slice(1);
+      let embeddedPhoneColumn = -1;
+      if (phoneColumn < 0) {
+        const headerless = nameColumn < 0;
+        const candidateRows = headerless ? matrix : rows;
+        const columns = headerless
+          ? Math.max(...candidateRows.map((row) => row.length))
+          : nameColumn >= 0 ? 1 : 0;
+        const candidateColumns = headerless
+          ? Array.from({ length: columns }, (_, index) => index)
+          : nameColumn >= 0 ? [nameColumn] : [];
+        const phoneColumnMatches = candidateColumns.map((column) => ({
+          column,
+          count: candidateRows.filter((row) => parseEmbeddedContact(row[column])).length,
+        })).sort((left, right) => right.count - left.count);
+        if (phoneColumnMatches[0]?.count > 0 &&
+          (phoneColumnMatches.length === 1 || phoneColumnMatches[0].count > phoneColumnMatches[1].count)) {
+          embeddedPhoneColumn = phoneColumnMatches[0].column;
+          if (headerless) {
+            nameColumn = embeddedPhoneColumn;
+            rows = matrix;
+          }
+        }
       }
-      const rows = matrix.slice(1).filter((row) => row.some((cell) => String(cell ?? "").trim()));
-      const leads = rows.map((row) => ({
-        name: String(row[nameColumn] ?? "").trim(), phone: String(row[phoneColumn] ?? "").trim(),
-        country: countryColumn >= 0 ? String(row[countryColumn] ?? "").trim() : "",
-        source: sourceColumn >= 0 ? String(row[sourceColumn] ?? "").trim() : defaultSource,
-        preferredLanguage: languageColumn >= 0 ? String(row[languageColumn] ?? "").trim() : "",
-        whatsappConsent: consentColumn >= 0 && yesValue(row[consentColumn]),
-        whatsappConsentSource: consentSourceColumn >= 0 ? String(row[consentSourceColumn] ?? "").trim() : "",
-      }));
+      if ((nameColumn < 0 || phoneColumn < 0) && embeddedPhoneColumn < 0) {
+        throw new Error("Include Name and Phone columns, or a contact column containing each person’s name and phone number. Headerless name-and-phone entries are also detected automatically.");
+      }
+      rows = rows.filter((row) => row.some((cell) => String(cell ?? "").trim()));
+      const leads = rows.map((row) => {
+        const embeddedContact = embeddedPhoneColumn >= 0 ? parseEmbeddedContact(row[embeddedPhoneColumn]) : null;
+        return {
+          name: embeddedPhoneColumn >= 0
+            ? embeddedContact?.name ?? String(row[embeddedPhoneColumn] ?? "").trim()
+            : String(row[nameColumn] ?? "").trim(),
+          phone: embeddedPhoneColumn >= 0
+            ? embeddedContact?.phone ?? ""
+            : String(row[phoneColumn] ?? "").trim(),
+          country: countryColumn >= 0 ? String(row[countryColumn] ?? "").trim() : "",
+          source: sourceColumn >= 0 ? String(row[sourceColumn] ?? "").trim() : defaultSource,
+          preferredLanguage: languageColumn >= 0 ? String(row[languageColumn] ?? "").trim() : "",
+          whatsappConsent: consentColumn >= 0 && yesValue(row[consentColumn]),
+          whatsappConsentSource: consentSourceColumn >= 0 ? String(row[consentSourceColumn] ?? "").trim() : "",
+        };
+      });
       let imported = 0; let duplicateCount = 0; let invalidCount = 0;
       for (let offset = 0; offset < leads.length; offset += 250) {
         const result = await request<{ imported: number; duplicateCount: number; invalidCount: number }>("/api/ats/referral-leads/import", {
@@ -329,7 +375,7 @@ export default function ReferralLeadsPage() {
         ].map((item, index) => {
           const Icon = item.icon;
           const content = <><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50"><Icon className="h-5 w-5 text-black" /></span><span className="min-w-0"><span className="block text-2xl font-black leading-none text-black">{loading && !data ? "—" : item.value}</span><span className="mt-1 block text-xs font-semibold text-black">{item.label}</span></span></>;
-          return item.id ? <button key={item.label} type="button" onClick={() => setSegment(item.id!)} aria-pressed={item.active} className={`referral-enter referral-delay-${Math.min(index + 1, 3)} flex min-h-[94px] items-center gap-3 rounded-2xl border p-4 text-left transition duration-200 hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${item.active ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white"}`}>{content}</button> : <div key={item.label} className="referral-enter flex min-h-[94px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">{content}</div>;
+          return item.id ? <button key={item.label} type="button" onClick={() => { setPage(1); setSegment(item.id!); }} aria-pressed={item.active} className={`referral-enter referral-delay-${Math.min(index + 1, 3)} flex min-h-[94px] items-center gap-3 rounded-2xl border p-4 text-left transition duration-200 hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${item.active ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white"}`}>{content}</button> : <div key={item.label} className="referral-enter flex min-h-[94px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">{content}</div>;
         })}
       </section>
 
@@ -345,11 +391,11 @@ export default function ReferralLeadsPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2" role="tablist" aria-label="Filter leads by status">
-          {(Object.keys(segmentDetails) as Segment[]).map((key) => <button key={key} type="button" role="tab" aria-selected={segment === key} onClick={() => setSegment(key)} className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${segment === key ? "border-emerald-700 bg-emerald-700 text-white" : "border-slate-300 bg-white text-black hover:bg-emerald-50"}`}>{segmentDetails[key].label}</button>)}
+          {(Object.keys(segmentDetails) as Segment[]).map((key) => <button key={key} type="button" role="tab" aria-selected={segment === key} onClick={() => { setPage(1); setSegment(key); }} className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${segment === key ? "border-emerald-700 bg-emerald-700 text-white" : "border-slate-300 bg-white text-black hover:bg-emerald-50"}`}>{segmentDetails[key].label}</button>)}
         </div>
 
         {error ? <div role="alert" className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-rose-300 bg-rose-50 p-4 text-black"><span>{error}</span><Button variant="outline" size="sm" onClick={() => void load()} className="border-slate-300 text-black">Try again</Button></div> : null}
-        {loading ? <div className="flex items-center justify-center gap-3 py-16 text-black"><LoaderCircle className="h-5 w-5 animate-spin" />Loading referral contacts…</div> : !visibleLeads.length ? <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-16 text-center"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm"><Users className="h-7 w-7 text-black" /></span><p className="mt-4 text-lg font-bold text-black">{data?.leads.length ? `No ${segmentDetails[segment].label.toLowerCase()} on this page` : "No referral leads yet"}</p><p className="mx-auto mt-2 max-w-md text-sm text-black">{data?.leads.length ? "Choose another status filter or adjust your search." : "Import a spreadsheet or collect a referral through the website form."}</p>{!data?.leads.length && <Button variant="outline" onClick={() => inputRef.current?.click()} className="mt-4 border-slate-300 text-black"><Upload className="h-4 w-4" />Import your first leads</Button>}</div> : (
+        {loading ? <div className="flex items-center justify-center gap-3 py-16 text-black"><LoaderCircle className="h-5 w-5 animate-spin" />Loading referral contacts…</div> : !visibleLeads.length ? <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-16 text-center"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm"><Users className="h-7 w-7 text-black" /></span><p className="mt-4 text-lg font-bold text-black">{data?.total ? `No ${segmentDetails[segment].label.toLowerCase()} on this page` : data?.summary.total ? "No leads match these filters" : "No referral leads yet"}</p><p className="mx-auto mt-2 max-w-md text-sm text-black">{data?.total ? "Choose another status filter or adjust your search." : data?.summary.total ? "Try changing the status, search, or country filters." : "Import a spreadsheet or collect a referral through the website form."}</p>{!data?.summary.total && <Button variant="outline" onClick={() => inputRef.current?.click()} className="mt-4 border-slate-300 text-black"><Upload className="h-4 w-4" />Import your first leads</Button>}</div> : (
           <>
             <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
               <table className="w-full min-w-[1050px] text-left text-sm text-black">
