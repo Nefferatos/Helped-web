@@ -918,16 +918,21 @@ const AddMaid = () => {
             application.application.profile.fullBodyPhotoUrl ||
             "",
         ];
-        const photoResults = await Promise.all(
-          photoSources.map(async (source) => {
+        const [profileDraftResponse, photoResults] = await Promise.all([
+          fetch(`/api/ats/profile-drafts/${encodeURIComponent(applicationId)}/prefill`, {
+            headers: { ...getAgencyAdminAuthHeaders() },
+          }).then(async (response) => response.ok
+            ? await response.json() as { draft?: { summary?: string | null; experience_summary?: string | null } }
+            : null).catch(() => null),
+          Promise.all(photoSources.map(async (source) => {
             if (!source) return { dataUrl: "", error: false };
             try {
               return { dataUrl: await fetchImageAsDataUrl(source), error: false };
             } catch {
               return { dataUrl: "", error: true };
             }
-          }),
-        );
+          })),
+        ]);
         if (cancelled) return;
         const photoDataUrls = photoResults.map((result) => result.dataUrl);
         setFormData((prev) =>
@@ -938,6 +943,15 @@ const AddMaid = () => {
               : detailedPrefill,
           ),
         );
+        const approvedDraftText = profileDraftResponse?.draft?.summary?.trim() || profileDraftResponse?.draft?.experience_summary?.trim();
+        if (approvedDraftText) {
+          setFormData((prev) => {
+            const introduction = (prev.introduction as Record<string, unknown>) || {};
+            if (String(introduction.publicIntro || "").trim()) return prev;
+            return { ...prev, introduction: { ...introduction, publicIntro: approvedDraftText } };
+          });
+          toast.info("The approved profile draft was added to Public Introduction. Review it before saving or publishing.");
+        }
         if (photoResults.some((result) => result.error)) {
           toast.warning("Applicant details loaded, but one or more photos could not be attached. Please check the photo slots.");
         }

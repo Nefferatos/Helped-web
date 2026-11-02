@@ -423,8 +423,9 @@ function PillSelect<T extends string>({
 const MessageCard = ({ msg, campaignId }: { msg: MarketingMessage; campaignId: string }) => {
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
   const sendEmail = async () => {
-    if (!msg.contactEmail) return;
+    if (!msg.contactEmail || sent) return;
     setSending(true);
     try {
       const res = await fetch("/api/ai/direct-marketing/send-email", {
@@ -432,16 +433,10 @@ const MessageCard = ({ msg, campaignId }: { msg: MarketingMessage; campaignId: s
         headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify({ campaignId, contactId: msg.contactId }),
       });
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (res.status === 404) {
-        // This deployment doesn't expose the server-side send endpoint yet
-        // (e.g. the Cloudflare Worker) — fall back to the mailto draft so the
-        // action still works for the agency.
-        if (msg.emailLink) window.open(msg.emailLink, "_blank", "noopener,noreferrer");
-        return;
-      }
+      const data = (await res.json().catch(() => null)) as { error?: string; trackingPending?: boolean } | null;
       if (!res.ok) throw new Error(data?.error || "Could not send email");
-      toast.success(`Email sent to ${msg.contactEmail}`);
+      setSent(true);
+      toast.success(data?.trackingPending ? "Email sent; delivery tracking is still updating." : `Email sent to ${msg.contactEmail}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not send email");
     } finally {
@@ -514,11 +509,11 @@ const MessageCard = ({ msg, campaignId }: { msg: MarketingMessage; campaignId: s
           {msg.contactEmail && (
             <button
               onClick={() => void sendEmail()}
-              disabled={sending}
+              disabled={sending || sent}
               className="flex h-7 items-center gap-1.5 rounded-md border border-sky-600 bg-sky-600 px-2.5 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
             >
               {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-              Send email
+              {sent ? "Email sent" : "Send email"}
             </button>
           )}
           <button

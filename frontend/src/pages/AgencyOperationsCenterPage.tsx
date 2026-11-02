@@ -1,11 +1,13 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { ArrowRight, BookOpen, CheckCircle2, FileAudio, FolderSync, Search, ShieldCheck, Sparkles, UsersRound, Plane, Stethoscope, HeartHandshake, ClipboardList } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, BookOpen, CheckCircle2, ExternalLink, FileAudio, FolderSync, Search, ShieldCheck, Sparkles, UsersRound, Plane, Stethoscope, HeartHandshake, ClipboardList } from 'lucide-react'
 import { getAgencyAdminAuthHeaders } from '@/lib/agencyAdminAuth'
+import { adminPath } from '@/lib/routes'
 import ContractorTasksPage from '@/pages/ContractorTasksPage'
 
 type Placement = { id: string; maid_reference_code: string | null; status: string; flight_booked: boolean; medical_completed: boolean; sip_completed: boolean; handover_completed: boolean }
 type KnowledgeSnippet = { id: string; title: string; category: string; content: string; similarity: number }
-type Requirements = { service_type?: string; location?: string; max_monthly_salary?: number; availability?: string; preferred_nationalities?: string[]; preferred_languages?: string[]; minimum_experience_years?: number; notes?: string }
+type Requirements = { service_type?: string; location?: string; household_size?: number | null; children_count?: number | null; elderly_count?: number | null; cooking_requirements?: string; preferred_start_date?: string | null; max_monthly_salary?: number; availability?: string; preferred_nationalities?: string[]; preferred_languages?: string[]; minimum_experience_years?: number; notes?: string }
 type MatchCandidate = { maidId: number; maidReferenceCode: string; maidName: string; score: number; reasons: string[]; manual?: boolean; photoDataUrl?: string }
 type ManualMaidOption = { id: number; referenceCode: string; fullName: string; nationality?: string; status?: string; photoDataUrl?: string }
 type MatchResponse = { data?: { matches?: MatchCandidate[]; aiUsed?: boolean; fallbackUsed?: boolean } }
@@ -72,11 +74,25 @@ function Card({
 }
 
 const STATS = [
-  { key: 'active', label: 'Active placements', icon: ClipboardList },
-  { key: 'flight', label: 'Flights booked', icon: Plane },
-  { key: 'medical', label: 'Medicals done', icon: Stethoscope },
-  { key: 'handover', label: 'Handovers done', icon: HeartHandshake },
+  { key: 'totalApplicants', label: 'Applicants', icon: UsersRound },
+  { key: 'totalEmployers', label: 'Employers', icon: UsersRound },
+  { key: 'activePlacements', label: 'Active placements', icon: ClipboardList },
+  { key: 'newInquiries', label: 'New enquiries', icon: Search },
+  { key: 'upcomingInterviews', label: 'Upcoming interviews', icon: ClipboardList },
+  { key: 'contractsAwaitingSignatures', label: 'Contract signature tasks', icon: ClipboardList },
+  { key: 'momApplicationsPending', label: 'MOM application tasks', icon: ClipboardList },
+  { key: 'ipaApprovalsPending', label: 'IPA approval tasks', icon: ClipboardList },
+  { key: 'upcomingArrivals', label: 'Arrivals in 72 hours', icon: Plane },
+  { key: 'airportPickupsPending', label: 'Pickup tasks', icon: Plane },
+  { key: 'medicalExaminationsPending', label: 'Medical exam tasks', icon: Stethoscope },
+  { key: 'sipPending', label: 'SIP tasks', icon: ClipboardList },
+  { key: 'workPermitsPending', label: 'Work permit tasks', icon: ClipboardList },
+  { key: 'completedHandovers', label: 'Verified handovers', icon: HeartHandshake },
+  { key: 'overdueTasks', label: 'Overdue tasks', icon: ClipboardList },
+  { key: 'openChecklistTasks', label: 'Open checklist tasks', icon: ClipboardList },
 ] as const
+
+type OperationsSummary = Record<(typeof STATS)[number]['key'], number> & { generatedAt: string }
 
 // Layout note: the five sections below used to be stacked in one long
 // scroll. They're grouped into tabs instead — Overview, Matching,
@@ -106,6 +122,7 @@ const placementSignal = (placement: Placement) => {
 export default function AgencyOperationsCenterPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [placements, setPlacements] = useState<Placement[]>([])
+  const [operationsSummary, setOperationsSummary] = useState<OperationsSummary | null>(null)
   const [removingPlacementId, setRemovingPlacementId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const [employerId, setEmployerId] = useState('')
@@ -132,12 +149,16 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [transcriptResult, setTranscriptResult] = useState<TranscriptResult | null>(null)
 
   const loadPlacements = async () => {
-    try {
-      const data = await api<{ placements: Placement[] }>('/api/operations-board')
-      setPlacements(data.placements ?? [])
-      setNotice('')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Unable to load operations board')
+    const [placementsResult, summaryResult] = await Promise.allSettled([
+      api<{ placements: Placement[] }>('/api/operations-board'),
+      api<OperationsSummary>('/api/operations-board/summary'),
+    ])
+    if (placementsResult.status === 'fulfilled') setPlacements(placementsResult.value.placements ?? [])
+    else setNotice(placementsResult.reason instanceof Error ? placementsResult.reason.message : 'Unable to load operations board')
+    if (summaryResult.status === 'fulfilled') setOperationsSummary(summaryResult.value)
+    else {
+      setOperationsSummary(null)
+      if (placementsResult.status === 'fulfilled') setNotice(summaryResult.reason instanceof Error ? `Some dashboard counts are unavailable: ${summaryResult.reason.message}` : 'Some dashboard counts are unavailable.')
     }
   }
   useEffect(() => { void loadPlacements() }, [])
@@ -176,6 +197,8 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
         serviceType: requirements.service_type, location: requirements.location, maxMonthlySalary: requirements.max_monthly_salary,
         availability: requirements.availability, preferredNationalities: requirements.preferred_nationalities,
         preferredLanguages: requirements.preferred_languages, minimumExperienceYears: requirements.minimum_experience_years, notes: requirements.notes,
+        householdSize: requirements.household_size, childrenCount: requirements.children_count, elderlyCount: requirements.elderly_count,
+        cookingRequirements: requirements.cooking_requirements, preferredStartDate: requirements.preferred_start_date,
       }) })
       setNotice('Employer requirements saved. Future matches will use them.')
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to save requirements') }
@@ -247,14 +270,16 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
 
     setStartingPlacementId(candidate.maidId)
     try {
-      await api('/api/operations-board/placements', {
+      const result = await api<{ checklist?: { ready: boolean; taskCount: number } }>('/api/operations-board/placements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ maidId: candidate.maidId, employerId: numericEmployerId }),
       })
       await loadPlacements()
       setPlacementCandidate(null)
-      setNotice(`Placement started for ${candidate.maidName}. The checklist is ready for staff updates.`)
+      setNotice(result.checklist?.ready
+        ? `Placement started for ${candidate.maidName}. ${result.checklist.taskCount} deployment tasks are ready for staff updates.`
+        : `Placement started for ${candidate.maidName}, but the deployment checklist was not initialized. Apply the deployment task database migration, then initialize the checklist from the Operations Board.`)
       setActiveTab('contractor')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Unable to start placement')
@@ -304,15 +329,6 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
       setMediaFile(null)
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to transcribe media') }
     finally { setIsTranscribing(false) }
-  }
-
-  const statValues: Record<string, number> = {
-    active: placements.filter((placement) =>
-      !['COMPLETED', 'CANCELLED', 'WITHDRAWN'].includes(placement.status.trim().toUpperCase()),
-    ).length,
-    flight: placements.filter((p) => p.flight_booked).length,
-    medical: placements.filter((p) => p.medical_completed).length,
-    handover: placements.filter((p) => p.handover_completed).length,
   }
 
   return (
@@ -396,14 +412,15 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
         </div>
 
         {/* ── KPI strip — always visible, whatever tab is open ────────── */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           {STATS.map(({ key, label, icon: Icon }) => (
             <div key={key} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Icon className="h-5 w-5" /></span>
-              <div><p className="text-2xl font-bold leading-none text-foreground">{statValues[key]}</p><p className="mt-1 text-xs font-medium text-black">{label}</p></div>
+              <div><p className="text-2xl font-bold leading-none text-foreground">{operationsSummary?.[key] ?? '—'}</p><p className="mt-1 text-xs font-medium text-black">{label}</p></div>
             </div>
           ))}
         </div>
+        <p className="-mt-4 text-xs text-black">Counts reflect agency records and open checklist tasks as of {operationsSummary?.generatedAt ? new Date(operationsSummary.generatedAt).toLocaleString() : 'the latest refresh'}. Checklist counts track staff tasks; they do not confirm an external authority’s approval.</p>
 
         {/* ── Tab navigation ───────────────────────────────────────── */}
         <div role="tablist" aria-label="Operations Center sections" className="grid grid-cols-2 gap-2 rounded-[26px] border border-border bg-muted/60 p-2 sm:grid-cols-3 lg:grid-cols-5">
@@ -493,6 +510,18 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
                 <Field label="Minimum experience (years)">
                   <input className={fieldClass} type="number" placeholder="e.g. 2" value={requirements.minimum_experience_years ?? ''} onChange={(e) => setRequirements({ ...requirements, minimum_experience_years: e.target.value ? Number(e.target.value) : undefined })} />
                 </Field>
+                <Field label="Household size">
+                  <input className={fieldClass} type="number" min="1" step="1" placeholder="e.g. 4" value={requirements.household_size ?? ''} onChange={(e) => setRequirements({ ...requirements, household_size: e.target.value ? Number(e.target.value) : null })} />
+                </Field>
+                <Field label="Children in household">
+                  <input className={fieldClass} type="number" min="0" step="1" placeholder="Not specified" value={requirements.children_count ?? ''} onChange={(e) => setRequirements({ ...requirements, children_count: e.target.value ? Number(e.target.value) : null })} />
+                </Field>
+                <Field label="Elderly household members">
+                  <input className={fieldClass} type="number" min="0" step="1" placeholder="Not specified" value={requirements.elderly_count ?? ''} onChange={(e) => setRequirements({ ...requirements, elderly_count: e.target.value ? Number(e.target.value) : null })} />
+                </Field>
+                <Field label="Preferred start date">
+                  <input className={fieldClass} type="date" value={requirements.preferred_start_date ?? ''} onChange={(e) => setRequirements({ ...requirements, preferred_start_date: e.target.value || null })} />
+                </Field>
                 <Field label="Nationalities">
                   <input className={fieldClass} placeholder="comma separated" value={(requirements.preferred_nationalities ?? []).join(', ')} onChange={(e) => setRequirements({ ...requirements, preferred_nationalities: splitList(e.target.value) })} />
                 </Field>
@@ -500,6 +529,10 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
                   <input className={fieldClass} placeholder="comma separated" value={(requirements.preferred_languages ?? []).join(', ')} onChange={(e) => setRequirements({ ...requirements, preferred_languages: splitList(e.target.value) })} />
                 </Field>
               </div>
+
+              <Field label="Cooking requirements">
+                <textarea className={fieldClass} rows={2} maxLength={1000} placeholder="For example: Chinese home cooking, vegetarian meals, baking" value={requirements.cooking_requirements ?? ''} onChange={(e) => setRequirements({ ...requirements, cooking_requirements: e.target.value })} />
+              </Field>
 
               <Field label="Notes">
                 <textarea className={fieldClass} rows={3} placeholder="Anything else the matching process should know…" value={requirements.notes ?? ''} onChange={(e) => setRequirements({ ...requirements, notes: e.target.value })} />
@@ -588,7 +621,13 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
         ) : null}
 
         {/* ── Knowledge tab ────────────────────────────────────────── */}
-        {activeTab === 'contractor' ? <ContractorTasksPage onPlacementChange={loadPlacements} /> : null}
+        {activeTab === 'contractor' ? <>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-black">
+            <div><p className="font-semibold">Placement tasks and contractor assignments</p><p className="mt-1 text-sm text-black">Use the checklist to assign deadlines and verify each deployment requirement.</p></div>
+            <Link to={adminPath('/operations')} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-slate-100">Open deployment checklist<ExternalLink className="h-4 w-4" /></Link>
+          </div>
+          <ContractorTasksPage onPlacementChange={loadPlacements} />
+        </> : null}
 
         {activeTab === 'knowledge' ? (
           <Card icon={BookOpen} title="Knowledge library" description="What your receptionist can look up">

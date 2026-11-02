@@ -134,6 +134,7 @@ const sendEmailViaResend = async ({
   subject,
   text,
   html,
+  idempotencyKey,
 }: {
   toEmail: string
   toName?: string
@@ -142,6 +143,7 @@ const sendEmailViaResend = async ({
   subject: string
   text: string
   html?: string
+  idempotencyKey?: string
 }) => {
   const apiKey = getOptionalEnv('RESEND_API_KEY')
   const from = getOptionalEnv('RESEND_FROM')
@@ -157,6 +159,7 @@ const sendEmailViaResend = async ({
     headers: {
       authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     },
     body: JSON.stringify({
       from,
@@ -312,6 +315,7 @@ type MarketingEmailInput = {
   html?: string
   replyToEmail?: string
   replyToName?: string
+  idempotencyKey?: string
 }
 
 /**
@@ -327,6 +331,7 @@ export const sendMarketingEmail = async ({
   html,
   replyToEmail,
   replyToName,
+  idempotencyKey,
 }: MarketingEmailInput) => {
   if (!checkEmailRateLimit(toEmail.toLowerCase())) {
     throw new MailDeliveryError('Too many emails sent. Please try again later.', 'RATE_LIMITED')
@@ -341,6 +346,12 @@ export const sendMarketingEmail = async ({
   const resendConfigured =
     mailProvider === 'resend' ||
     Boolean(getOptionalEnv('RESEND_API_KEY') && getOptionalEnv('RESEND_FROM'))
+  // Campaign delivery supplies a stable idempotency key. Do not silently
+  // downgrade that workflow to SMTP, which cannot honor the same key after an
+  // ambiguous network failure.
+  if (idempotencyKey && !resendConfigured) {
+    throw new MailConfigurationError('Campaign email delivery requires RESEND_API_KEY and RESEND_FROM for safe idempotent sending.')
+  }
   const replyTo = replyToEmail ? formatAddress(replyToEmail, replyToName) : ''
 
   if (resendConfigured) {
@@ -352,6 +363,7 @@ export const sendMarketingEmail = async ({
       subject: normalizedSubject,
       text: normalizedText,
       html,
+      idempotencyKey,
     })
     return
   }

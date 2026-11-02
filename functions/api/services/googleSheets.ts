@@ -353,6 +353,44 @@ const ILLEGAL_SHEET_TITLE_CHARS = /[[\]:*?/\\]+/g;
  * `[]:*?/\`, or duplicate an existing title. This normalises a requested
  * title and guarantees uniqueness against `existingTitles`.
  */
+/** Read a bounded cell range for an authenticated, staff-requested import. */
+export const readGoogleSheetsRange = async (
+  credentials: GoogleSheetsCredentials,
+  range: string,
+): Promise<GoogleSheetValues> => {
+  const cleanRange = String(range ?? "").trim();
+  if (!cleanRange || cleanRange.length > 160 || !cleanRange.includes("!")) {
+    throw new Error("Enter a sheet range such as Referrals!A1:Z501");
+  }
+  const separator = cleanRange.lastIndexOf("!");
+  const sheetName = cleanRange.slice(0, separator).trim();
+  const cells = cleanRange.slice(separator + 1).replace(/\$/g, "");
+  const boundedCells = cells.match(/^([A-Z]{1,3})([1-9]\d*):([A-Z]{1,3})([1-9]\d*)$/i);
+  const columnNumber = (column: string) => [...column.toUpperCase()].reduce((number, letter) => number * 26 + letter.charCodeAt(0) - 64, 0);
+  if (!sheetName || !boundedCells) {
+    throw new Error("Use a bounded cell range such as Referrals!A1:Z501; whole-column ranges are not allowed.");
+  }
+  const [, firstColumn, firstRowText, lastColumn, lastRowText] = boundedCells;
+  const firstColumnNumber = columnNumber(firstColumn);
+  const lastColumnNumber = columnNumber(lastColumn);
+  const firstRow = Number(firstRowText);
+  const lastRow = Number(lastRowText);
+  if (lastColumnNumber < firstColumnNumber || lastRow < firstRow || lastRow - firstRow + 1 > 501 || lastColumnNumber - firstColumnNumber + 1 > 50) {
+    throw new Error("Google Sheets import is limited to 501 rows and 50 columns per request.");
+  }
+  const accessToken = await getGoogleSheetsAccessToken(credentials.serviceAccount);
+  const url = `${SHEETS_API_BASE}/${encodeURIComponent(credentials.spreadsheetId)}/values/${encodeURIComponent(cleanRange)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`;
+  const response = await sheetsFetch(accessToken, url, { method: "GET" });
+  const payload = await response.json() as { values?: unknown[][] };
+  return (payload.values ?? []).slice(0, 501).map((row) =>
+    (Array.isArray(row) ? row.slice(0, 50) : []).map((cell) => {
+      if (typeof cell === "string") return cell.slice(0, 5000);
+      if (typeof cell === "number" || typeof cell === "boolean") return cell;
+      return "";
+    }),
+  );
+};
+
 export const sanitizeSheetTitle = (
   requested: string,
   existingTitles: Set<string>,

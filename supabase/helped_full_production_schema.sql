@@ -1195,7 +1195,11 @@ CREATE TABLE IF NOT EXISTS public.employer_requirements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), agency_id INTEGER NOT NULL DEFAULT 1, employer_id INTEGER NOT NULL,
   service_type TEXT, location TEXT, max_monthly_salary NUMERIC(12,2), availability TEXT,
   preferred_nationalities TEXT[] NOT NULL DEFAULT '{}', preferred_languages TEXT[] NOT NULL DEFAULT '{}',
-  minimum_experience_years INTEGER CHECK (minimum_experience_years >= 0), notes TEXT,
+  minimum_experience_years INTEGER CHECK (minimum_experience_years >= 0),
+  household_size INTEGER CHECK (household_size IS NULL OR household_size > 0),
+  children_count INTEGER CHECK (children_count IS NULL OR children_count >= 0),
+  elderly_count INTEGER CHECK (elderly_count IS NULL OR elderly_count >= 0),
+  cooking_requirements TEXT NOT NULL DEFAULT '', preferred_start_date DATE, notes TEXT,
   active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (agency_id, employer_id)
 );

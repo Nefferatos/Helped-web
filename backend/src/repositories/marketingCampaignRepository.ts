@@ -47,3 +47,38 @@ export const getMarketingCampaign = async (agencyId: number, id: string): Promis
   if (!value) return null
   return typeof value === 'string' ? JSON.parse(value) as MarketingCampaign : value
 }
+
+export type MarketingMessageDeliveryClaim = 'claimed' | 'sent' | 'in_progress'
+
+/** Claim one agency-scoped message so concurrent clicks cannot send it twice. */
+export const claimMarketingEmailDelivery = async (agencyId: number, campaignId: string, contactId: string): Promise<MarketingMessageDeliveryClaim> => {
+  const claimed = await query(sql`
+    INSERT INTO marketing_message_deliveries (agency_id, campaign_id, contact_id, channel, status, attempts, lease_expires_at)
+    VALUES (${agencyId}, ${campaignId}::uuid, ${contactId}, 'email', 'SENDING', 1, NOW() + INTERVAL '15 minutes')
+    ON CONFLICT (agency_id, campaign_id, contact_id, channel)
+    DO UPDATE SET status = 'SENDING', attempts = marketing_message_deliveries.attempts + 1,
+      lease_expires_at = NOW() + INTERVAL '15 minutes', last_error = '', updated_at = NOW()
+    WHERE marketing_message_deliveries.status = 'FAILED'
+    RETURNING id
+  `)
+  if (claimed.rows.length > 0) return 'claimed'
+  const existing = await query(sql`
+    SELECT status FROM marketing_message_deliveries
+    WHERE agency_id = ${agencyId} AND campaign_id = ${campaignId}::uuid AND contact_id = ${contactId} AND channel = 'email'
+    LIMIT 1
+  `)
+  return existing.rows[0]?.status === 'SENT' ? 'sent' : 'in_progress'
+}
+
+export const finishMarketingEmailDelivery = async (
+  agencyId: number,
+  campaignId: string,
+  contactId: string,
+  status: 'SENT' | 'FAILED',
+  safeError = '',
+) => query(sql`
+  UPDATE marketing_message_deliveries
+  SET status = ${status}, sent_at = CASE WHEN ${status} = 'SENT' THEN NOW() ELSE sent_at END,
+      lease_expires_at = NULL, last_error = ${safeError.slice(0, 120)}, updated_at = NOW()
+  WHERE agency_id = ${agencyId} AND campaign_id = ${campaignId}::uuid AND contact_id = ${contactId} AND channel = 'email'
+`)

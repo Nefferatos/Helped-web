@@ -20,9 +20,19 @@ type ContractorTask = {
   completed_at: string | null
   completion_notes: string | null
   completed_by?: string | null
+  assigned_by?: string
+  assignment_note?: string
+  acknowledged_at?: string | null
+  acknowledged_by?: string | null
+  acknowledgement_note?: string
+  acknowledgement_token_expires_at?: string | null
+  completion_reported_at?: string | null
+  completion_report_note?: string
+  completion_reported_by?: string | null
   contractors?: { name?: string } | null
   placements?: { maid_reference_code?: string | null } | null
 }
+type Contractor = { id: string; name: string; phone: string; active: boolean }
 
 type MilestoneEvent = { actor?: string; notes?: string; completedAt?: string }
 type Placement = {
@@ -143,6 +153,8 @@ function PlacementMilestoneCard({
 
 export default function ContractorTasksPage({ onPlacementChange }: { onPlacementChange?: () => Promise<void> }) {
   const [tasks, setTasks] = useState<ContractorTask[]>([])
+  const [contractors, setContractors] = useState<Contractor[]>([])
+  const [assignmentDraft, setAssignmentDraft] = useState({ placementId: '', contractorId: '', taskType: '', dueAt: '', note: '' })
   const [placements, setPlacements] = useState<Placement[]>([])
   const [maidSummaries, setMaidSummaries] = useState<Record<string, MaidSummary>>({})
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -150,6 +162,7 @@ export default function ContractorTasksPage({ onPlacementChange }: { onPlacement
   const [savedNoteIds, setSavedNoteIds] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [acknowledgementLinks, setAcknowledgementLinks] = useState<Record<string, { url: string; expiresAt: string }>>({})
   const [error, setError] = useState('')
   const [placementSearch, setPlacementSearch] = useState('')
   const [placementPage, setPlacementPage] = useState(1)
@@ -168,12 +181,14 @@ export default function ContractorTasksPage({ onPlacementChange }: { onPlacement
     setLoading(true)
     setError('')
     try {
-      const [taskData, placementData] = await Promise.all([
+      const [taskData, placementData, contractorData] = await Promise.all([
         request<{ tasks?: ContractorTask[] }>('/api/contractor/tasks'),
         request<{ placements?: Placement[] }>('/api/operations-board'),
+        request<{ contractors?: Contractor[] }>('/api/contractor/contractors'),
       ])
       setTasks(taskData.tasks || [])
       setPlacements(placementData.placements || [])
+      setContractors(contractorData.contractors || [])
       setPlacementNotes((current) => Object.fromEntries(
         (placementData.placements || []).map((placement) => [placement.id, current[placement.id] ?? placement.notes ?? '']),
       ))
@@ -185,6 +200,10 @@ export default function ContractorTasksPage({ onPlacementChange }: { onPlacement
   }, [])
 
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (assignmentDraft.placementId || !placements.length) return
+    setAssignmentDraft((current) => ({ ...current, placementId: placements[0].id }))
+  }, [assignmentDraft.placementId, placements])
   useEffect(() => { setPlacementPage((current) => Math.min(current, placementPageCount)) }, [placementPageCount])
   useEffect(() => {
     const references = visiblePlacementRefKey.split('|').filter(Boolean)
@@ -220,6 +239,57 @@ export default function ContractorTasksPage({ onPlacementChange }: { onPlacement
     } finally {
       setSavingId(null)
     }
+  }
+
+  const assignContractorTask = async () => {
+    if (!assignmentDraft.placementId || !assignmentDraft.contractorId || !assignmentDraft.taskType.trim()) {
+      setError('Choose a placement and contractor, then enter the task to assign.')
+      return
+    }
+    setSavingId('new-contractor-task')
+    setError('')
+    try {
+      const result = await request<{ task: ContractorTask; acknowledgementUrl: string; acknowledgementExpiresAt: string }>(`/api/contractor/placements/${encodeURIComponent(assignmentDraft.placementId)}/tasks`, {
+        method: 'POST', body: JSON.stringify({ contractorId: assignmentDraft.contractorId, taskType: assignmentDraft.taskType, dueAt: assignmentDraft.dueAt || undefined, note: assignmentDraft.note }),
+      })
+      setAcknowledgementLinks((current) => ({ ...current, [result.task.id]: { url: result.acknowledgementUrl, expiresAt: result.acknowledgementExpiresAt } }))
+      setAssignmentDraft((current) => ({ ...current, taskType: '', dueAt: '', note: '' }))
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to assign contractor task')
+    } finally { setSavingId(null) }
+  }
+
+  const createAcknowledgementLink = async (task: ContractorTask) => {
+    setSavingId(`${task.id}-link`)
+    setError('')
+    try {
+      const result = await request<{ acknowledgementUrl: string; acknowledgementExpiresAt: string }>(`/api/contractor/tasks/${encodeURIComponent(task.id)}/acknowledgement-link`, { method: 'POST', body: JSON.stringify({}) })
+      setAcknowledgementLinks((current) => ({ ...current, [task.id]: { url: result.acknowledgementUrl, expiresAt: result.acknowledgementExpiresAt } }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create acknowledgement link')
+    } finally { setSavingId(null) }
+  }
+
+  const copyAcknowledgementLink = async (taskId: string) => {
+    const link = acknowledgementLinks[taskId]?.url
+    if (!link) return
+    try { await navigator.clipboard.writeText(link) }
+    catch { setError('Could not copy the link automatically. Select and copy it from the link field.') }
+  }
+
+  const recordAcknowledgement = async (task: ContractorTask) => {
+    setSavingId(`${task.id}-ack`)
+    setError('')
+    try {
+      const result = await request<{ task?: ContractorTask }>(`/api/contractor/tasks/${encodeURIComponent(task.id)}/acknowledge`, {
+        method: 'POST', body: JSON.stringify({ note: notes[task.id] || '' }),
+      })
+      if (result.task) setTasks((current) => current.map((item) => item.id === task.id ? { ...item, ...result.task } : item))
+      else await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to record contractor acknowledgement')
+    } finally { setSavingId(null) }
   }
 
   const completePlacementMilestone = async (placement: Placement, milestone: 'flight' | 'medical' | 'sip' | 'handover') => {
@@ -271,6 +341,10 @@ export default function ContractorTasksPage({ onPlacementChange }: { onPlacement
       </div>
 
       {error && <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
+
+      {placements.length > 0 && <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm"><h3 className="font-bold text-black">Assign contractor task</h3><p className="mt-1 text-xs text-slate-700">Each assignment creates a secure seven-day link for acknowledgement and a later completion report. Staff must verify reported work.</p>{contractors.length === 0 ? <p className="mt-3 text-sm text-amber-800">Add an active contractor record for this agency before assigning tasks.</p> : <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5"><select aria-label="Placement" value={assignmentDraft.placementId} onChange={(event) => setAssignmentDraft((current) => ({ ...current, placementId: event.target.value }))} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm text-black">{placements.map((placement) => <option key={placement.id} value={placement.id}>{placement.maid_reference_code || placement.id}</option>)}</select><select aria-label="Contractor" value={assignmentDraft.contractorId} onChange={(event) => setAssignmentDraft((current) => ({ ...current, contractorId: event.target.value }))} className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm text-black"><option value="">Choose contractor</option>{contractors.map((contractor) => <option key={contractor.id} value={contractor.id}>{contractor.name}</option>)}</select><input aria-label="Task to assign" value={assignmentDraft.taskType} onChange={(event) => setAssignmentDraft((current) => ({ ...current, taskType: event.target.value }))} placeholder="Task description" maxLength={120} className="h-10 rounded-lg border border-slate-300 px-3 text-sm text-black" /><input aria-label="Task due date" type="datetime-local" value={assignmentDraft.dueAt} onChange={(event) => setAssignmentDraft((current) => ({ ...current, dueAt: event.target.value }))} className="h-10 rounded-lg border border-slate-300 px-2 text-sm text-black" /><button type="button" onClick={() => void assignContractorTask()} disabled={savingId === 'new-contractor-task'} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-3 text-sm font-bold text-white disabled:opacity-60">{savingId === 'new-contractor-task' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}Assign task</button><textarea aria-label="Assignment note" value={assignmentDraft.note} onChange={(event) => setAssignmentDraft((current) => ({ ...current, note: event.target.value }))} placeholder="Assignment details (optional)" maxLength={2000} rows={2} className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-black md:col-span-2 xl:col-span-5" /></div>}</div>}
+
+      {Object.entries(acknowledgementLinks).map(([taskId, link]) => <div key={taskId} className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm"><p className="font-bold text-sky-950">Share this secure link directly with the assigned contractor</p><p className="mt-1 text-xs text-sky-900">It expires {showDate(link.expiresAt)}. The contractor can acknowledge the assignment and later report completion. Staff must verify reported work.</p><div className="mt-2 flex gap-2"><input readOnly aria-label="Contractor acknowledgement link" value={link.url} className="min-w-0 flex-1 rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs text-black" /><button type="button" onClick={() => void copyAcknowledgementLink(taskId)} className="rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-bold text-sky-950">Copy link</button></div></div>)}
 
       {loading ? (
         <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-10 text-sm text-black"><LoaderCircle className="h-5 w-5 animate-spin" /> Loading placement tasks…</div>
@@ -333,6 +407,8 @@ export default function ContractorTasksPage({ onPlacementChange }: { onPlacement
             const milestone = milestoneForTask(task.task_type)
             const MilestoneIcon = milestone.icon
             const isComplete = task.status.toUpperCase() === 'COMPLETED'
+            const isCompletionReported = task.status.toUpperCase() === 'COMPLETION_REPORTED' || Boolean(task.completion_reported_at)
+            const isAcknowledged = Boolean(task.acknowledged_at)
             const completedBy = task.completed_by?.replace(/^user:/, '') || 'Agency staff'
             return (
               <article key={task.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -341,22 +417,25 @@ export default function ContractorTasksPage({ onPlacementChange }: { onPlacement
                     <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700"><MilestoneIcon className="h-5 w-5" /></div>
                     <div><p className="text-xs font-semibold uppercase tracking-wide text-black">Placement milestone</p><h3 className="mt-0.5 font-bold text-black">{milestone.label}</h3></div>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${isComplete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{isComplete ? 'Completed' : 'Action needed'}</span>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${isComplete ? 'bg-emerald-100 text-emerald-800' : isCompletionReported ? 'bg-amber-100 text-amber-900' : isAcknowledged ? 'bg-sky-100 text-sky-900' : 'bg-amber-100 text-amber-800'}`}>{isComplete ? 'Verified complete' : isCompletionReported ? 'Reported · staff review' : isAcknowledged ? 'Acknowledged' : 'Action needed'}</span>
                 </div>
                 <p className="mt-4 text-sm text-black">{isComplete ? 'This milestone is recorded in the placement overview.' : 'Completing this updates the placement progress in Operations Center.'}</p>
                 <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 border-y border-slate-100 py-4 text-sm">
                   <div><dt className="text-xs font-semibold uppercase tracking-wide text-black">Placement</dt><dd className="mt-1 font-medium text-black">{task.placements?.maid_reference_code || task.placement_id}</dd></div>
-                  <div><dt className="text-xs font-semibold uppercase tracking-wide text-black">Assigned to</dt><dd className="mt-1 font-medium text-black">{task.contractors?.name || 'Agency staff'}</dd></div>
+                  <div><dt className="text-xs font-semibold uppercase tracking-wide text-black">Assigned to</dt><dd className="mt-1 font-medium text-black">{task.contractors?.name || 'Agency staff'}</dd>{task.assigned_by && <dd className="mt-1 text-xs text-slate-700">Assigned by {task.assigned_by}</dd>}</div>
                   <div className="col-span-2"><dt className="text-xs font-semibold uppercase tracking-wide text-black">Due</dt><dd className="mt-1 font-medium text-black">{showDate(task.due_at)}</dd></div>
                 </dl>
+                {!isCompletionReported && !isAcknowledged && !isComplete && <div className="mb-3">{acknowledgementLinks[task.id] ? <div className="flex gap-2"><input readOnly aria-label="Contractor acknowledgement link" value={acknowledgementLinks[task.id].url} className="min-w-0 flex-1 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-black" /><button type="button" onClick={() => void copyAcknowledgementLink(task.id)} className="rounded-lg border border-sky-300 px-3 text-xs font-bold">Copy link</button></div> : <button type="button" onClick={() => void createAcknowledgementLink(task)} disabled={savingId === `${task.id}-link`} className="rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-bold text-sky-900 disabled:opacity-60">{savingId === `${task.id}-link` ? 'Creating link…' : 'Create contractor acknowledgement link'}</button>}</div>}
                 {isComplete ? (
                   <div className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm"><p className="font-semibold text-emerald-900">Completed {showDate(task.completed_at)}</p><p className="mt-1 text-emerald-800">Marked by: {completedBy}</p>{task.completion_notes && <p className="mt-2 whitespace-pre-wrap text-emerald-800">{task.completion_notes}</p>}</div>
                 ) : (
                   <div className="mt-4 space-y-3">
-                    <label className="block text-sm font-semibold text-black" htmlFor={`task-notes-${task.id}`}>Completion notes <span className="font-normal text-black">(optional)</span></label>
-                    <textarea id={`task-notes-${task.id}`} value={notes[task.id] || ''} onChange={(event) => setNotes((current) => ({ ...current, [task.id]: event.target.value }))} placeholder="Add booking reference, medical result, handover details, or any issue…" rows={3} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-black placeholder:text-black outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                    {isAcknowledged ? <p className="rounded-lg bg-sky-50 p-3 text-xs text-sky-950">Acknowledgement recorded by {task.acknowledged_by || 'Agency staff'} · {showDate(task.acknowledged_at)}{task.acknowledgement_note ? ` · ${task.acknowledgement_note}` : ''}</p> : <button type="button" onClick={() => void recordAcknowledgement(task)} disabled={savingId === `${task.id}-ack`} className="inline-flex items-center gap-2 rounded-lg border border-sky-300 bg-white px-3 py-2 text-xs font-bold text-sky-900 disabled:opacity-60">{savingId === `${task.id}-ack` ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Record contractor acknowledgement</button>}
+                    {isCompletionReported && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Contractor reported completion {showDate(task.completion_reported_at ?? null)}{task.completion_report_note ? ` · ${task.completion_report_note}` : ''}. Review the report before verifying.</p>}
+                    <label className="block text-sm font-semibold text-black" htmlFor={`task-notes-${task.id}`}>{isCompletionReported ? 'Staff verification note (required)' : 'Completion notes'} {!isCompletionReported && <span className="font-normal text-black">(optional)</span>}</label>
+                    <textarea id={`task-notes-${task.id}`} value={notes[task.id] || ''} onChange={(event) => setNotes((current) => ({ ...current, [task.id]: event.target.value }))} placeholder={isCompletionReported ? 'Record what you reviewed to verify the work' : 'Add booking reference, medical result, handover details, or any issue…'} rows={3} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-black placeholder:text-black outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
                     <button type="button" onClick={() => void complete(task)} disabled={savingId === task.id} className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60">
-                      {savingId === task.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Mark {milestone.label}
+                      {savingId === task.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} {isCompletionReported ? `Verify and mark ${milestone.label}` : `Mark ${milestone.label}`}
                     </button>
                   </div>
                 )}

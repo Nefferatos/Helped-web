@@ -17,6 +17,7 @@ import {
   extractSpreadsheetId,
   parseGoogleServiceAccount,
   resolveGoogleSheetsCredentials,
+  readGoogleSheetsRange,
   testGoogleSheetsConnection,
   writeGoogleSheetsTabs,
 } from "./services/googleSheets";
@@ -175,6 +176,7 @@ const CLIENT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 interface AgencyAdminRecord {
   id: number;
   agencyId: number;
+  role?: string;
   supabaseUserId?: string;
   username: string;
   email?: string;
@@ -195,6 +197,7 @@ interface AgencyAdminSessionRecord {
   admin?: {
     id: number;
     agencyId: number;
+    role?: string;
     username: string;
     email?: string;
     emailVerified?: boolean;
@@ -461,6 +464,34 @@ interface AtsFilterPresetRecord {
   createdAt: string;
 }
 
+interface AtsReferralLeadRecord {
+  id: string;
+  agencyId: number;
+  name: string;
+  phone: string;
+  country: string;
+  source: string;
+  preferredLanguage: string;
+  campaignId: string;
+  whatsappConsentAt: string | null;
+  whatsappConsentWithdrawnAt: string | null;
+  whatsappConsentSource: string;
+  shareContactConsentAt: string | null;
+  possibleDuplicateOf?: string;
+  referrerName: string;
+  referrerPhone: string;
+  notes: string;
+  interestStatus: "new" | "interested" | "not_interested" | "replied";
+  leadClassification?: "new_applicant" | "existing_applicant" | "referral" | "general_enquiry" | "unknown";
+  leadHunterStatus?: "classified" | "not_configured" | "failed";
+  eligibleForNextStep?: boolean;
+  staffReviewRequired?: boolean;
+  lastDeliveryStatus: "not_sent" | "accepted" | "delivered" | "failed";
+  lastMessageAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface TiktokIntegrationRecord {
   accessToken?: string;
   refreshToken?: string;
@@ -566,6 +597,13 @@ type Bindings = {
   WHATSAPP_APP_SECRET?: string;
   // Dedicated Make webhook for public maid referrals; never expose it to browsers.
   MAKE_WEBHOOK_URL_MAID_REFERRAL?: string;
+  MAKE_WEBHOOK_URL_AGENT_1_LEAD_HUNTER?: string;
+  // Applicant profile collector and safe public profile draft builder.
+  // These remain server-side and are called only after purpose-specific consent.
+  MAKE_WEBHOOK_URL_AGENT_2_PROFILE_COLLECTOR?: string;
+  MAKE_WEBHOOK_URL_AGENT_3_PROFILE_BUILDER?: string;
+  // Local-only bridge to the Express session validator for Vite development.
+  LOCAL_AGENCY_AUTH_URL?: string;
   // ─── FDW application chatbot + referral (make/helped-fdw-application-chatbot.blueprint.json) ──
   // Make is the engine: the Worker only relays to this one custom webhook, whose
   // router handles three payload shapes (chat → AI Agent reply; application /
@@ -613,12 +651,22 @@ type Bindings = {
   // Event-driven Make scenario fired when an arrival contractor task is completed.
   // Set via: npx wrangler secret put MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT
   MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT?: string;
+  // Daily three-day airport-arrival report. Configure only after the Make
+  // scenario and its internal recipients have been reviewed and activated.
+  MAKE_WEBHOOK_URL_ROLLING_ARRIVAL_REPORT?: string;
+  // Tenant scope for the scheduled arrival digest. Required so one shared
+  // Make webhook cannot receive flight/dispatch details from every agency.
+  ROLLING_ARRIVAL_REPORT_AGENCY_ID?: string;
   // Event-driven Make scenario fired when Operations Center marks a placement
   // milestone (flight, medical, SIP, or handover) complete.
   // Set via: npx wrangler secret put MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT
   MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT?: string;
   // Make workflow webhook used by the interview-scheduled staff alert scenario.
   MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT?: string;
+  MAKE_WEBHOOK_URL_DEPLOYMENT_TASK_EVENTS?: string;
+  // Receives non-contact campaign lifecycle events (draft creation/approval).
+  // Set with: npx wrangler secret put MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS
+  MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS?: string;
   // Shared secret for Make.com workflow callbacks and health probes.
   // Set via: npx wrangler secret put EVENT_INGEST_SECRET
   EVENT_INGEST_SECRET?: string;
@@ -714,6 +762,11 @@ app.use("/api/*", async (c, next) => {
 });
 
 const now = () => new Date().toISOString();
+const parseSingaporeDateTime = (value: string) => {
+  const normalized = value.trim();
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  return new Date(hasTimezone ? normalized : `${normalized}+08:00`);
+};
 
 const stripBom = (value: string) => value.replace(/^\uFEFF/, "");
 
@@ -3512,6 +3565,15 @@ const safeApi =
       console.error("API handler error", c.req.method, c.req.path, error);
       const message =
         error instanceof Error ? error.message : "Internal Server Error";
+      if (/deployment_tasks/i.test(message) && /PGRST205|schema cache|could not find the table/i.test(message)) {
+        return jsonError("The deployment checklist database is not installed yet. Apply supabase/20261031_deployment_tasks.sql, then retry.", 503);
+      }
+      if (/helped_ats_applicant_workflows/i.test(message) && /PGRST205|schema cache|could not find the table/i.test(message)) {
+        return jsonError("Applicant profile workflow storage is not installed yet. Apply supabase/20261031_ats_agent_workflows.sql, then retry.", 503);
+      }
+      if (/contractor_jobs/i.test(message) && /acknowledgement_token_hash|PGRST204|schema cache|could not find the table|column .* does not exist/i.test(message)) {
+        return jsonError("Contractor acknowledgement storage is not installed yet. Apply supabase/20261101_contractor_self_service_acknowledgement.sql after the contractor assignment migration, then retry.", 503);
+      }
       // Propagate upstream rate-limit as 429 so clients can retry correctly.
       if (/rate.?limit|429/i.test(message)) return jsonError("Rate limit exceeded, please try again later", 429);
       // Propagate upstream AI daily-limit as 503.
@@ -3629,6 +3691,41 @@ const requireClientAuth = async (c: any, next: () => Promise<void>) => {
   }
 };
 
+const loadLocalAgencyAdminForToken = async (env: Bindings, token: string): Promise<AgencyAdminRecord | null> => {
+  const endpoint = env.LOCAL_AGENCY_AUTH_URL?.trim();
+  if (!endpoint) return null;
+  try {
+    const url = new URL(endpoint);
+    if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname) ||
+      url.port !== "3000" || url.pathname !== "/api/agency-auth/me") return null;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!response.ok) return null;
+    const payload: unknown = await response.json();
+    if (!isPlainObject(payload) || !isPlainObject(payload.admin)) return null;
+    const record = payload.admin;
+    const id = Number(record.id);
+    const agencyId = Number(record.agencyId ?? record.agency_id);
+    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(agencyId) || agencyId <= 0) return null;
+    return {
+      id,
+      agencyId,
+      role: toTrimmedString(record.role) || "RECRUITER",
+      username: toTrimmedString(record.username),
+      email: toTrimmedString(record.email),
+      password: "",
+      agencyName: toTrimmedString(record.agencyName) || `Agency ${agencyId}`,
+      emailVerified: record.emailVerified === true,
+      profileImageUrl: toTrimmedString(record.profileImageUrl),
+      createdAt: toTrimmedString(record.createdAt) || now(),
+    };
+  } catch {
+    return null;
+  }
+};
+
 const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
   const token = parseAuthorizationToken(c.req.raw);
   if (!token) {
@@ -3636,6 +3733,17 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
   }
 
   try {
+    // Vite's local admin session is stored by the Express backend, not the
+    // local Worker KV namespace. Validate opaque tokens through Express only
+    // when the loopback-only development setting is present.
+    if (c.env.LOCAL_AGENCY_AUTH_URL?.trim()) {
+      const localAdmin = await loadLocalAgencyAdminForToken(c.env, token);
+      if (!localAdmin) return c.json({ error: "Unauthorized" }, 401);
+      c.set("agencyAdmin", localAdmin);
+      await next();
+      return;
+    }
+
     const sessions = await loadAgencyAdminSessions(c.env);
     const session = sessions.find((item) => item.token === token);
     if (session) {
@@ -3643,6 +3751,7 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
         ? {
             id: session.admin.id,
             agencyId: session.admin.agencyId,
+            role: session.admin.role ?? "RECRUITER",
             username: session.admin.username,
             email: session.admin.email ?? "",
             password: "",
@@ -3709,6 +3818,19 @@ const requireAgencyAdminAuth = async (c: any, next: () => Promise<void>) => {
   }
 };
 
+const requireAgencyAdminRoleAuth = (...allowed: string[]) => async (c: any, next: () => Promise<void>) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
+  const rawRole = admin?.role?.trim() ?? "";
+  const role = ["admin", "agency", "staff", "contractor"].includes(rawRole)
+    ? rawRole : rawRole.toUpperCase() || "RECRUITER";
+  if (!admin || !allowed.includes(role)) return c.json({ error: "Insufficient role" }, 403);
+  await next();
+};
+
+const canReviewAgencyRecords = requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff", "DOCUMENT_REVIEWER");
+const canManageAgencyRecords = requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff");
+const canAdministerAgencyRecords = requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency");
+
 const toSafeClient = (client: ClientRecord) => ({
   id: client.id,
   name: client.name,
@@ -3723,6 +3845,7 @@ const toSafeClient = (client: ClientRecord) => ({
 const toSafeAgencyAdmin = (admin: AgencyAdminRecord) => ({
   id: admin.id,
   agencyId: admin.agencyId,
+  role: admin.role ?? "RECRUITER",
   username: admin.username,
   email: admin.email ?? "",
   emailVerified: Boolean(admin.emailVerified),
@@ -4849,6 +4972,8 @@ const sendEmailViaResend = async (
   to: string,
   subject: string,
   text: string,
+  idempotencyKey?: string,
+  html?: string,
 ) => {
   const apiKey = env.RESEND_API_KEY?.trim();
   const from = env.RESEND_FROM?.trim();
@@ -4861,12 +4986,14 @@ const sendEmailViaResend = async (
     headers: {
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: JSON.stringify({
       from,
       to,
       subject,
       text,
+      ...(html ? { html } : {}),
     }),
   });
 
@@ -6628,6 +6755,18 @@ const buildMakeAutomationInventory = (env: Bindings) => {
       ...makeHook(env.MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT, "MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT", undefined, "7525191"),
     },
     {
+      id: "deployment-task-events", name: "Deployment Task Events", mode: "automatic",
+      purpose: "Delivers verified deployment task and private integration outcome events through the durable Make outbox.",
+      trigger: "Staff verifies a placement task, or a private Drive/media integration completes or fails.",
+      ...makeHook(env.MAKE_WEBHOOK_URL_DEPLOYMENT_TASK_EVENTS, "MAKE_WEBHOOK_URL_DEPLOYMENT_TASK_EVENTS"),
+    },
+    {
+      id: "marketing-campaign-events", name: "Marketing Campaign Events", mode: "automatic",
+      purpose: "Notifies Make when a staff-generated campaign draft is ready for review; recipient details are excluded.",
+      trigger: "Staff generates a campaign draft in AI Marketing.",
+      ...makeHook(env.MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS, "MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS"),
+    },
+    {
       id: "whatsapp-broadcast", name: "WhatsApp Broadcast", mode: "staff initiated",
       purpose: "Forwards the reviewed contact list and message to the WhatsApp broadcast scenario.",
       trigger: "Agency staff confirms a broadcast from the WhatsApp Broadcast page.",
@@ -6665,6 +6804,24 @@ const buildMakeAutomationInventory = (env: Bindings) => {
       purpose: "Forwards a submitted maid referral to the configured Make workflow.",
       trigger: "A user submits a maid referral.",
       ...makeHook(env.MAKE_WEBHOOK_URL_MAID_REFERRAL, "MAKE_WEBHOOK_URL_MAID_REFERRAL"),
+    },
+    {
+      id: "agent-1-lead-hunter", name: "Agent 1 Lead and Referral Hunter", mode: "automatic",
+      purpose: "Classifies a website referral after it has been saved to the agency lead list.",
+      trigger: "A visitor submits a referral through the website form.",
+      ...makeHook(env.MAKE_WEBHOOK_URL_AGENT_1_LEAD_HUNTER, "MAKE_WEBHOOK_URL_AGENT_1_LEAD_HUNTER"),
+    },
+    {
+      id: "agent-2-profile-collector", name: "Agent 2 Applicant Profile Collector", mode: "applicant initiated",
+      purpose: "Collects applicant-stated profile details after the applicant grants processing consent.",
+      trigger: "An applicant sends a message through the application status page after opting into profile assistance.",
+      ...makeHook(env.MAKE_WEBHOOK_URL_AGENT_2_PROFILE_COLLECTOR, "MAKE_WEBHOOK_URL_AGENT_2_PROFILE_COLLECTOR"),
+    },
+    {
+      id: "agent-3-profile-builder", name: "Agent 3 Profile Draft Builder", mode: "applicant initiated",
+      purpose: "Prepares an allowlisted employer-facing profile draft after applicant confirmation and publication consent.",
+      trigger: "The applicant confirms their details and requests a profile draft with separate publication consent.",
+      ...makeHook(env.MAKE_WEBHOOK_URL_AGENT_3_PROFILE_BUILDER, "MAKE_WEBHOOK_URL_AGENT_3_PROFILE_BUILDER"),
     },
     {
       id: "pdf-biodata", name: "PDF Biodata Autofill", mode: "staff initiated",
@@ -8189,6 +8346,7 @@ const compareReferenceCodes = (left: string | undefined, right: string | undefin
 app.get(
   "/api/employers",
   requireAgencyAdminAuth,
+  canReviewAgencyRecords,
   safeApi(async (c) => {
     const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
     if (!admin) return c.json({ error: "Unauthorized" }, 401);
@@ -8205,6 +8363,7 @@ app.get(
 app.get(
   "/api/employers/:refCode",
   requireAgencyAdminAuth,
+  canReviewAgencyRecords,
   safeApi(async (c) => {
     const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
     if (!admin) return c.json({ error: "Unauthorized" }, 401);
@@ -8224,6 +8383,7 @@ app.get(
 app.post(
   "/api/employers",
   requireAgencyAdminAuth,
+  canManageAgencyRecords,
   safeApi(async (c) => {
     const body = await parseBody<{
       refCode?: string | null;
@@ -8421,6 +8581,7 @@ app.post(
 app.post(
   "/api/employment-contract",
   requireAgencyAdminAuth,
+  canManageAgencyRecords,
   safeApi(async (c) => {
     const request = new Request(new URL("/api/employers", c.req.url), {
       method: "POST",
@@ -8436,6 +8597,7 @@ app.post(
 app.post(
   "/api/employer-files",
   requireAgencyAdminAuth,
+  canManageAgencyRecords,
   safeApi(async (c) => {
     const storageConfig = getSupabaseStorageConfig(c.env);
     if (!storageConfig) {
@@ -8507,6 +8669,7 @@ app.post(
 app.get(
   "/api/employer-files",
   requireAgencyAdminAuth,
+  canReviewAgencyRecords,
   safeApi(async (c) => {
     const data = await loadData(c.env, { readOnly: true });
     const files = data.employmentContracts.flatMap((contract) =>
@@ -8521,6 +8684,7 @@ app.get(
 app.get(
   "/api/employer-files/view",
   requireAgencyAdminAuth,
+  canReviewAgencyRecords,
   safeApi(async (c) => {
     const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
     const reference = c.req.query("ref") ?? "";
@@ -8559,6 +8723,7 @@ app.get(
 app.delete(
   "/api/employers/:refCode",
   requireAgencyAdminAuth,
+  canAdministerAgencyRecords,
   safeApi(async (c) => {
     const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
     if (!admin) return c.json({ error: "Unauthorized" }, 401);
@@ -9159,12 +9324,14 @@ app.post("/api/requests/mark-viewed", requireAgencyAdminAuth, async (c) => {
 
 type PlacementBoardRow = {
   id: string;
+  agency_id?: number;
   maid_reference_code: string | null;
   employer_id?: string | null;
   notes?: string | null;
   status: string;
   updated_at?: string;
 };
+type ClientPlacementRow = PlacementBoardRow & { agency_id: number; employer_id?: string | null; created_at?: string };
 
 type PlacementMilestoneEventRow = {
   entity_id: string;
@@ -9172,6 +9339,23 @@ type PlacementMilestoneEventRow = {
   actor?: string;
   payload?: { notes?: string } | null;
   created_at: string;
+};
+
+type RollingArrivalFlightRow = {
+  id: string;
+  placement_id: string;
+  airline: string;
+  flight_number: string;
+  arrival_airport: string;
+  arrival_at: string;
+  status: string;
+  notes: string;
+  terminal?: string;
+  pickup_contact?: string;
+  transport_arrangement?: string;
+  accommodation_destination?: string;
+  special_instructions?: string;
+  placements?: { agency_id?: number; maid_reference_code?: string | null; employer_id?: string | null } | null;
 };
 
 const placementMilestoneMap: Record<string, "flight" | "medical" | "sip" | "handover"> = {
@@ -9183,6 +9367,7 @@ const placementMilestoneMap: Record<string, "flight" | "medical" | "sip" | "hand
 
 type EmployerRequirementsRow = {
   employer_id: number;
+  updated_at?: string;
   service_type: string | null;
   location: string | null;
   max_monthly_salary: number | null;
@@ -9190,6 +9375,11 @@ type EmployerRequirementsRow = {
   preferred_nationalities: string[] | null;
   preferred_languages: string[] | null;
   minimum_experience_years: number | null;
+  household_size: number | null;
+  children_count: number | null;
+  elderly_count: number | null;
+  cooking_requirements: string;
+  preferred_start_date: string | null;
   notes: string | null;
 };
 
@@ -9206,14 +9396,14 @@ const stringArray = (value: unknown) =>
     ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean).slice(0, 20)
     : [];
 
-app.get("/api/employers/:employerId/requirements", requireAgencyAdminAuth, safeApi(async (c) => {
+app.get("/api/employers/:employerId/requirements", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Employer requirements require Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const employerId = getPositiveId(c.req.param("employerId"));
   if (!employerId) return c.json({ error: "employerId must be a positive integer" }, 400);
   const rows = await fetchSupabaseTableRows<EmployerRequirementsRow>(config, "employer_requirements", {
-    select: "employer_id,service_type,location,max_monthly_salary,availability,preferred_nationalities,preferred_languages,minimum_experience_years,notes",
+    select: "employer_id,service_type,location,max_monthly_salary,availability,preferred_nationalities,preferred_languages,minimum_experience_years,household_size,children_count,elderly_count,cooking_requirements,preferred_start_date,notes",
     filters: { agency_id: admin.agencyId, employer_id: employerId, active: true },
     orderBy: "updated_at.desc",
     limit: 1,
@@ -9221,7 +9411,7 @@ app.get("/api/employers/:employerId/requirements", requireAgencyAdminAuth, safeA
   return c.json({ requirements: rows[0] ?? null });
 }));
 
-app.put("/api/employers/:employerId/requirements", requireAgencyAdminAuth, safeApi(async (c) => {
+app.put("/api/employers/:employerId/requirements", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Employer requirements require Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -9230,13 +9420,21 @@ app.put("/api/employers/:employerId/requirements", requireAgencyAdminAuth, safeA
   const body = await parseBody<{
     serviceType?: unknown; location?: unknown; maxMonthlySalary?: unknown; availability?: unknown;
     preferredNationalities?: unknown; preferredLanguages?: unknown; minimumExperienceYears?: unknown; notes?: unknown;
+    householdSize?: unknown; childrenCount?: unknown; elderlyCount?: unknown; cookingRequirements?: unknown; preferredStartDate?: unknown;
   }>(c.req.raw);
   const maxSalary = body?.maxMonthlySalary == null || body.maxMonthlySalary === "" ? null : Number(body.maxMonthlySalary);
   const minimumExperience = body?.minimumExperienceYears == null || body.minimumExperienceYears === "" ? null : Number(body.minimumExperienceYears);
+  const householdSize = body?.householdSize == null || body.householdSize === "" ? null : Number(body.householdSize);
+  const childrenCount = body?.childrenCount == null || body.childrenCount === "" ? null : Number(body.childrenCount);
+  const elderlyCount = body?.elderlyCount == null || body.elderlyCount === "" ? null : Number(body.elderlyCount);
+  const preferredStartDate = boundedString(body?.preferredStartDate, 10);
   if (maxSalary !== null && (!Number.isFinite(maxSalary) || maxSalary < 0)) return c.json({ error: "maxMonthlySalary must be a non-negative number" }, 400);
   if (minimumExperience !== null && (!Number.isInteger(minimumExperience) || minimumExperience < 0)) return c.json({ error: "minimumExperienceYears must be a non-negative integer" }, 400);
+  if (householdSize !== null && (!Number.isInteger(householdSize) || householdSize < 1 || householdSize > 100)) return c.json({ error: "householdSize must be a whole number from 1 to 100" }, 400);
+  if ([childrenCount, elderlyCount].some((count) => count !== null && (!Number.isInteger(count) || count < 0 || count > 100))) return c.json({ error: "childrenCount and elderlyCount must be whole numbers from 0 to 100 when supplied" }, 400);
+  if (preferredStartDate && (!/^\d{4}-\d{2}-\d{2}$/.test(preferredStartDate) || Number.isNaN(Date.parse(`${preferredStartDate}T00:00:00Z`)) || new Date(`${preferredStartDate}T00:00:00Z`).toISOString().slice(0, 10) !== preferredStartDate)) return c.json({ error: "preferredStartDate must be a valid date in YYYY-MM-DD format" }, 400);
 
-  const response = await fetch(`${config.baseUrl}/rest/v1/employer_requirements?on_conflict=agency_id%2Cemployer_id&select=employer_id,service_type,location,max_monthly_salary,availability,preferred_nationalities,preferred_languages,minimum_experience_years,notes`, {
+  const response = await fetch(`${config.baseUrl}/rest/v1/employer_requirements?on_conflict=agency_id%2Cemployer_id&select=employer_id,service_type,location,max_monthly_salary,availability,preferred_nationalities,preferred_languages,minimum_experience_years,household_size,children_count,elderly_count,cooking_requirements,preferred_start_date,notes,updated_at`, {
     method: "POST",
     headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "resolution=merge-duplicates,return=representation" }),
     body: JSON.stringify([{
@@ -9249,16 +9447,37 @@ app.put("/api/employers/:employerId/requirements", requireAgencyAdminAuth, safeA
       preferred_nationalities: stringArray(body?.preferredNationalities),
       preferred_languages: stringArray(body?.preferredLanguages),
       minimum_experience_years: minimumExperience,
+      household_size: householdSize,
+      children_count: childrenCount,
+      elderly_count: elderlyCount,
+      cooking_requirements: boundedString(body?.cookingRequirements, 1000) ?? "",
+      preferred_start_date: preferredStartDate,
       notes: boundedString(body?.notes, 5000),
       active: true,
     }]),
   });
   if (!response.ok) throw new Error(`Unable to save employer requirements (${response.status}): ${await readSupabaseError(response)}`);
   const rows = await response.json() as EmployerRequirementsRow[];
-  return c.json({ requirements: rows[0] ?? null });
+  const saved = rows[0] ?? null;
+  const hook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (saved && hook) {
+    const fingerprint = await sha256Hex(JSON.stringify({
+      employerId, updatedAt: saved.updated_at ?? "", serviceType: saved.service_type, location: saved.location,
+      salary: saved.max_monthly_salary, availability: saved.availability,
+      nationalities: saved.preferred_nationalities, languages: saved.preferred_languages,
+      minimumExperience: saved.minimum_experience_years,
+      householdSize: saved.household_size, childrenCount: saved.children_count, elderlyCount: saved.elderly_count,
+      cookingRequirements: saved.cooking_requirements, preferredStartDate: saved.preferred_start_date,
+    }));
+    runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `employer:${employerId}:requirements:${fingerprint}`, admin.agencyId, {
+      event_type: "employer.requirements_submitted", agency_id: admin.agencyId, employer_id: employerId,
+      updated_at: saved.updated_at ?? now(),
+    }).catch((error) => console.error("Employer requirements Make event could not be queued", errMsg(error))));
+  }
+  return c.json({ requirements: saved, makeEventConfigured: Boolean(saved && hook) });
 }));
 
-app.post("/api/operations-board/match", requireAgencyAdminAuth, safeApi(async (c) => {
+app.post("/api/operations-board/match", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Employer matching requires Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -9268,7 +9487,7 @@ app.post("/api/operations-board/match", requireAgencyAdminAuth, safeApi(async (c
   const [data, requirementRows] = await Promise.all([
     loadData(c.env),
     fetchSupabaseTableRows<EmployerRequirementsRow>(config, "employer_requirements", {
-      select: "employer_id,service_type,location,max_monthly_salary,availability,preferred_nationalities,preferred_languages,minimum_experience_years,notes",
+      select: "employer_id,service_type,location,max_monthly_salary,availability,preferred_nationalities,preferred_languages,minimum_experience_years,household_size,children_count,elderly_count,cooking_requirements,preferred_start_date,notes,updated_at",
       filters: { agency_id: admin.agencyId, employer_id: employerId, active: true },
       orderBy: "updated_at.desc",
       limit: 1,
@@ -9285,6 +9504,11 @@ app.post("/api/operations-board/match", requireAgencyAdminAuth, safeApi(async (c
     requirements.preferred_nationalities?.length && `Preferred nationalities: ${requirements.preferred_nationalities.join(", ")}`,
     requirements.preferred_languages?.length && `Preferred languages: ${requirements.preferred_languages.join(", ")}`,
     requirements.minimum_experience_years != null && `Minimum experience: ${requirements.minimum_experience_years} years`,
+    requirements.household_size != null && `Household size: ${requirements.household_size}`,
+    requirements.children_count != null && `Children in household: ${requirements.children_count}`,
+    requirements.elderly_count != null && `Elderly household members: ${requirements.elderly_count}`,
+    requirements.cooking_requirements && `Cooking requirements: ${requirements.cooking_requirements}`,
+    requirements.preferred_start_date && `Preferred start date: ${requirements.preferred_start_date}`,
     requirements.notes,
   ].filter(Boolean).join("\n");
   const result = await buildAiMatchReview(c.env, agencyMaids, {
@@ -9295,7 +9519,21 @@ app.post("/api/operations-board/match", requireAgencyAdminAuth, safeApi(async (c
     salary: requirements.max_monthly_salary == null ? "" : String(requirements.max_monthly_salary),
     availability: requirements.availability ?? "",
   });
-  return c.json({ data: { matches: result.matches, aiUsed: result.aiUsed, fallbackUsed: result.fallbackUsed } });
+  const matchingHook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (matchingHook) {
+    const matchDigest = await sha256Hex(JSON.stringify({
+      requirementsUpdatedAt: requirements.updated_at ?? "",
+      recommendations: result.matches.map((match) => ({ referenceCode: match.maidReferenceCode, score: match.score })),
+    }));
+    runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `matching:${admin.agencyId}:${employerId}:${matchDigest}`, admin.agencyId, {
+      event_type: "matching.completed", agency_id: admin.agencyId, employer_id: employerId,
+      requirements_updated_at: requirements.updated_at ?? null,
+      recommended_count: result.matches.length,
+      recommendations: result.matches.map((match) => ({ applicant_reference: match.maidReferenceCode, suitability_score: match.score })),
+      ai_used: result.aiUsed, fallback_used: result.fallbackUsed,
+    }).catch((error) => console.error("Matching completion Make event could not be queued", errMsg(error))));
+  }
+  return c.json({ data: { matches: result.matches, aiUsed: result.aiUsed, fallbackUsed: result.fallbackUsed, makeEventConfigured: Boolean(matchingHook) } });
 }));
 
 const loadPlacementMilestoneEvents = async (config: SupabaseAppDataConfig, placementIds: string[]) => {
@@ -9315,11 +9553,761 @@ const loadPlacementMilestoneEvents = async (config: SupabaseAppDataConfig, place
   return ((await response.json()) as PlacementMilestoneEventRow[]).filter((event) => allowed.has(event.entity_id));
 };
 
+const deploymentTaskTemplates = [
+  { task_key: "employer_documents", task_group: "Employer documents", title: "Collect employer documents", description: "Request and verify the documents required for this placement." },
+  { task_key: "employer_documents_received", task_group: "Employer documents", title: "Record employer document receipt", description: "Record which employer documents were received and link the files to this placement." },
+  { task_key: "employer_documents_verified", task_group: "Employer documents", title: "Verify employer documents", description: "An authorized staff member checks the submitted employer documents and records any resubmission needed." },
+  { task_key: "contract_generation", task_group: "Contract", title: "Generate employment contract", description: "Populate the approved contract template from verified records." },
+  { task_key: "contract_generated", task_group: "Contract", title: "Save generated contract", description: "Save the deterministic PDF generated from the approved template to private placement storage." },
+  { task_key: "contract_review", task_group: "Contract", title: "Review and approve contract", description: "An authorized staff member reviews the generated contract before signature." },
+  { task_key: "contract_signature", task_group: "Contract", title: "Collect contract signatures", description: "Send the approved contract using the configured signature workflow and record completion." },
+  { task_key: "signed_contract_saved", task_group: "Contract", title: "Save signed contract", description: "Attach the completed signed document and verify that all required parties signed." },
+  { task_key: "mom_application_ready", task_group: "MOM application", title: "Verify MOM application pack", description: "Staff checks required records and documents before authorized submission." },
+  { task_key: "mom_application", task_group: "Work permit", title: "Prepare and submit MOM application", description: "Staff prepares the application and records submission status. This is not a direct MOM integration." },
+  { task_key: "mom_application_status", task_group: "MOM application", title: "Record MOM reference and status", description: "Authorized staff records the reference, submission date, assigned owner, and manually verified status." },
+  { task_key: "ipa_approval", task_group: "Work permit", title: "Record IPA decision", description: "Record the verified approval, rejection, or additional information request." },
+  { task_key: "insurance", task_group: "Pre-arrival", title: "Confirm medical insurance", description: "Record the active insurance evidence and its effective dates." },
+  { task_key: "personal_accident_insurance", task_group: "Pre-arrival", title: "Confirm personal accident insurance", description: "Record policy evidence and verify the effective dates against the placement." },
+  { task_key: "security_bond", task_group: "Pre-arrival", title: "Confirm security bond", description: "Record verified bond details and supporting evidence." },
+  { task_key: "flight_booking", task_group: "Travel", title: "Book and verify flight", description: "Record the confirmed airline, flight number, and arrival time." },
+  { task_key: "sg_arrival_card", task_group: "Travel", title: "Complete SG Arrival Card", description: "Record completion using the confirmed arrival details and applicable rules." },
+  { task_key: "airport_pickup", task_group: "Arrival", title: "Assign airport pickup", description: "Confirm the pickup contact, transport, and arrival instructions." },
+  { task_key: "airport_pickup_acknowledged", task_group: "Arrival", title: "Confirm pickup acknowledgement", description: "Record that the assigned pickup contact acknowledged the task and arrival details." },
+  { task_key: "accommodation", task_group: "Arrival", title: "Confirm accommodation", description: "Record the confirmed accommodation arrangement and contact." },
+  { task_key: "arrival_confirmed", task_group: "Arrival", title: "Record applicant arrival", description: "Staff confirms the applicant arrived using an authoritative operational update." },
+  { task_key: "airport_pickup_completed", task_group: "Arrival", title: "Confirm airport pickup completed", description: "Record pickup completion and any delay, incident, or destination change." },
+  { task_key: "medical_appointment", task_group: "After arrival", title: "Schedule medical examination", description: "Record the clinic, appointment time, assigned owner, and applicable deadline." },
+  { task_key: "medical_exam", task_group: "After arrival", title: "Complete medical examination", description: "Track the appointment and verify the recorded result." },
+  { task_key: "sip_registration", task_group: "After arrival", title: "Check and register SIP if applicable", description: "Staff verifies whether SIP applies and records its registration and due date." },
+  { task_key: "sip", task_group: "After arrival", title: "Complete SIP if applicable", description: "Record whether SIP applies and verify completion when required." },
+  { task_key: "temporary_work_permit", task_group: "Work permit", title: "Prepare temporary Work Permit documents", description: "Record required temporary documents and link evidence; staff verifies the actual requirements." },
+  { task_key: "mom_registration_appointment", task_group: "Work permit", title: "Track MOM registration appointment", description: "Record the appointment only where required and verify attendance and outcome." },
+  { task_key: "work_permit_issuance", task_group: "Work permit", title: "Verify Work Permit issuance", description: "Record the actual issuance result and evidence." },
+  { task_key: "fingerprint_photo_registration", task_group: "Work permit", title: "Track fingerprint and photo registration", description: "Record completion only when required and verify the official outcome." },
+  { task_key: "employer_handover", task_group: "Handover", title: "Complete employer handover", description: "Confirm required conditions and record the handover date." },
+] as const;
+
+const deploymentTaskStatuses = new Set([
+  "NOT_STARTED", "PLANNED", "IN_PROGRESS", "VERIFICATION_PENDING", "VERIFIED", "REJECTED", "RESUBMISSION_REQUIRED", "BLOCKED", "NOT_APPLICABLE",
+]);
+
+const fetchAgencyPlacement = async (config: SupabaseAppDataConfig, placementId: string, agencyId: number) => {
+  const rows = await fetchSupabaseTableRows<PlacementBoardRow>(config, "placements", {
+    select: "id,agency_id,maid_reference_code,employer_id,status,updated_at",
+    filters: { id: placementId, agency_id: agencyId }, limit: 1,
+  });
+  return rows[0] ?? null;
+};
+
+const fetchDeploymentTasks = async (config: SupabaseAppDataConfig, placementId: string, agencyId: number) =>
+  fetchSupabaseTableRows<{
+    id: string; agency_id: number; placement_id: string; task_key: string; task_group: string; title: string;
+    description: string; status: string; assigned_to: string | null; planned_at: string | null; due_at: string | null;
+    completed_at: string | null; evidence_document_id: string | null; verification_note: string; verified_at: string | null;
+    verified_by: string | null; notes: string; created_at: string; updated_at: string;
+  }>(config, "deployment_tasks", {
+    select: "id,agency_id,placement_id,task_key,task_group,title,description,status,assigned_to,planned_at,due_at,completed_at,evidence_document_id,verification_note,verified_at,verified_by,notes,created_at,updated_at",
+    filters: { placement_id: placementId, agency_id: agencyId }, orderBy: "created_at.asc", limit: 100,
+  });
+
+type PlacementDocumentRow = {
+  id: string; agency_id: number; entity_type: string; entity_id: string; category: string;
+  original_name: string; mime_type: string; size_bytes: number; storage_ref: string; uploaded_by: string; created_at: string;
+};
+
+type PlacementFlightRow = {
+  id: string; placement_id: string; airline: string; flight_number: string; departure_airport: string;
+  arrival_airport: string; departure_at: string | null; arrival_at: string | null; status: string; notes: string;
+  terminal: string; pickup_contact: string; transport_arrangement: string; accommodation_destination: string; special_instructions: string;
+  created_at: string; updated_at: string;
+};
+
+const fetchPlacementDocuments = async (config: SupabaseAppDataConfig, placementId: string, agencyId: number) =>
+  fetchSupabaseTableRows<PlacementDocumentRow>(config, "document_metadata", {
+    select: "id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,storage_ref,uploaded_by,created_at",
+    filters: { agency_id: agencyId, entity_type: "placement", entity_id: placementId },
+    orderBy: "created_at.desc", limit: 100,
+  });
+
+const getClientPlacementForEmployer = async (
+  env: Bindings,
+  client: ClientRecord,
+  placementId: string,
+) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config || !isNormalizedSupabaseEnabled(env)) return { config: null, placement: null };
+  const email = normalizeEmail(client.email);
+  if (!email) return { config, placement: null };
+  const data = await loadData(env, { readOnly: true });
+  const matchedEmployers = data.employers.filter((record) => {
+    const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
+    return (record.agencyId ?? 1) > 0 && normalizeEmail(toTrimmedString(employer.email)) === email;
+  });
+  for (const employer of matchedEmployers) {
+    const placements = await fetchSupabaseTableRows<ClientPlacementRow>(config, "placements", {
+      select: "id,agency_id,maid_reference_code,employer_id,status,updated_at,created_at",
+      filters: { id: placementId, agency_id: employer.agencyId ?? 1, employer_id: String(employer.id) },
+      limit: 1,
+    });
+    if (placements[0]) return { config, placement: placements[0] };
+  }
+  return { config, placement: null };
+};
+
+app.get("/api/client/placements", requireClientAuth, safeApi(async (c) => {
+  const client = c.get("client") as ClientRecord;
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Placement documents are not available right now" }, 503);
+  const email = normalizeEmail(client.email);
+  if (!email) return c.json({ placements: [], accountLinked: false });
+  const data = await loadData(c.env, { readOnly: true });
+  const employers = data.employers.filter((record) => {
+    const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
+    return (record.agencyId ?? 1) > 0 && normalizeEmail(toTrimmedString(employer.email)) === email;
+  });
+  const placements = (await Promise.all(employers.map(async (employer) =>
+    fetchSupabaseTableRows<ClientPlacementRow>(config, "placements", {
+      select: "id,agency_id,maid_reference_code,employer_id,status,updated_at,created_at",
+      filters: { agency_id: employer.agencyId ?? 1, employer_id: String(employer.id) },
+      orderBy: "created_at.desc", limit: 100,
+    }),
+  ))).flat();
+  const unique = [...new Map(placements.map((placement) => [placement.id, placement])).values()];
+  const results = await Promise.all(unique.map(async (placement) => {
+    const documents = await fetchPlacementDocuments(config, placement.id, placement.agency_id);
+    return { ...placement, documents: documents.map(({ storage_ref: _storageRef, ...document }) => document) };
+  }));
+  return c.json({ placements: results, accountLinked: employers.length > 0 });
+}));
+
+app.get("/api/client/placements/:placementId/documents/:documentId/url", requireClientAuth, safeApi(async (c) => {
+  const client = c.get("client") as ClientRecord;
+  const storage = getExternalSyncStorageConfig(c.env);
+  if (!storage) return c.json({ error: "Private document storage is not configured" }, 503);
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  const documentId = toTrimmedString(c.req.param("documentId"));
+  const { config, placement } = await getClientPlacementForEmployer(c.env, client, placementId);
+  if (!config) return c.json({ error: "Placement documents are not available right now" }, 503);
+  if (!placement || !/^[0-9a-f-]{36}$/i.test(documentId)) return c.json({ error: "Document not found" }, 404);
+  const [document] = await fetchSupabaseTableRows<PlacementDocumentRow>(config, "document_metadata", {
+    select: "id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,storage_ref,uploaded_by,created_at",
+    filters: { id: documentId, agency_id: placement.agency_id, entity_type: "placement", entity_id: placementId }, limit: 1,
+  });
+  if (!document) return c.json({ error: "Document not found" }, 404);
+  const prefix = `storage://${storage.bucket}/`;
+  if (!document.storage_ref.startsWith(prefix)) return c.json({ error: "Document storage reference is invalid" }, 409);
+  return c.json({ signedUrl: await createExternalSyncSignedUrl(storage, document.storage_ref.slice(prefix.length)), expiresIn: 900 });
+}));
+
+app.post("/api/client/placements/:placementId/documents", requireClientAuth, safeApi(async (c) => {
+  const client = c.get("client") as ClientRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  const { config, placement } = await getClientPlacementForEmployer(c.env, client, placementId);
+  const storage = getExternalSyncStorageConfig(c.env);
+  if (!config || !storage) return c.json({ error: "Private document storage is not configured" }, 503);
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
+  const formData = await c.req.raw.formData().catch(() => null);
+  if (!formData) return c.json({ error: "Multipart form data is required" }, 400);
+  const file = formData.get("file");
+  if (!(file instanceof File) || !file.name.trim()) return c.json({ error: "Choose a document to upload" }, 400);
+  if (file.size < 1 || file.size > MAX_EXTERNAL_SYNC_UPLOAD_BYTES) return c.json({ error: "Document must be between 1 byte and 25 MB" }, 400);
+  const extension = file.name.match(/\.[^.]+$/)?.[0]?.toLowerCase() ?? "";
+  const allowedExtensions = new Set([".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".jpg", ".jpeg", ".png"]);
+  if (!allowedExtensions.has(extension)) return c.json({ error: "Choose a supported document format" }, 400);
+  if (extension === ".pdf") {
+    const header = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+    if (String.fromCharCode(...header) !== "%PDF-") return c.json({ error: "The uploaded PDF file is invalid" }, 400);
+  }
+  const { objectPath, storageRef } = await uploadOperationFileToPrivateStorage(storage, file, placement.agency_id, "placement-documents");
+  const response = await fetch(`${config.baseUrl}/rest/v1/document_metadata?select=id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,uploaded_by,created_at`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify([{ agency_id: placement.agency_id, entity_type: "placement", entity_id: placementId,
+      category: "employer", original_name: sanitizeStoragePathSegment(file.name, "document"),
+      mime_type: file.type || "application/octet-stream", size_bytes: file.size, storage_ref: storageRef, uploaded_by: "Employer portal" }]),
+  });
+  if (!response.ok) {
+    const encodedObjectPath = objectPath.split("/").map(encodeURIComponent).join("/");
+    await fetch(`${storage.baseUrl}/storage/v1/object/${encodeURIComponent(storage.bucket)}/${encodedObjectPath}`, { method: "DELETE", headers: supabaseStorageHeaders(storage) }).catch(() => undefined);
+    throw new Error(`Document metadata could not be saved (${response.status}): ${await readSupabaseError(response)}`);
+  }
+  const [document] = await response.json() as PlacementDocumentRow[];
+  if (!document) return c.json({ error: "Document uploaded but its record could not be read back" }, 502);
+  const tasks = await fetchDeploymentTasks(config, placementId, placement.agency_id).catch(() => []);
+  const receiptTask = tasks.find((task) => task.task_key === "employer_documents_received");
+  if (receiptTask && receiptTask.status !== "NOT_APPLICABLE") {
+    const nextStatus = "VERIFICATION_PENDING";
+    const saveTask = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(receiptTask.id)}&agency_id=eq.${placement.agency_id}&placement_id=eq.${encodeURIComponent(placementId)}`, {
+      method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+      body: JSON.stringify({ status: nextStatus, evidence_document_id: document.id, completed_at: null, verified_at: null, verified_by: null, updated_by: "Employer portal", updated_at: now() }),
+    });
+    if (!saveTask.ok) console.error("Employer document uploaded but the review task did not update", await readSupabaseError(saveTask));
+    else await recordDeploymentTaskEvent(config, { agencyId: placement.agency_id, placementId, taskId: receiptTask.id, taskKey: receiptTask.task_key, actor: "Employer portal", fromStatus: receiptTask.status, toStatus: nextStatus }).catch((error) => console.error("Employer document task audit failed", errMsg(error)));
+  }
+  const hook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (hook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `document:${document.id}:uploaded`, placement.agency_id, {
+    event_type: "document.uploaded", agency_id: placement.agency_id, placement_id: placementId, document_id: document.id, category: "employer",
+  }).catch((error) => console.error("Employer document Make event could not be queued", errMsg(error))));
+  return c.json({ document: { ...document, storage_ref: undefined }, reviewStatus: "VERIFICATION_PENDING", makeEventConfigured: Boolean(hook) }, 201);
+}));
+
+app.get("/api/operations-board/placements/:placementId/flights", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Placement flights require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId) || !await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  const flights = await fetchSupabaseTableRows<PlacementFlightRow>(config, "flights", {
+    select: "id,placement_id,airline,flight_number,departure_airport,arrival_airport,departure_at,arrival_at,status,notes,terminal,pickup_contact,transport_arrangement,accommodation_destination,special_instructions,created_at,updated_at",
+    filters: { placement_id: placementId }, orderBy: "arrival_at.asc.nullslast,created_at.desc", limit: 50,
+  });
+  return c.json({ flights });
+}));
+
+app.post("/api/operations-board/placements/:placementId/flights", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Placement flights require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId) || !await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  const body = await parseBody<{ airline?: unknown; flightNumber?: unknown; departureAirport?: unknown; arrivalAirport?: unknown; arrivalAt?: unknown; status?: unknown; notes?: unknown; terminal?: unknown; pickupContact?: unknown; transportArrangement?: unknown; accommodationDestination?: unknown; specialInstructions?: unknown }>(c.req.raw);
+  const arrivalAt = typeof body?.arrivalAt === "string" ? parseSingaporeDateTime(body.arrivalAt) : null;
+  if (!arrivalAt || Number.isNaN(arrivalAt.getTime())) return c.json({ error: "A valid arrival date and time is required" }, 400);
+  const status = toTrimmedString(body?.status || "SCHEDULED").toUpperCase();
+  if (!["PENDING", "SCHEDULED", "IN_PROGRESS", "BLOCKED", "CANCELLED"].includes(status)) return c.json({ error: "Invalid flight status" }, 400);
+  const response = await fetch(`${config.baseUrl}/rest/v1/flights?select=id,placement_id,airline,flight_number,departure_airport,arrival_airport,departure_at,arrival_at,status,notes,terminal,pickup_contact,transport_arrangement,accommodation_destination,special_instructions,created_at,updated_at`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify([{ placement_id: placementId, airline: toTrimmedString(body?.airline).slice(0, 120), flight_number: toTrimmedString(body?.flightNumber).slice(0, 40), arrival_airport: toTrimmedString(body?.arrivalAirport).slice(0, 120), arrival_at: arrivalAt.toISOString(), status, notes: toTrimmedString(body?.notes).slice(0, 2000), terminal: toTrimmedString(body?.terminal).slice(0, 40), pickup_contact: toTrimmedString(body?.pickupContact).slice(0, 160), transport_arrangement: toTrimmedString(body?.transportArrangement).slice(0, 500), accommodation_destination: toTrimmedString(body?.accommodationDestination).slice(0, 500), special_instructions: toTrimmedString(body?.specialInstructions).slice(0, 1000), updated_at: now() }]),
+  });
+  if (!response.ok) throw new Error(`Unable to save flight (${response.status}): ${await readSupabaseError(response)}`);
+  const flights = await response.json() as PlacementFlightRow[];
+  const flight = flights[0];
+  let pickupTaskSynced = true;
+  try {
+    await syncAirportPickupTaskWithFlightSchedule(config, placementId, admin.agencyId, admin.username || admin.email || "Agency staff", true);
+  } catch (error) {
+    pickupTaskSynced = false;
+    console.error("Flight saved but airport pickup task synchronization failed", errMsg(error));
+  }
+  const eventWebhook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (flight && status === "SCHEDULED" && eventWebhook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `arrival:${flight.id}:scheduled:${flight.arrival_at}`, admin.agencyId, {
+    event_type: "arrival.scheduled", agency_id: admin.agencyId, flight_id: flight.id, placement_id: placementId,
+    arrival_at: flight.arrival_at, airline: flight.airline, flight_number: flight.flight_number, arrival_airport: flight.arrival_airport,
+  }).catch((error) => console.error("Arrival schedule Make event could not be queued", errMsg(error))));
+  return c.json({ flight, pickupTaskSynced, arrivalEventQueued: Boolean(eventWebhook && status === "SCHEDULED") }, 201);
+}));
+
+app.patch("/api/operations-board/flights/:flightId", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Placement flights require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const flightId = toTrimmedString(c.req.param("flightId"));
+  const rows = await fetchSupabaseTableRows<PlacementFlightRow>(config, "flights", { select: "id,placement_id,airline,flight_number,departure_airport,arrival_airport,departure_at,arrival_at,status,notes,terminal,pickup_contact,transport_arrangement,accommodation_destination,special_instructions,created_at,updated_at", filters: { id: flightId }, limit: 1 });
+  const current = rows[0];
+  if (!current || !await fetchAgencyPlacement(config, current.placement_id, admin.agencyId)) return c.json({ error: "Flight not found" }, 404);
+  const body = await parseBody<{ status?: unknown; notes?: unknown; arrivalAt?: unknown; flightNumber?: unknown; airline?: unknown; arrivalAirport?: unknown; terminal?: unknown; pickupContact?: unknown; transportArrangement?: unknown; accommodationDestination?: unknown; specialInstructions?: unknown }>(c.req.raw);
+  const patch: Record<string, unknown> = { updated_at: now() };
+  if (body?.status !== undefined) {
+    const status = toTrimmedString(body.status).toUpperCase();
+    if (!["PENDING", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "BLOCKED", "CANCELLED"].includes(status)) return c.json({ error: "Invalid flight status" }, 400);
+    patch.status = status;
+  }
+  if (body?.notes !== undefined) patch.notes = toTrimmedString(body.notes).slice(0, 2000);
+  if (body?.flightNumber !== undefined) patch.flight_number = toTrimmedString(body.flightNumber).slice(0, 40);
+  if (body?.airline !== undefined) patch.airline = toTrimmedString(body.airline).slice(0, 120);
+  if (body?.arrivalAirport !== undefined) patch.arrival_airport = toTrimmedString(body.arrivalAirport).slice(0, 120);
+  if (body?.terminal !== undefined) patch.terminal = toTrimmedString(body.terminal).slice(0, 40);
+  if (body?.pickupContact !== undefined) patch.pickup_contact = toTrimmedString(body.pickupContact).slice(0, 160);
+  if (body?.transportArrangement !== undefined) patch.transport_arrangement = toTrimmedString(body.transportArrangement).slice(0, 500);
+  if (body?.accommodationDestination !== undefined) patch.accommodation_destination = toTrimmedString(body.accommodationDestination).slice(0, 500);
+  if (body?.specialInstructions !== undefined) patch.special_instructions = toTrimmedString(body.specialInstructions).slice(0, 1000);
+  if (body?.arrivalAt !== undefined) {
+    const arrivalAt = parseSingaporeDateTime(String(body.arrivalAt));
+    if (Number.isNaN(arrivalAt.getTime())) return c.json({ error: "A valid arrival date and time is required" }, 400);
+    patch.arrival_at = arrivalAt.toISOString();
+  }
+  const response = await fetch(`${config.baseUrl}/rest/v1/flights?id=eq.${encodeURIComponent(flightId)}&select=id,placement_id,airline,flight_number,departure_airport,arrival_airport,departure_at,arrival_at,status,notes,terminal,pickup_contact,transport_arrangement,accommodation_destination,special_instructions,created_at,updated_at`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }), body: JSON.stringify(patch),
+  });
+  if (!response.ok) throw new Error(`Unable to update flight (${response.status}): ${await readSupabaseError(response)}`);
+  const updated = await response.json() as PlacementFlightRow[];
+  const flight = updated[0] ?? null;
+  let pickupTaskSynced = true;
+  try {
+    await syncAirportPickupTaskWithFlightSchedule(config, current.placement_id, admin.agencyId, admin.username || admin.email || "Agency staff", body?.status !== undefined || body?.arrivalAt !== undefined);
+  } catch (error) {
+    pickupTaskSynced = false;
+    console.error("Flight updated but airport pickup task synchronization failed", errMsg(error));
+  }
+  const eventWebhook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (flight && eventWebhook && (body?.status !== undefined || body?.arrivalAt !== undefined) && ["SCHEDULED", "COMPLETED"].includes(flight.status)) {
+    const eventType = flight.status === "COMPLETED" ? "arrival.completed" : "arrival.scheduled";
+    const eventId = `arrival:${flight.id}:${eventType}:${flight.arrival_at}`;
+    runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", eventId, admin.agencyId, {
+      event_type: eventType, agency_id: admin.agencyId, flight_id: flight.id, placement_id: flight.placement_id,
+      arrival_at: flight.arrival_at, airline: flight.airline, flight_number: flight.flight_number, arrival_airport: flight.arrival_airport,
+    }).catch((error) => console.error("Arrival status Make event could not be queued", errMsg(error))));
+  }
+  return c.json({ flight, pickupTaskSynced });
+}));
+
+const initializeDeploymentTasks = async (config: SupabaseAppDataConfig, placementId: string, agencyId: number, actor: string) => {
+  const insert = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?on_conflict=placement_id,task_key`, {
+    method: "POST",
+    headers: supabaseHeaders(config, {
+      "content-type": "application/json",
+      prefer: "resolution=ignore-duplicates,return=minimal",
+    }),
+    body: JSON.stringify(deploymentTaskTemplates.map((task) => ({
+      ...task, agency_id: agencyId, placement_id: placementId, status: "NOT_STARTED", created_by: actor, updated_by: actor,
+    }))),
+  });
+  if (!insert.ok) throw new Error(`Unable to initialize placement checklist (${insert.status}): ${await readSupabaseError(insert)}`);
+  return fetchDeploymentTasks(config, placementId, agencyId);
+};
+
+type MomApplicationRow = {
+  id: string; agency_id: number; placement_id: string; applicant_id: string; employer_id: string;
+  submission_date: string | null; application_reference: string; ipa_status: string;
+  ipa_document_id: string | null; approval_date: string | null; rejection_reason: string;
+  assigned_to: string; notes: string; updated_by: string; created_at: string; updated_at: string;
+};
+const momApplicationStatuses = new Set([
+  "NOT_STARTED", "DOCUMENTS_PREPARING", "READY_FOR_SUBMISSION", "AWAITING_HUMAN_APPROVAL",
+  "SUBMITTED_TO_MOM", "PENDING_APPROVAL", "APPROVED", "REJECTED", "ADDITIONAL_INFORMATION_REQUIRED",
+]);
+const isDateOnly = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+const getMomApplication = async (config: SupabaseAppDataConfig, placementId: string, agencyId: number) => {
+  const rows = await fetchSupabaseTableRows<MomApplicationRow>(config, "placement_mom_applications", {
+    select: "id,agency_id,placement_id,applicant_id,employer_id,submission_date,application_reference,ipa_status,ipa_document_id,approval_date,rejection_reason,assigned_to,notes,updated_by,created_at,updated_at",
+    filters: { placement_id: placementId, agency_id: agencyId }, limit: 1,
+  });
+  return rows[0] ?? null;
+};
+
+app.get("/api/operations-board/placements/:placementId/mom-application", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "MOM tracking requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
+  const placements = await fetchSupabaseTableRows<{ id: string; agency_id: number; candidate_application_id: string | null; maid_reference_code: string | null; employer_id: string | null }>(config, "placements", {
+    select: "id,agency_id,candidate_application_id,maid_reference_code,employer_id", filters: { id: placementId, agency_id: admin.agencyId }, limit: 1,
+  });
+  const placement = placements[0];
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
+  return c.json({
+    application: await getMomApplication(config, placementId, admin.agencyId),
+    applicantId: placement.candidate_application_id || placement.maid_reference_code || "",
+    employerId: placement.employer_id || "",
+  });
+}));
+
+app.put("/api/operations-board/placements/:placementId/mom-application", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "MOM tracking requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
+  const body = await parseBody<Record<string, unknown>>(c.req.raw);
+  if (!body) return c.json({ error: "MOM application details are required" }, 400);
+  const placements = await fetchSupabaseTableRows<{ id: string; agency_id: number; candidate_application_id: string | null; maid_reference_code: string | null; employer_id: string | null }>(config, "placements", {
+    select: "id,agency_id,candidate_application_id,maid_reference_code,employer_id", filters: { id: placementId, agency_id: admin.agencyId }, limit: 1,
+  });
+  const placement = placements[0];
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
+  const status = toTrimmedString(body.ipaStatus).toUpperCase();
+  if (!momApplicationStatuses.has(status)) return c.json({ error: "Choose a valid MOM/IPA application status" }, 400);
+  const submissionDate = body.submissionDate == null || body.submissionDate === "" ? null : body.submissionDate;
+  const approvalDate = body.approvalDate == null || body.approvalDate === "" ? null : body.approvalDate;
+  if (submissionDate !== null && !isDateOnly(submissionDate)) return c.json({ error: "Enter a valid submission date" }, 400);
+  if (approvalDate !== null && !isDateOnly(approvalDate)) return c.json({ error: "Enter a valid IPA approval date" }, 400);
+  const applicationReference = toTrimmedString(body.applicationReference);
+  const rejectionReason = toTrimmedString(body.rejectionReason);
+  const assignedTo = toTrimmedString(body.assignedTo);
+  const notes = toTrimmedString(body.notes);
+  const ipaDocumentId = toTrimmedString(body.ipaDocumentId);
+  if (applicationReference.length > 120 || rejectionReason.length > 1000 || assignedTo.length > 120 || notes.length > 2000) return c.json({ error: "One or more MOM tracking fields exceed their allowed length" }, 400);
+  if (["SUBMITTED_TO_MOM", "PENDING_APPROVAL", "APPROVED", "REJECTED", "ADDITIONAL_INFORMATION_REQUIRED"].includes(status) && !submissionDate) return c.json({ error: "Record the submission date before using this MOM status" }, 400);
+  if (status === "APPROVED" && (!approvalDate || !ipaDocumentId)) return c.json({ error: "An approved IPA requires its approval date and supporting document" }, 400);
+  if (status === "REJECTED" && (!rejectionReason || !ipaDocumentId)) return c.json({ error: "A rejected IPA requires the rejection reason and supporting document" }, 400);
+  if (approvalDate && submissionDate && approvalDate < submissionDate) return c.json({ error: "Approval date cannot be before the submission date" }, 400);
+  if (ipaDocumentId && !/^[0-9a-f-]{36}$/i.test(ipaDocumentId)) return c.json({ error: "Choose a valid IPA evidence document" }, 400);
+  if (ipaDocumentId) {
+    const documents = await fetchSupabaseTableRows<{ id: string }>(config, "document_metadata", {
+      select: "id", filters: { id: ipaDocumentId, agency_id: admin.agencyId, entity_type: "placement", entity_id: placementId }, limit: 1,
+    });
+    if (!documents[0]) return c.json({ error: "IPA evidence must be a private document linked to this placement" }, 404);
+  }
+  const previous = await getMomApplication(config, placementId, admin.agencyId);
+  const actor = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
+  const timestamp = now();
+  const row: MomApplicationRow = {
+    id: previous?.id || crypto.randomUUID(), agency_id: admin.agencyId, placement_id: placementId,
+    applicant_id: placement.candidate_application_id || placement.maid_reference_code || "",
+    employer_id: placement.employer_id || "", submission_date: submissionDate as string | null,
+    application_reference: applicationReference, ipa_status: status, ipa_document_id: ipaDocumentId || null,
+    approval_date: approvalDate as string | null, rejection_reason: rejectionReason, assigned_to: assignedTo,
+    notes, updated_by: actor, created_at: previous?.created_at || timestamp, updated_at: timestamp,
+  };
+  const saveResponse = await fetch(`${config.baseUrl}/rest/v1/placement_mom_applications?on_conflict=placement_id&select=id,agency_id,placement_id,applicant_id,employer_id,submission_date,application_reference,ipa_status,ipa_document_id,approval_date,rejection_reason,assigned_to,notes,updated_by,created_at,updated_at`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "resolution=merge-duplicates,return=representation" }), body: JSON.stringify([row]),
+  });
+  if (!saveResponse.ok) throw new Error(`Unable to save MOM/IPA tracking (${saveResponse.status}): ${await readSupabaseError(saveResponse)}`);
+  const [saved] = await saveResponse.json() as MomApplicationRow[];
+  if (!saved) return c.json({ error: "MOM tracking saved without a confirmation row; refresh before continuing" }, 502);
+
+  let deploymentTaskSynced = false;
+  try {
+    const tasks = await initializeDeploymentTasks(config, placementId, admin.agencyId, actor);
+    const decisionTask = tasks.find((task) => task.task_key === "ipa_approval");
+    if (decisionTask) {
+      const finalDecision = ["APPROVED", "REJECTED"].includes(status);
+      const taskStatus = finalDecision ? "VERIFIED" : status === "NOT_STARTED" ? "NOT_STARTED"
+        : status === "DOCUMENTS_PREPARING" ? "IN_PROGRESS"
+          : status === "AWAITING_HUMAN_APPROVAL" ? "VERIFICATION_PENDING"
+            : status === "ADDITIONAL_INFORMATION_REQUIRED" ? "BLOCKED"
+              : status === "READY_FOR_SUBMISSION" ? "PLANNED" : "IN_PROGRESS";
+      const verificationNote = finalDecision ? `Staff recorded the ${status.toLowerCase()} IPA decision and attached its supporting document.` : "";
+      const taskPatch = finalDecision ? {
+        status: taskStatus, evidence_document_id: ipaDocumentId, verification_note: verificationNote,
+        completed_at: timestamp, verified_at: timestamp, verified_by: actor, updated_at: timestamp, updated_by: actor,
+      } : {
+        status: taskStatus, completed_at: null, verified_at: null, verified_by: null, updated_at: timestamp, updated_by: actor,
+      };
+      const taskResponse = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(decisionTask.id)}&agency_id=eq.${admin.agencyId}&placement_id=eq.${encodeURIComponent(placementId)}&select=id,status`, {
+        method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }), body: JSON.stringify(taskPatch),
+      });
+      if (!taskResponse.ok) throw new Error(`IPA task sync failed (${taskResponse.status}): ${await readSupabaseError(taskResponse)}`);
+      const [updatedTask] = await taskResponse.json() as Array<{ id: string; status: string }>;
+      deploymentTaskSynced = Boolean(updatedTask);
+      if (updatedTask && decisionTask.status !== updatedTask.status) await recordDeploymentTaskEvent(config, {
+        agencyId: admin.agencyId, placementId, taskId: decisionTask.id, taskKey: decisionTask.task_key,
+        actor, fromStatus: decisionTask.status, toStatus: updatedTask.status,
+      });
+    }
+  } catch (syncError) { console.error("MOM application saved but IPA deployment task sync failed", errMsg(syncError)); }
+
+  const workflowEvent = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify([{ event_type: "mom.application_updated", entity_type: "placement", entity_id: placementId, actor: `user:${actor}`, status, payload: { agencyId: admin.agencyId, trackingId: saved.id, status } }]),
+  }).then((response) => response.ok).catch((error) => { console.error("MOM application workflow audit failed", errMsg(error)); return false; });
+
+  const webhookConfigured = Boolean(makeWebhookUrlForOutbox(c.env, "deployment_task_event"));
+  if (webhookConfigured) {
+    const updateDigest = await sha256Hex(JSON.stringify({ placementId, status, submissionDate, applicationReference, approvalDate, ipaDocumentId, rejectionReason }));
+    runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `mom-application:${saved.id}:updated:${updateDigest}`, admin.agencyId, {
+      event_type: "mom.application_updated", agency_id: admin.agencyId, placement_id: placementId, tracking_id: saved.id, status,
+    }).catch((error) => console.error("MOM status Make event could not be queued", errMsg(error))));
+    if (status === "APPROVED" && previous?.ipa_status !== "APPROVED") {
+      runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `ipa:${saved.id}:approved:${approvalDate}:${ipaDocumentId}`, admin.agencyId, {
+        event_type: "ipa.approved", agency_id: admin.agencyId, placement_id: placementId, tracking_id: saved.id, approval_date: approvalDate,
+      }).catch((error) => console.error("IPA approval Make event could not be queued", errMsg(error))));
+    }
+  }
+  return c.json({ application: saved, deploymentTaskSynced, workflowEventLogged: workflowEvent, deliveryEventQueued: webhookConfigured });
+}));
+
+const syncAirportPickupTaskWithFlightSchedule = async (
+  config: SupabaseAppDataConfig,
+  placementId: string,
+  agencyId: number,
+  actor: string,
+  reopenVerified: boolean,
+) => {
+  const [tasks, flights] = await Promise.all([
+    initializeDeploymentTasks(config, placementId, agencyId, actor),
+    fetchSupabaseTableRows<{ id: string; arrival_at: string | null; status: string }>(config, "flights", {
+      select: "id,arrival_at,status", filters: { placement_id: placementId }, orderBy: "arrival_at.asc.nullslast", limit: 100,
+    }),
+  ]);
+  const task = tasks.find((item) => item.task_key === "airport_pickup");
+  if (!task) return;
+  const activeFlights = flights.filter((flight) => ["PENDING", "SCHEDULED", "IN_PROGRESS", "BLOCKED"].includes(flight.status) && flight.arrival_at && Number.isFinite(Date.parse(flight.arrival_at))).sort((left, right) => Date.parse(left.arrival_at!) - Date.parse(right.arrival_at!));
+  const nextFlight = activeFlights[0];
+  const currentStatus = task.status;
+  let nextStatus = currentStatus;
+  const update: Record<string, unknown> = { updated_at: now(), updated_by: actor };
+  const scheduleChanged = Boolean(nextFlight && task.due_at !== nextFlight.arrival_at);
+  if (nextFlight && (currentStatus === "NOT_STARTED" || currentStatus === "PLANNED" || (currentStatus === "VERIFIED" && reopenVerified && scheduleChanged))) {
+    nextStatus = "PLANNED";
+    update.status = nextStatus;
+    update.planned_at = nextFlight.arrival_at;
+    update.due_at = nextFlight.arrival_at;
+    if (currentStatus === "VERIFIED") {
+      update.completed_at = null;
+      update.verified_at = null;
+      update.verified_by = null;
+    }
+  } else if (!nextFlight && currentStatus === "PLANNED") {
+    nextStatus = "NOT_STARTED";
+    update.status = nextStatus;
+    update.planned_at = null;
+    update.due_at = null;
+  } else return;
+  const save = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(task.id)}&agency_id=eq.${agencyId}&placement_id=eq.${encodeURIComponent(placementId)}`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify(update),
+  });
+  if (!save.ok) throw new Error(`Flight saved, but airport pickup task could not be synchronized (${save.status}): ${await readSupabaseError(save)}`);
+  if (currentStatus !== nextStatus) await recordDeploymentTaskEvent(config, {
+    agencyId, placementId, taskId: task.id, taskKey: task.task_key, actor, fromStatus: currentStatus, toStatus: nextStatus,
+  });
+};
+
+const recordDeploymentTaskEvent = async (
+  config: SupabaseAppDataConfig,
+  event: { agencyId: number; placementId: string; taskId: string; taskKey: string; actor: string; fromStatus: string; toStatus: string },
+) => {
+  const response = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify([{
+      event_type: "deployment.task.updated", entity_type: "deployment_task", entity_id: event.taskId,
+      actor: event.actor, status: "completed",
+      payload: { agencyId: event.agencyId, placementId: event.placementId, taskKey: event.taskKey, fromStatus: event.fromStatus, toStatus: event.toStatus },
+    }]),
+  });
+  return response.ok;
+};
+
+app.get("/api/operations-board/placements/:placementId/documents", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Placement documents require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
+  if (!await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  const documents = await fetchPlacementDocuments(config, placementId, admin.agencyId);
+  return c.json({ documents: documents.map(({ storage_ref: _storageRef, ...document }) => document) });
+}));
+
+app.post("/api/operations-board/placements/:placementId/documents", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  const storage = getExternalSyncStorageConfig(c.env);
+  if (!config || !storage) return c.json({ error: "Private placement document storage is not configured" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
+  if (!await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  const formData = await c.req.raw.formData().catch(() => null);
+  if (!formData) return c.json({ error: "A document upload is required" }, 400);
+  const file = formData.get("file");
+  if (!(file instanceof File) || !file.name.trim()) return c.json({ error: "Choose a document to upload" }, 400);
+  if (file.size < 1 || file.size > MAX_EXTERNAL_SYNC_UPLOAD_BYTES) return c.json({ error: "Document must be between 1 byte and 25 MB" }, 400);
+  const allowedExtensions = new Set([".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".jpg", ".jpeg", ".png"]);
+  const extension = file.name.match(/\.[^.]+$/)?.[0]?.toLowerCase() ?? "";
+  if (!allowedExtensions.has(extension)) return c.json({ error: "Choose a supported document format" }, 400);
+  const category = toTrimmedString(formData.get("category")) || "other";
+  const allowedCategories = new Set(["employer", "contract", "insurance", "security_bond", "flight", "arrival", "medical", "sip", "work_permit", "handover", "other"]);
+  if (!allowedCategories.has(category)) return c.json({ error: "Choose a valid document category" }, 400);
+  const uploadedBy = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
+  const { objectPath, storageRef } = await uploadOperationFileToPrivateStorage(storage, file, admin.agencyId, "placement-documents");
+  const response = await fetch(`${config.baseUrl}/rest/v1/document_metadata?select=id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,uploaded_by,created_at`, {
+    method: "POST",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify([{
+      agency_id: admin.agencyId, entity_type: "placement", entity_id: placementId, category,
+      original_name: sanitizeStoragePathSegment(file.name, "document"), mime_type: file.type || "application/octet-stream",
+      size_bytes: file.size, storage_ref: storageRef, uploaded_by: uploadedBy,
+    }]),
+  });
+  if (!response.ok) {
+    const encodedObjectPath = objectPath.split("/").map(encodeURIComponent).join("/");
+    await fetch(`${storage.baseUrl}/storage/v1/object/${encodeURIComponent(storage.bucket)}/${encodedObjectPath}`, {
+      method: "DELETE", headers: supabaseStorageHeaders(storage),
+    }).catch(() => undefined);
+    throw new Error(`Placement document metadata could not be saved (${response.status}): ${await readSupabaseError(response)}`);
+  }
+  const saved = await response.json() as Array<Record<string, unknown>>;
+  if (!saved[0]) return c.json({ error: "Document uploaded but its metadata could not be read back" }, 502);
+  const documentId = toTrimmedString(saved[0].id);
+  const deploymentEventsUrl = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (deploymentEventsUrl && documentId) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `document:${documentId}:uploaded`, admin.agencyId, {
+    event_type: "document.uploaded", agency_id: admin.agencyId, placement_id: placementId, document_id: documentId, category,
+  }).catch((error) => console.error("Document upload Make event could not be queued", errMsg(error))));
+  return c.json({ document: saved[0], deliveryEventQueued: Boolean(deploymentEventsUrl) }, 201);
+}));
+
+app.get("/api/operations-board/placements/:placementId/documents/:documentId/url", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  const storage = getExternalSyncStorageConfig(c.env);
+  if (!config || !storage) return c.json({ error: "Private placement document storage is not configured" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  const documentId = toTrimmedString(c.req.param("documentId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId) || !/^[0-9a-f-]{36}$/i.test(documentId)) return c.json({ error: "Valid placement and document ids are required" }, 400);
+  if (!await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  const documents = await fetchSupabaseTableRows<PlacementDocumentRow>(config, "document_metadata", {
+    select: "id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,storage_ref,uploaded_by,created_at",
+    filters: { id: documentId, agency_id: admin.agencyId, entity_type: "placement", entity_id: placementId }, limit: 1,
+  });
+  const document = documents[0];
+  if (!document) return c.json({ error: "Document not found" }, 404);
+  const prefix = `storage://${storage.bucket}/`;
+  if (!document.storage_ref.startsWith(prefix)) return c.json({ error: "Document storage reference is invalid" }, 409);
+  const signedUrl = await createExternalSyncSignedUrl(storage, document.storage_ref.slice(prefix.length));
+  return c.json({ signedUrl, expiresIn: 900 });
+}));
+
+app.get("/api/operations-board/placements/:placementId/tasks", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
+  if (!await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  return c.json({ tasks: await fetchDeploymentTasks(config, placementId, admin.agencyId), templates: deploymentTaskTemplates.length });
+}));
+
+app.post("/api/operations-board/placements/:placementId/tasks/initialize", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
+  if (!await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  const actor = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
+  const tasks = await initializeDeploymentTasks(config, placementId, admin.agencyId, actor);
+  return c.json({ tasks, initialized: true }, 201);
+}));
+
+app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const taskId = toTrimmedString(c.req.param("taskId"));
+  if (!/^[0-9a-f-]{36}$/i.test(taskId)) return c.json({ error: "Valid task id is required" }, 400);
+  const body = await parseBody<Record<string, unknown>>(c.req.raw);
+  if (!body || Object.keys(body).length === 0) return c.json({ error: "Task updates are required" }, 400);
+  const tasks = await fetchSupabaseTableRows<{
+    id: string; placement_id: string; task_key: string; task_group: string; title: string; status: string; assigned_to: string | null;
+    planned_at: string | null; due_at: string | null; completed_at: string | null;
+    evidence_document_id: string | null; verification_note: string; notes: string; verified_at: string | null;
+  }>(config, "deployment_tasks", {
+    select: "id,placement_id,task_key,task_group,title,status,assigned_to,planned_at,due_at,completed_at,evidence_document_id,verification_note,notes,verified_at",
+    filters: { id: taskId, agency_id: admin.agencyId }, limit: 1,
+  });
+  const existing = tasks[0];
+  if (!existing) return c.json({ error: "Deployment task not found" }, 404);
+  if (!await fetchAgencyPlacement(config, existing.placement_id, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff" };
+  const actor = String(update.updated_by);
+  if (Object.hasOwn(body, "status")) {
+    const status = toTrimmedString(body.status).toUpperCase();
+    if (!deploymentTaskStatuses.has(status)) return c.json({ error: "Choose a valid task status" }, 400);
+    update.status = status;
+  }
+  if (Object.hasOwn(body, "assignedTo")) {
+    const assignedTo = toTrimmedString(body.assignedTo);
+    if (assignedTo.length > 120) return c.json({ error: "Assignee must be 120 characters or fewer" }, 400);
+    update.assigned_to = assignedTo || null;
+  }
+  const parseDateField = (key: "plannedAt" | "dueAt") => {
+    if (!Object.hasOwn(body, key)) return { present: false, value: null as string | null };
+    if (body[key] === null || body[key] === "") return { present: true, value: null as string | null };
+    if (typeof body[key] !== "string" || !Number.isFinite(Date.parse(body[key] as string))) return { present: true, value: undefined };
+    return { present: true, value: new Date(body[key] as string).toISOString() };
+  };
+  const plannedAt = parseDateField("plannedAt");
+  const dueAt = parseDateField("dueAt");
+  if (plannedAt.value === undefined || dueAt.value === undefined) return c.json({ error: "Enter valid planned and due dates" }, 400);
+  if (plannedAt.present) update.planned_at = plannedAt.value;
+  if (dueAt.present) update.due_at = dueAt.value;
+  if (Object.hasOwn(body, "notes")) {
+    if (typeof body.notes !== "string" || body.notes.length > 1000) return c.json({ error: "Task notes must be 1,000 characters or fewer" }, 400);
+    update.notes = body.notes.trim();
+  }
+  if (Object.hasOwn(body, "verificationNote")) {
+    if (typeof body.verificationNote !== "string" || body.verificationNote.length > 1000) return c.json({ error: "Verification notes must be 1,000 characters or fewer" }, 400);
+    update.verification_note = body.verificationNote.trim();
+  }
+  if (Object.hasOwn(body, "evidenceDocumentId")) {
+    const documentId = toTrimmedString(body.evidenceDocumentId);
+    if (documentId && !/^[0-9a-f-]{36}$/i.test(documentId)) return c.json({ error: "Choose a valid evidence document" }, 400);
+    if (documentId) {
+      const documents = await fetchSupabaseTableRows<{ id: string }>(config, "document_metadata", {
+        select: "id", filters: { id: documentId, agency_id: admin.agencyId, entity_type: "placement", entity_id: existing.placement_id }, limit: 1,
+      });
+      if (!documents[0]) return c.json({ error: "Evidence document was not found for this placement" }, 404);
+    }
+    update.evidence_document_id = documentId || null;
+  }
+
+  const nextStatus = String(update.status ?? existing.status);
+  if (nextStatus === "VERIFIED") {
+    const proofNote = String(update.verification_note ?? existing.verification_note ?? "").trim();
+    const evidenceId = Object.hasOwn(update, "evidence_document_id") ? update.evidence_document_id : existing.evidence_document_id;
+    const evidenceRequiredTaskKeys = new Set([
+      "contract_generated",
+      "contract_signature",
+      "signed_contract_saved",
+      "ipa_approval",
+      "insurance",
+      "personal_accident_insurance",
+      "security_bond",
+      "work_permit_issuance",
+    ]);
+    if (evidenceRequiredTaskKeys.has(existing.task_key) && !evidenceId) {
+      return c.json({ error: "Attach the verified private placement document before completing this task" }, 400);
+    }
+    if (proofNote.length < 5 && !evidenceId) return c.json({ error: "Add a verification note or attach placement evidence before marking this task verified" }, 400);
+    const verifiedAt = existing.status === "VERIFIED" && existing.verified_at ? existing.verified_at : new Date().toISOString();
+    update.completed_at = existing.completed_at || verifiedAt;
+    update.verified_at = verifiedAt;
+    update.verified_by = actor;
+  } else {
+    if (Object.hasOwn(update, "status") && nextStatus !== existing.status) update.completed_at = null;
+    if (Object.hasOwn(update, "status") && nextStatus !== "VERIFICATION_PENDING") {
+      update.verified_at = null;
+      update.verified_by = null;
+    }
+  }
+  if (nextStatus === "NOT_APPLICABLE" && toTrimmedString(update.notes ?? existing.notes).length < 5) {
+    return c.json({ error: "Explain why this checklist item does not apply" }, 400);
+  }
+  if (["REJECTED", "RESUBMISSION_REQUIRED"].includes(nextStatus) && toTrimmedString(update.notes ?? existing.notes).length < 5) {
+    return c.json({ error: "Add a clear staff note explaining the rejection or required resubmission" }, 400);
+  }
+  const savedResponse = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(taskId)}&agency_id=eq.${encodeURIComponent(String(admin.agencyId))}&placement_id=eq.${encodeURIComponent(existing.placement_id)}&select=*`, {
+    method: "PATCH",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify(update),
+  });
+  if (!savedResponse.ok) throw new Error(`Unable to update deployment task (${savedResponse.status}): ${await readSupabaseError(savedResponse)}`);
+  const saved = await savedResponse.json() as Array<Record<string, unknown>>;
+  if (!saved[0]) return c.json({ error: "Deployment task not found" }, 404);
+  const taskBecameVerified = existing.status !== "VERIFIED" && nextStatus === "VERIFIED";
+  const deploymentEventsUrl = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (taskBecameVerified && deploymentEventsUrl) {
+    const verifiedAt = toTrimmedString(saved[0].verified_at) || now();
+    const eventBase = { agency_id: admin.agencyId, placement_id: existing.placement_id, task_id: existing.id, task_key: existing.task_key, task_group: existing.task_group, title: existing.title, verified_at: verifiedAt, verified_by: actor, evidence_document_id: toTrimmedString(saved[0].evidence_document_id) || null };
+    const eventId = `deployment-task:${existing.id}:verified:${verifiedAt}`;
+    const specificType: Record<string, string> = {
+      contract_generated: "contract.generated", contract_review: "contract.approved", signed_contract_saved: "contract.signed",
+      mom_application_status: "mom.application_updated", work_permit_issuance: "workpermit.issued",
+      medical_exam: "medical.completed", sip: "sip.completed", arrival_confirmed: "arrival.completed",
+      flight_booking: "arrival.scheduled", employer_handover: "handover.completed",
+    };
+    const events: Array<{ event_type: string; event_id: string; [key: string]: unknown }> = [
+      { event_type: "deployment.task.completed", event_id: eventId, ...eventBase },
+    ];
+    if (specificType[existing.task_key]) events.push({ event_type: specificType[existing.task_key], event_id: `${eventId}:${specificType[existing.task_key]}`, ...eventBase });
+    if (eventBase.evidence_document_id) events.push({ event_type: "document.verified", event_id: `document:${eventBase.evidence_document_id}:verified:${verifiedAt}`, ...eventBase });
+    for (const event of events) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", event.event_id, admin.agencyId, event).catch((error) => console.error("Deployment workflow Make event could not be queued", event.event_type, errMsg(error))));
+  }
+  const auditLogged = await recordDeploymentTaskEvent(config, {
+    agencyId: admin.agencyId, placementId: existing.placement_id, taskId, taskKey: existing.task_key,
+    actor, fromStatus: existing.status, toStatus: nextStatus,
+  }).catch((eventError) => { console.error("Deployment task audit event failed", errMsg(eventError)); return false; });
+  return c.json({ task: saved[0], auditLogged });
+}));
+
 // Operations Center board. Placement and milestone state are both read from
 // Supabase, so it is the same source of truth used by the staff action buttons.
 app.get(
   "/api/operations-board",
   requireAgencyAdminAuth,
+  canReviewAgencyRecords,
   safeApi(async (c) => {
     const config = getSupabaseAppDataConfig(c.env);
     if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
@@ -9352,6 +10340,314 @@ app.get(
     return c.json({ placements: board, count: board.length });
   }),
 );
+
+app.get("/api/operations-board/summary", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const currentIso = now();
+  const next72Hours = new Date(Date.now() + 72 * 60 * 60_000).toISOString();
+  const data = await loadData(c.env, { readOnly: true });
+  const [tasks, interviewsResponse, flightsResponse] = await Promise.all([
+    fetchSupabaseTableRows<{ task_key: string; status: string; due_at: string | null }>(config, "deployment_tasks", {
+      select: "task_key,status,due_at", filters: { agency_id: admin.agencyId }, limit: 5000,
+    }),
+    (async () => {
+      const params = new URLSearchParams({ select: "id,scheduled_at,status", agency_id: `eq.${admin.agencyId}`, scheduled_at: `gte.${currentIso}`, status: "in.(REQUESTED,AWAITING_EMPLOYER_CONFIRMATION,AWAITING_APPLICANT_CONFIRMATION,SCHEDULED,CONFIRMED,RESCHEDULED)", order: "scheduled_at.asc", limit: "500" });
+      const response = await fetch(`${config.baseUrl}/rest/v1/interviews?${params}`, { headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }), signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error(`Unable to load upcoming interviews (${response.status}): ${await readSupabaseError(response)}`);
+      return await response.json() as Array<{ id: string; scheduled_at: string; status: string }>;
+    })(),
+    (async () => {
+      const params = new URLSearchParams({ select: "id,arrival_at,status,placements!inner(agency_id)", "placements.agency_id": `eq.${admin.agencyId}`, arrival_at: `gte.${currentIso}`, status: "not.eq.CANCELLED", order: "arrival_at.asc", limit: "1000" });
+      params.set("arrival_at.lte", next72Hours);
+      const response = await fetch(`${config.baseUrl}/rest/v1/flights?${params}`, { headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }), signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error(`Unable to load upcoming arrivals (${response.status}): ${await readSupabaseError(response)}`);
+      return await response.json() as Array<{ id: string; arrival_at: string; status: string }>;
+    })(),
+  ]);
+  const unfinished = (taskKey: string) => tasks.filter((task) => task.task_key === taskKey && !["VERIFIED", "NOT_APPLICABLE"].includes(task.status));
+  const openTasks = tasks.filter((task) => !["VERIFIED", "NOT_APPLICABLE"].includes(task.status));
+  const hasKey = (pattern: RegExp) => openTasks.filter((task) => pattern.test(task.task_key));
+  return c.json({
+    generatedAt: currentIso,
+    totalApplicants: data.ats.applications.filter((item) => item.agencyId === admin.agencyId).length,
+    totalEmployers: data.employers.filter((item) => (item.agencyId ?? 1) === admin.agencyId).length,
+    activePlacements: (await fetchSupabaseTableRows<{ id: string; status: string }>(config, "placements", { select: "id,status", filters: { agency_id: admin.agencyId }, limit: 2000 })).filter((item) => !["COMPLETED", "CANCELLED", "WITHDRAWN"].includes(item.status.toUpperCase())).length,
+    newInquiries: data.enquiries.filter((item) => (item.agencyId ?? 1) === admin.agencyId && (!item.status || item.status === "new")).length,
+    upcomingInterviews: interviewsResponse.length,
+    contractsAwaitingSignatures: unfinished("contract_signature").length,
+    momApplicationsPending: hasKey(/^mom_application/).length,
+    ipaApprovalsPending: unfinished("ipa_approval").length,
+    upcomingArrivals: flightsResponse.length,
+    airportPickupsPending: hasKey(/^airport_pickup/).length,
+    medicalExaminationsPending: hasKey(/^medical_exam/).length,
+    sipPending: hasKey(/^sip/).length,
+    workPermitsPending: hasKey(/work_permit|mom_registration|fingerprint_photo/).length,
+    completedHandovers: tasks.filter((task) => task.task_key === "employer_handover" && task.status === "VERIFIED").length,
+    overdueTasks: openTasks.filter((task) => task.due_at && Date.parse(task.due_at) < Date.parse(currentIso)).length,
+    openChecklistTasks: openTasks.length,
+  });
+}));
+
+app.get("/api/operations-board/make-deliveries", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Automation history requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const params = new URLSearchParams({
+    select: "event_id,hook_key,status,attempts,max_attempts,next_attempt_at,last_error,delivered_at,created_at",
+    agency_id: `eq.${admin.agencyId}`, order: "created_at.desc", limit: "50",
+  });
+  const response = await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?${params}`, { headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(8_000) });
+  if (!response.ok) throw new Error(`Unable to load Make delivery history (${response.status}): ${await readSupabaseError(response)}`);
+  const deliveries = await response.json() as Array<{ event_id: string; hook_key: string; status: string; attempts: number; max_attempts: number; next_attempt_at: string; last_error: string; delivered_at: string | null; created_at: string }>;
+  return c.json({ deliveries, recentCount: deliveries.length, generatedAt: now() });
+}));
+
+// The rolling contractor report uses confirmed flight records as its source.
+// Keep it read-only here: staff must enter/update flight facts in the approved
+// flight workflow before they are included, and cancelled flights are excluded.
+app.get("/api/operations-board/arrivals/rolling-three-day", requireAgencyAdminAuth, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Arrival reports require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const singaporeParts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const singaporeToday = `${singaporeParts.find((part) => part.type === "year")?.value}-${singaporeParts.find((part) => part.type === "month")?.value}-${singaporeParts.find((part) => part.type === "day")?.value}`;
+  const localDay = (offset: number) => {
+    const value = new Date(`${singaporeToday}T00:00:00Z`);
+    value.setUTCDate(value.getUTCDate() + offset);
+    return value.toISOString().slice(0, 10);
+  };
+  const singaporeDate = (value: string) => {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value));
+    return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
+  };
+  const dates = [0, 1, 2].map(localDay);
+  const start = `${dates[0]}T00:00:00+08:00`;
+  const end = `${dates[2]}T23:59:59.999+08:00`;
+  const params = new URLSearchParams({
+    select: "id,placement_id,airline,flight_number,arrival_airport,arrival_at,status,notes,terminal,pickup_contact,transport_arrangement,accommodation_destination,special_instructions,placements!inner(agency_id,maid_reference_code,employer_id)",
+    "placements.agency_id": `eq.${admin.agencyId}`,
+    "arrival_at.gte": start,
+    "arrival_at.lte": end,
+    status: "in.(PENDING,SCHEDULED,IN_PROGRESS,BLOCKED)",
+    order: "arrival_at.asc",
+    limit: "500",
+  });
+  const response = await fetch(`${config.baseUrl}/rest/v1/flights?${params.toString()}`, {
+    method: "GET", headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }),
+  });
+  if (!response.ok) throw new Error(`Unable to load arrival report (${response.status}): ${await readSupabaseError(response)}`);
+  const flights = await response.json() as RollingArrivalFlightRow[];
+  // Enrich only the authenticated staff report. The scheduled Make digest below
+  // intentionally remains limited to operational references and flight facts.
+  const applicantReferences = [...new Set(flights
+    .map((flight) => flight.placements?.maid_reference_code)
+    .filter((reference): reference is string => Boolean(reference)))];
+  const applicantByReference = new Map<string, { name: string; photo: string }>();
+  if (applicantReferences.length) {
+    const maidTable = isNormalizedSupabaseEnabled(c.env) ? "helped_maids" : "app_maids";
+    const maidParams = new URLSearchParams({
+      select: "reference_code,agency_id,full_name",
+      app_id: `eq.${config.rowId}`,
+      agency_id: `eq.${admin.agencyId}`,
+      reference_code: `in.(${applicantReferences.map(normalizeReferenceCode).join(",")})`,
+      limit: String(Math.min(applicantReferences.length, 500)),
+    });
+    const maidResponse = await fetch(`${config.baseUrl}/rest/v1/${maidTable}?${maidParams}`, {
+      headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!maidResponse.ok) throw new Error(`Unable to load arrival applicant identities (${maidResponse.status}): ${await readSupabaseError(maidResponse)}`);
+    const maidRows = await maidResponse.json() as Array<{ reference_code: string; agency_id: number; full_name: string }>;
+    const photos = maidRows.length === 0 ? {} : isNormalizedSupabaseEnabled(c.env)
+      ? await batchMaidPhotosFromSupabaseNormalized(config, maidRows.map((maid) => maid.reference_code))
+      : await batchMaidPhotosFromSupabaseAppView(config, maidRows.map((maid) => maid.reference_code));
+    for (const maid of maidRows) {
+      if (maid.agency_id === admin.agencyId) {
+        applicantByReference.set(maid.reference_code, { name: maid.full_name, photo: photos[maid.reference_code] ?? "" });
+      }
+    }
+  }
+  const report = dates.map((date, index) => ({
+    date,
+    label: ["Today", "Tomorrow", "Following day"][index],
+    arrivals: flights.filter((flight) => singaporeDate(flight.arrival_at) === date && flight.status !== "CANCELLED").map((flight) => ({
+      flight_id: flight.id, placement_id: flight.placement_id, applicant_reference: flight.placements?.maid_reference_code ?? "Unassigned",
+      applicant_name: applicantByReference.get(flight.placements?.maid_reference_code ?? "")?.name ?? "Name unavailable",
+      applicant_photo: applicantByReference.get(flight.placements?.maid_reference_code ?? "")?.photo ?? "",
+      employer_reference: flight.placements?.employer_id ?? "Unassigned", airline: flight.airline, flight_number: flight.flight_number,
+      arrival_airport: flight.arrival_airport, arrival_at: flight.arrival_at, status: flight.status, notes: flight.notes,
+      terminal: flight.terminal ?? "", pickup_contact: flight.pickup_contact ?? "", transport_arrangement: flight.transport_arrangement ?? "",
+      accommodation_destination: flight.accommodation_destination ?? "", special_instructions: flight.special_instructions ?? "",
+    })),
+  }));
+  return c.json({ timezone: "Asia/Singapore", generated_at: now(), days: report, total: report.reduce((sum, day) => sum + day.arrivals.length, 0) });
+}));
+
+const runScheduledRollingArrivalReport = async (env: Bindings) => {
+  if (!makeWebhookUrlForOutbox(env, "rolling_arrival_report")) return;
+  const agencyId = Number(env.ROLLING_ARRIVAL_REPORT_AGENCY_ID);
+  if (!Number.isSafeInteger(agencyId) || agencyId < 1) {
+    console.error("Arrival digest requires a valid ROLLING_ARRIVAL_REPORT_AGENCY_ID");
+    return;
+  }
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) { console.error("Arrival digest requires Supabase service credentials"); return; }
+
+  const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const clockParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+  const singaporeMinute = Number(clockParts.find((part) => part.type === "hour")?.value ?? 0) * 60 + Number(clockParts.find((part) => part.type === "minute")?.value ?? 0);
+  if (singaporeMinute < 8 * 60 || singaporeMinute > 9 * 60) return;
+  const reportDate = `${dateParts.find((part) => part.type === "year")?.value}-${dateParts.find((part) => part.type === "month")?.value}-${dateParts.find((part) => part.type === "day")?.value}`;
+  const dateAfter = (offset: number) => { const d = new Date(`${reportDate}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); };
+  const dates = [0, 1, 2].map(dateAfter);
+  const params = new URLSearchParams({
+    select: "id,placement_id,airline,flight_number,arrival_airport,arrival_at,status,notes,terminal,pickup_contact,transport_arrangement,accommodation_destination,special_instructions,placements!inner(agency_id,maid_reference_code,employer_id)",
+    "placements.agency_id": `eq.${agencyId}`,
+    "arrival_at.gte": `${dates[0]}T00:00:00+08:00`,
+    "arrival_at.lte": `${dates[2]}T23:59:59.999+08:00`,
+    status: "in.(PENDING,SCHEDULED,IN_PROGRESS,BLOCKED)", order: "arrival_at.asc", limit: "1000",
+  });
+  const flightsResponse = await fetch(`${config.baseUrl}/rest/v1/flights?${params.toString()}`, { headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=8000" }) });
+  if (!flightsResponse.ok) { console.error("Arrival digest flight query failed", flightsResponse.status, await readSupabaseError(flightsResponse)); return; }
+  const flights = await flightsResponse.json() as RollingArrivalFlightRow[];
+  const dayReports = dates.map((date, index) => ({ date, label: ["Today", "Tomorrow", "Following day"][index], arrivals: flights.filter((flight) => {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(flight.arrival_at));
+    const flightDate = `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
+    return flightDate === date && flight.status !== "CANCELLED";
+  }).map((flight) => ({
+    placement_id: flight.placement_id, applicant_reference: flight.placements?.maid_reference_code ?? "Unassigned",
+    employer_reference: flight.placements?.employer_id ?? "Unassigned", airline: flight.airline, flight_number: flight.flight_number,
+    arrival_airport: flight.arrival_airport, arrival_at: flight.arrival_at, status: flight.status, notes: flight.notes,
+    terminal: flight.terminal ?? "", pickup_contact: flight.pickup_contact ?? "", transport_arrangement: flight.transport_arrangement ?? "",
+    accommodation_destination: flight.accommodation_destination ?? "", special_instructions: flight.special_instructions ?? "",
+  })) }));
+  const eventId = `arrival-report:${agencyId}:${reportDate}`;
+  const deliveryState = await enqueueMakeWebhookEvent(env, "rolling_arrival_report", eventId, agencyId, { event_type: "arrival.report.daily", agency_id: agencyId, report_date: reportDate, timezone: "Asia/Singapore", generated_at: now(), days: dayReports });
+  if (deliveryState === "failed") console.error("Rolling arrival report was queued but its immediate delivery attempt failed", agencyId, reportDate);
+};
+
+type InterviewReminderRow = {
+  id: string; agency_id: number; scheduled_at: string; meeting_url: string | null; mode: string;
+  status: string; candidate_name: string; candidate_email: string; reminders_enabled: boolean;
+  reminder_24h_sent_at: string | null; reminder_morning_sent_at: string | null; reminder_2h_sent_at: string | null;
+  employer_name: string; employer_email: string; employer_contact_verified_at: string | null; employer_invitation_sent_at: string | null;
+  employer_reminder_24h_sent_at: string | null; employer_reminder_morning_sent_at: string | null; employer_reminder_2h_sent_at: string | null;
+};
+type InterviewReminderDelivery = {
+  id: string; event_id: string; agency_id: number; interview_id: string; reminder_type: "24_hour" | "morning_of" | "2_hour"; recipient_type: "applicant" | "employer";
+  recipient_email: string; recipient_name: string; attempts: number; status: string;
+};
+
+const runScheduledInterviewReminders = async (env: Bindings) => {
+  // These messages are sent by the site's configured transactional email
+  // provider. Missing provider config pauses reminders without consuming retries.
+  if (!env.RESEND_API_KEY?.trim() || !env.RESEND_FROM?.trim()) return;
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) return;
+  const current = new Date();
+  const currentIso = current.toISOString();
+  const interviewsQuery = new URLSearchParams({
+    select: "id,agency_id,scheduled_at,meeting_url,mode,status,candidate_name,candidate_email,reminders_enabled,reminder_24h_sent_at,reminder_morning_sent_at,reminder_2h_sent_at,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at,employer_reminder_24h_sent_at,employer_reminder_morning_sent_at,employer_reminder_2h_sent_at",
+    or: "(reminders_enabled.eq.true,employer_invitation_sent_at.not.is.null)", status: "in.(SCHEDULED,CONFIRMED)", scheduled_at: `gte.${currentIso}`,
+    order: "scheduled_at.asc", limit: "500",
+  });
+  const interviewsResponse = await fetch(`${config.baseUrl}/rest/v1/interviews?${interviewsQuery}`, {
+    headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=8000" }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!interviewsResponse.ok) throw new Error(`Interview reminder query failed (${interviewsResponse.status}): ${await readSupabaseError(interviewsResponse)}`);
+  const interviews = await interviewsResponse.json() as InterviewReminderRow[];
+  const localParts = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(date);
+  const currentParts = localParts(current);
+  const singaporeDate = `${currentParts.find((part) => part.type === "year")?.value}-${currentParts.find((part) => part.type === "month")?.value}-${currentParts.find((part) => part.type === "day")?.value}`;
+  const singaporeHour = Number(currentParts.find((part) => part.type === "hour")?.value ?? 0);
+  for (const interview of interviews) {
+    const scheduledMs = Date.parse(interview.scheduled_at);
+    if (!Number.isFinite(scheduledMs)) continue;
+    const delta = scheduledMs - current.getTime();
+    const scheduledParts = localParts(new Date(scheduledMs));
+    const scheduledDate = `${scheduledParts.find((part) => part.type === "year")?.value}-${scheduledParts.find((part) => part.type === "month")?.value}-${scheduledParts.find((part) => part.type === "day")?.value}`;
+    const reminderTypes: Array<InterviewReminderDelivery["reminder_type"]> = [];
+    if (delta <= 24 * 60 * 60_000 && delta > 2 * 60 * 60_000) reminderTypes.push("24_hour");
+    if (scheduledDate === singaporeDate && singaporeHour >= 8 && singaporeHour < 10 && delta > 15 * 60_000) reminderTypes.push("morning_of");
+    if (delta <= 2 * 60 * 60_000 && delta > 0) reminderTypes.push("2_hour");
+    const recipients: Array<{ type: InterviewReminderDelivery["recipient_type"]; email: string; name: string; enabled: boolean; sent: Partial<Record<InterviewReminderDelivery["reminder_type"], string | null>> }> = [
+      { type: "applicant", email: interview.candidate_email?.trim() ?? "", name: interview.candidate_name ?? "", enabled: interview.reminders_enabled, sent: { "24_hour": interview.reminder_24h_sent_at, morning_of: interview.reminder_morning_sent_at, "2_hour": interview.reminder_2h_sent_at } },
+      { type: "employer", email: interview.employer_email?.trim() ?? "", name: interview.employer_name ?? "", enabled: Boolean(interview.employer_contact_verified_at && interview.employer_invitation_sent_at), sent: { "24_hour": interview.employer_reminder_24h_sent_at, morning_of: interview.employer_reminder_morning_sent_at, "2_hour": interview.employer_reminder_2h_sent_at } },
+    ];
+    for (const recipient of recipients) {
+      if (!recipient.enabled || !isEmailLike(recipient.email)) continue;
+      for (const reminderType of reminderTypes) {
+        if (recipient.sent[reminderType]) continue;
+        const eventId = `interview:${interview.id}:reminder:${recipient.type}:${reminderType}:${interview.scheduled_at}`;
+        const queueResponse = await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?on_conflict=event_id`, {
+          method: "POST",
+          headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "resolution=ignore-duplicates,return=minimal" }),
+          body: JSON.stringify({ event_id: eventId, agency_id: interview.agency_id, interview_id: interview.id, reminder_type: reminderType, recipient_type: recipient.type, recipient_email: recipient.email, recipient_name: recipient.name, status: "PENDING", next_attempt_at: currentIso }),
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (!queueResponse.ok) console.error("Unable to queue interview reminder", interview.id, recipient.type, reminderType, await readSupabaseError(queueResponse));
+      }
+    }
+  }
+
+  // Recover a worker execution interrupted after claiming an item. Stable
+  // Resend idempotency keys make retrying a delivery safe during provider timeouts.
+  const staleCutoff = new Date(current.getTime() - 10 * 60_000).toISOString();
+  const staleQuery = new URLSearchParams({ status: "eq.SENDING", updated_at: `lt.${staleCutoff}`, select: "id,attempts" });
+  const staleResponse = await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?${staleQuery}`, { headers: supabaseHeaders(config, { accept: "application/json" }) });
+  if (staleResponse.ok) {
+    const stale = await staleResponse.json() as Array<{ id: string; attempts: number }>;
+    for (const item of stale) await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?id=eq.${encodeURIComponent(item.id)}&status=eq.SENDING&attempts=eq.${item.attempts}`, {
+      method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+      body: JSON.stringify({ status: "PENDING", next_attempt_at: currentIso, last_error: "Recovered after interrupted delivery attempt" }),
+    });
+  }
+
+  const dueQuery = new URLSearchParams({ status: "eq.PENDING", next_attempt_at: `lte.${currentIso}`, select: "id,event_id,agency_id,interview_id,reminder_type,recipient_type,recipient_email,recipient_name,attempts", order: "created_at.asc", limit: "25" });
+  const dueResponse = await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?${dueQuery}`, { headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(8_000) });
+  if (!dueResponse.ok) throw new Error(`Interview reminder outbox query failed (${dueResponse.status}): ${await readSupabaseError(dueResponse)}`);
+  const deliveries = await dueResponse.json() as InterviewReminderDelivery[];
+  for (const delivery of deliveries) {
+    if (delivery.attempts >= 5) {
+      await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?id=eq.${encodeURIComponent(delivery.id)}&status=eq.PENDING`, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify({ status: "FAILED", last_error: "Maximum delivery attempts reached" }) });
+      continue;
+    }
+    const claimResponse = await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?id=eq.${encodeURIComponent(delivery.id)}&status=eq.PENDING&attempts=eq.${delivery.attempts}&select=id`, {
+      method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+      body: JSON.stringify({ status: "SENDING", attempts: delivery.attempts + 1 }),
+    });
+    if (!claimResponse.ok || ((await claimResponse.json().catch(() => [])) as unknown[]).length === 0) continue;
+    const interviewQuery = new URLSearchParams({ select: "id,scheduled_at,meeting_url,mode,status,candidate_email,candidate_name,reminders_enabled,employer_email,employer_name,employer_contact_verified_at,employer_invitation_sent_at", id: `eq.${delivery.interview_id}`, agency_id: `eq.${delivery.agency_id}`, limit: "1" });
+    const interviewResponse = await fetch(`${config.baseUrl}/rest/v1/interviews?${interviewQuery}`, { headers: supabaseHeaders(config, { accept: "application/json" }) });
+    const interviewRows = interviewResponse.ok ? await interviewResponse.json() as Array<{ id: string; scheduled_at: string; meeting_url: string | null; mode: string; status: string; candidate_email: string; candidate_name: string; reminders_enabled: boolean; employer_email: string; employer_name: string; employer_contact_verified_at: string | null; employer_invitation_sent_at: string | null }> : [];
+    const interview = interviewRows[0];
+    const currentRecipientEmail = delivery.recipient_type === "employer" ? interview?.employer_email : interview?.candidate_email;
+    const recipientStillEligible = delivery.recipient_type === "employer" ? Boolean(interview?.employer_contact_verified_at && interview?.employer_invitation_sent_at) : Boolean(interview?.reminders_enabled);
+    if (!interview || !["SCHEDULED", "CONFIRMED"].includes(interview.status) || !delivery.event_id.endsWith(`:${interview.scheduled_at}`) || !recipientStillEligible || !currentRecipientEmail || normalizeEmail(currentRecipientEmail) !== normalizeEmail(delivery.recipient_email)) {
+      await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?id=eq.${encodeURIComponent(delivery.id)}&status=eq.SENDING`, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify({ status: "CANCELLED", last_error: "Interview was cancelled, changed, or no longer has a recipient" }) });
+      continue;
+    }
+    const formattedTime = new Intl.DateTimeFormat("en-SG", { timeZone: "Asia/Singapore", dateStyle: "full", timeStyle: "short" }).format(new Date(interview.scheduled_at));
+    const label = delivery.reminder_type === "24_hour" ? "tomorrow" : delivery.reminder_type === "morning_of" ? "today" : "in about two hours";
+    const subject = `Interview reminder: ${label}`;
+    const text = `Hello${delivery.recipient_name ? ` ${delivery.recipient_name}` : ""},\n\nThis is a reminder that your interview is scheduled for ${formattedTime} (Singapore time).\nFormat: ${interview.mode.replace(/_/g, " ")}${interview.meeting_url ? `\nJoin here: ${interview.meeting_url}` : ""}\n\nIf you need to change the time, please contact the agency.\n\nAt The Agency`;
+    const result = await sendEmailViaResend(env, delivery.recipient_email, subject, text, delivery.event_id).catch((error) => ({ ok: false as const, error: errMsg(error) }));
+    if (result.ok) {
+      const markerPrefix = delivery.recipient_type === "employer" ? "employer_reminder_" : "reminder_";
+      const marker = delivery.reminder_type === "24_hour" ? `${markerPrefix}24h_sent_at` : delivery.reminder_type === "morning_of" ? `${markerPrefix}morning_sent_at` : `${markerPrefix}2h_sent_at`;
+      await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?id=eq.${encodeURIComponent(delivery.id)}&status=eq.SENDING`, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify({ status: "DELIVERED", delivered_at: now(), last_error: "" }) });
+      await fetch(`${config.baseUrl}/rest/v1/interviews?id=eq.${encodeURIComponent(interview.id)}&agency_id=eq.${delivery.agency_id}`, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify({ [marker]: now() }) });
+    } else {
+      const nextAttempt = delivery.attempts + 1;
+      const delaysMinutes = [5, 15, 60, 240, 240];
+      const retryAt = new Date(current.getTime() + delaysMinutes[Math.min(nextAttempt - 1, delaysMinutes.length - 1)] * 60_000).toISOString();
+      await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?id=eq.${encodeURIComponent(delivery.id)}&status=eq.SENDING`, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify({ status: nextAttempt >= 5 ? "FAILED" : "PENDING", next_attempt_at: retryAt, last_error: String(result.error).slice(0, 1000) }) });
+    }
+  }
+};
 // Agency-wide activity transcript: the same workflow_events spine the
 // Operations Center and the AI pages record into, read across every entity this
 // agency owns. workflow_events has no agency column, so events are attributed
@@ -9361,6 +10657,7 @@ app.get(
 app.get(
   "/api/operations-board/transcript",
   requireAgencyAdminAuth,
+  canManageAgencyRecords,
   safeApi(async (c) => {
     const config = getSupabaseAppDataConfig(c.env);
     if (!config) return c.json({ error: "Activity transcript requires Supabase storage" }, 503);
@@ -9398,6 +10695,10 @@ app.get(
     const entries = events
       .filter((event) => {
         if (event.entity_type === "placement") return placementReferences.has(String(event.entity_id));
+        if (event.entity_type === "deployment_task") {
+          return String(event.payload?.agencyId ?? "") === String(admin.agencyId)
+            && placementReferences.has(String(event.payload?.placementId ?? ""));
+        }
         if (event.entity_type === "application") {
           return String(event.payload?.agencyId ?? "") === String(admin.agencyId);
         }
@@ -9416,7 +10717,7 @@ app.get(
 );
 
 
-app.post("/api/operations-board/placements", requireAgencyAdminAuth, safeApi(async (c) => {
+app.post("/api/operations-board/placements", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -9483,11 +10784,26 @@ app.post("/api/operations-board/placements", requireAgencyAdminAuth, safeApi(asy
     if (!cleanup.ok) console.error("Failed to roll back partially created Operations Center placement:", placement.id);
     throw new Error(`Unable to record placement history (${history.status}): ${details}`);
   }
+  let checklistReady = true;
+  let checklistTaskCount = 0;
+  try {
+    const checklist = await initializeDeploymentTasks(config, placement.id, admin.agencyId, actor);
+    checklistTaskCount = checklist.length;
+  } catch (error) {
+    checklistReady = false;
+    console.error("Placement created but deployment checklist initialization failed", errMsg(error));
+  }
+  const placementHook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (placementHook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `placement:${placement.id}:created`, admin.agencyId, {
+    event_type: "placement.created", agency_id: admin.agencyId, placement_id: placement.id,
+    employer_id: placement.employer_id, applicant_reference: placement.maid_reference_code,
+    selected_at: placement.created_at, checklist_ready: checklistReady,
+  }).catch((error) => console.error("Placement creation Make event could not be queued", errMsg(error))));
 
-  return c.json({ placement }, 201);
+  return c.json({ placement, checklist: { ready: checklistReady, taskCount: checklistTaskCount }, makeEventConfigured: Boolean(placementHook) }, 201);
 }));
 
-app.put("/api/operations-board/placements/:placementId/notes", requireAgencyAdminAuth, safeApi(async (c) => {
+app.put("/api/operations-board/placements/:placementId/notes", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -9509,7 +10825,7 @@ app.put("/api/operations-board/placements/:placementId/notes", requireAgencyAdmi
 // Sample data can be removed from the portal without exposing a destructive
 // control for real placements. The reference check is deliberately enforced
 // on the server as well as in the UI.
-app.delete("/api/operations-board/placements/:placementId/sample", requireAgencyAdminAuth, safeApi(async (c) => {
+app.delete("/api/operations-board/placements/:placementId/sample", requireAgencyAdminAuth, canAdministerAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -9540,20 +10856,182 @@ app.delete("/api/operations-board/placements/:placementId/sample", requireAgency
 // an authenticated agency cannot read or complete another agency's tasks.
 type ContractorTaskRow = {
   id: string;
+  contractor_id: string;
   placement_id: string;
   task_type: string;
   status: string;
   due_at: string | null;
   completed_at: string | null;
   completion_notes: string | null;
+  assigned_by?: string;
+  assignment_note?: string;
+  acknowledged_at?: string | null;
+  acknowledged_by?: string | null;
+  acknowledgement_note?: string;
+  acknowledgement_token_expires_at?: string | null;
+  completion_reported_at?: string | null;
+  completion_report_note?: string;
+  completion_reported_by?: string | null;
   created_at: string;
   contractors?: { name?: string; agency_id?: number } | null;
   placements?: { maid_reference_code?: string | null; employer_id?: string | null; status?: string } | null;
 };
 
-const contractorTaskSelect = "id,placement_id,task_type,status,due_at,completed_at,completion_notes,created_at,contractors!inner(name,agency_id),placements(maid_reference_code,employer_id,status)";
+const contractorTaskSelect = "id,contractor_id,placement_id,task_type,status,due_at,completed_at,completion_notes,assigned_by,assignment_note,acknowledged_at,acknowledged_by,acknowledgement_note,completion_reported_at,completion_report_note,completion_reported_by,created_at,contractors!inner(name,agency_id),placements(maid_reference_code,employer_id,status)";
+const writeContractorWorkflowEvent = async (config: SupabaseAppDataConfig, event: { placementId: string; agencyId: number; eventType: string; actor: string; payload: Record<string, unknown> }) => {
+  const response = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify({ event_type: event.eventType, entity_type: "placement", entity_id: event.placementId, actor: event.actor, payload: { ...event.payload, agencyId: event.agencyId }, status: "completed" }),
+  });
+  if (!response.ok) console.error("Contractor workflow event could not be recorded", event.eventType, await readSupabaseError(response));
+};
 
-app.get("/api/contractor/tasks", requireAgencyAdminAuth, safeApi(async (c) => {
+const createContractorAcknowledgementLink = async (origin: string) => {
+  const token = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  const tokenHash = await sha256Hex(token);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString();
+  const link = new URL("/contractor/acknowledge", origin);
+  link.searchParams.set("token", token);
+  return { tokenHash, expiresAt, url: link.toString() };
+};
+
+const findContractorAcknowledgementJob = async (config: SupabaseAppDataConfig, rawToken: string) => {
+  if (!/^[0-9a-f-]{64,80}$/i.test(rawToken)) return null;
+  const tokenHash = await sha256Hex(rawToken);
+  const rows = await fetchSupabaseTableRows<ContractorTaskRow>(config, "contractor_jobs", {
+    select: "id,contractor_id,placement_id,task_type,status,due_at,completed_at,acknowledged_at,completion_reported_at,completion_report_note,acknowledgement_token_expires_at,created_at,contractors!inner(name,agency_id),placements(maid_reference_code)",
+    filters: { acknowledgement_token_hash: tokenHash }, limit: 1,
+  });
+  const job = rows[0];
+  if (!job || !job.acknowledgement_token_expires_at || Date.parse(job.acknowledgement_token_expires_at) <= Date.now()) return null;
+  return { job, tokenHash };
+};
+
+app.get("/api/contractor/public/acknowledgement", safeApi(async (c) => {
+  c.header("Cache-Control", "no-store, private");
+  c.header("Referrer-Policy", "no-referrer");
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Contractor acknowledgement is unavailable" }, 503);
+  const token = toTrimmedString(c.req.query("token"));
+  const found = await findContractorAcknowledgementJob(config, token);
+  if (!found) return c.json({ error: "This acknowledgement link is invalid or expired. Contact the agency for a new link." }, 404);
+  const { job } = found;
+  if (["COMPLETED", "CANCELLED"].includes(job.status)) return c.json({ error: "This contractor task is already closed" }, 409);
+  if (job.completion_reported_at) return c.json({ error: "Completion has already been reported. Contact the agency if you need to add information." }, 409);
+  return c.json({ task: { taskType: job.task_type, dueAt: job.due_at, placementReference: job.placements?.maid_reference_code || "Placement", contractorName: job.contractors?.name || "Assigned contractor", expiresAt: job.acknowledgement_token_expires_at, acknowledgedAt: job.acknowledged_at ?? null } });
+}));
+
+app.post("/api/contractor/public/acknowledgement", safeApi(async (c) => {
+  c.header("Cache-Control", "no-store, private");
+  c.header("Referrer-Policy", "no-referrer");
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Contractor acknowledgement is unavailable" }, 503);
+  const body = await parseBody<{ token?: unknown; note?: unknown; action?: unknown }>(c.req.raw);
+  const token = toTrimmedString(body?.token);
+  const found = await findContractorAcknowledgementJob(config, token);
+  if (!found) return c.json({ error: "This acknowledgement link is invalid or expired. Contact the agency for a new link." }, 404);
+  const { job, tokenHash } = found;
+  if (["COMPLETED", "CANCELLED"].includes(job.status)) return c.json({ error: "This contractor task is already closed" }, 409);
+  const note = toTrimmedString(body?.note).slice(0, 1000);
+  const action = toTrimmedString(body?.action) || "acknowledge";
+  if (action === "report_completion") {
+    if (!job.acknowledged_at) return c.json({ error: "Acknowledge the assignment before reporting it complete" }, 409);
+    if (job.completion_reported_at) return c.json({ error: "Completion has already been reported" }, 409);
+    const reportedAt = now();
+    const response = await fetch(`${config.baseUrl}/rest/v1/contractor_jobs?id=eq.${encodeURIComponent(job.id)}&contractor_id=eq.${encodeURIComponent(job.contractor_id)}&acknowledgement_token_hash=eq.${encodeURIComponent(tokenHash)}&acknowledged_at=not.is.null&completion_reported_at=is.null&status=not.in.(COMPLETED,CANCELLED)&select=id`, {
+      method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+      body: JSON.stringify({ status: "COMPLETION_REPORTED", completion_reported_at: reportedAt, completion_reported_by: "Assigned contractor (secure link)", completion_report_note: note, acknowledgement_token_hash: null, acknowledgement_token_expires_at: null, updated_at: reportedAt }),
+    });
+    if (!response.ok) throw new Error(`Unable to record contractor completion report (${response.status}): ${await readSupabaseError(response)}`);
+    const updated = await response.json() as Array<{ id: string }>;
+    if (!updated[0]) return c.json({ error: "This task changed before the completion report was recorded. Contact the agency." }, 409);
+    const agencyId = job.contractors?.agency_id ?? 1;
+    await writeContractorWorkflowEvent(config, { eventType: "contractor.task_completion_reported", placementId: job.placement_id, agencyId, actor: "contractor:secure-link", payload: { contractorJobId: job.id, reportedAt } });
+    if (makeWebhookUrlForOutbox(c.env, "deployment_task_event")) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `contractor-job:${job.id}:completion-reported:${reportedAt}`, agencyId, {
+      event_type: "contractor.task_completion_reported", agency_id: agencyId, placement_id: job.placement_id, contractor_job_id: job.id, reported_at: reportedAt,
+    }).catch((error) => console.error("Contractor completion report Make event could not be queued", errMsg(error))));
+    return c.json({ ok: true, completionReportedAt: reportedAt, staffVerificationRequired: true });
+  }
+  if (action !== "acknowledge") return c.json({ error: "Choose acknowledge or report_completion" }, 400);
+  if (job.acknowledged_at) return c.json({ error: "This task has already been acknowledged" }, 409);
+  const acknowledgedAt = now();
+  const response = await fetch(`${config.baseUrl}/rest/v1/contractor_jobs?id=eq.${encodeURIComponent(job.id)}&contractor_id=eq.${encodeURIComponent(job.contractor_id)}&acknowledgement_token_hash=eq.${encodeURIComponent(tokenHash)}&acknowledged_at=is.null&status=not.in.(COMPLETED,CANCELLED)&select=id`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ status: "ACKNOWLEDGED", acknowledged_at: acknowledgedAt, acknowledged_by: "Assigned contractor (secure link)", acknowledgement_note: note, updated_at: acknowledgedAt }),
+  });
+  if (!response.ok) throw new Error(`Unable to record contractor acknowledgement (${response.status}): ${await readSupabaseError(response)}`);
+  const updated = await response.json() as Array<{ id: string }>;
+  if (!updated[0]) return c.json({ error: "This task changed before acknowledgement was recorded. Contact the agency." }, 409);
+  const agencyId = job.contractors?.agency_id ?? 1;
+  await writeContractorWorkflowEvent(config, { eventType: "contractor.task_acknowledged", placementId: job.placement_id, agencyId, actor: "contractor:secure-link", payload: { contractorJobId: job.id, acknowledgedAt } });
+  if (makeWebhookUrlForOutbox(c.env, "deployment_task_event")) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `contractor-job:${job.id}:acknowledged:${acknowledgedAt}`, agencyId, {
+    event_type: "contractor.task_acknowledged", agency_id: agencyId, placement_id: job.placement_id, contractor_job_id: job.id, acknowledged_at: acknowledgedAt,
+  }).catch((error) => console.error("Contractor acknowledgement Make event could not be queued", errMsg(error))));
+  return c.json({ ok: true, acknowledgedAt });
+}));
+
+app.get("/api/contractor/contractors", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Contractor assignment requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const contractors = await fetchSupabaseTableRows<{ id: string; name: string; phone: string; active: boolean }>(config, "contractors", {
+    select: "id,name,phone,active", filters: { agency_id: admin.agencyId, active: true }, orderBy: "name.asc", limit: 250,
+  });
+  return c.json({ contractors });
+}));
+
+app.post("/api/contractor/placements/:placementId/tasks", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Contractor assignment requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  const body = await parseBody<{ contractorId?: unknown; taskType?: unknown; dueAt?: unknown; note?: unknown }>(c.req.raw);
+  const contractorId = toTrimmedString(body?.contractorId);
+  const taskType = toTrimmedString(body?.taskType).slice(0, 120);
+  const dueAt = toTrimmedString(body?.dueAt);
+  if (!taskType) return c.json({ error: "Enter a task description" }, 400);
+  if (dueAt && Number.isNaN(Date.parse(dueAt))) return c.json({ error: "Enter a valid due date" }, 400);
+  if (!await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  const contractor = await fetchSupabaseTableRows<{ id: string; name: string }>(config, "contractors", {
+    select: "id,name", filters: { id: contractorId, agency_id: admin.agencyId, active: true }, limit: 1,
+  });
+  if (!contractorId || !contractor[0]) return c.json({ error: "Choose an active contractor from this agency" }, 400);
+  const actor = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
+  const acknowledgement = await createContractorAcknowledgementLink(new URL(c.req.url).origin);
+  const response = await fetch(`${config.baseUrl}/rest/v1/contractor_jobs?select=${encodeURIComponent(contractorTaskSelect)}`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ contractor_id: contractorId, placement_id: placementId, task_type: taskType, status: "PENDING", due_at: dueAt ? new Date(dueAt).toISOString() : null, assigned_by: actor, assignment_note: toTrimmedString(body?.note).slice(0, 2000), acknowledgement_token_hash: acknowledgement.tokenHash, acknowledgement_token_expires_at: acknowledgement.expiresAt }),
+  });
+  if (!response.ok) throw new Error(`Unable to assign contractor task (${response.status}): ${await readSupabaseError(response)}`);
+  const task = ((await response.json()) as ContractorTaskRow[])[0];
+  if (!task) throw new Error("Contractor task was created but no task record was returned");
+  await writeContractorWorkflowEvent(config, { eventType: "contractor.task_assigned", placementId, agencyId: admin.agencyId, actor: `user:${actor}`, payload: { contractorJobId: task.id, contractorName: contractor[0].name, taskType, dueAt: task.due_at } });
+  return c.json({ task, acknowledgementUrl: acknowledgement.url, acknowledgementExpiresAt: acknowledgement.expiresAt }, 201);
+}));
+
+app.post("/api/contractor/tasks/:taskId/acknowledgement-link", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Contractor acknowledgements require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const taskId = toTrimmedString(c.req.param("taskId"));
+  const rows = await fetchSupabaseTableRows<ContractorTaskRow>(config, "contractor_jobs", {
+    select: contractorTaskSelect, filters: { id: taskId, "contractors.agency_id": admin.agencyId }, limit: 1,
+  });
+  const task = rows[0];
+  if (!task) return c.json({ error: "Contractor task not found" }, 404);
+  if (task.acknowledged_at || ["COMPLETED", "CANCELLED"].includes(task.status)) return c.json({ error: "This task no longer accepts an acknowledgement" }, 409);
+  const acknowledgement = await createContractorAcknowledgementLink(new URL(c.req.url).origin);
+  const response = await fetch(`${config.baseUrl}/rest/v1/contractor_jobs?id=eq.${encodeURIComponent(task.id)}&contractor_id=eq.${encodeURIComponent(task.contractor_id)}&acknowledged_at=is.null&status=not.in.(COMPLETED,CANCELLED)&select=id`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ acknowledgement_token_hash: acknowledgement.tokenHash, acknowledgement_token_expires_at: acknowledgement.expiresAt, updated_at: now() }),
+  });
+  if (!response.ok) throw new Error(`Unable to create contractor acknowledgement link (${response.status}): ${await readSupabaseError(response)}`);
+  const saved = await response.json() as Array<{ id: string }>;
+  if (!saved[0]) return c.json({ error: "This task changed before the link was created. Refresh and try again." }, 409);
+  return c.json({ acknowledgementUrl: acknowledgement.url, acknowledgementExpiresAt: acknowledgement.expiresAt });
+}));
+
+app.get("/api/contractor/tasks", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Contractor tasks require Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -9566,7 +11044,33 @@ app.get("/api/contractor/tasks", requireAgencyAdminAuth, safeApi(async (c) => {
   return c.json({ tasks, count: tasks.length });
 }));
 
-app.post("/api/contractor/tasks/:taskId/complete", requireAgencyAdminAuth, safeApi(async (c) => {
+app.post("/api/contractor/tasks/:taskId/acknowledge", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Contractor acknowledgements require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const taskId = toTrimmedString(c.req.param("taskId"));
+  const body = await parseBody<{ note?: unknown }>(c.req.raw);
+  const rows = await fetchSupabaseTableRows<ContractorTaskRow>(config, "contractor_jobs", {
+    select: contractorTaskSelect, filters: { id: taskId, "contractors.agency_id": admin.agencyId }, limit: 1,
+  });
+  const task = rows[0];
+  if (!task) return c.json({ error: "Contractor task not found" }, 404);
+  if (["COMPLETED", "CANCELLED"].includes(task.status)) return c.json({ error: `This task is already ${task.status.toLowerCase()}` }, 409);
+  if (task.acknowledged_at) return c.json({ error: "This contractor acknowledgement is already recorded" }, 409);
+  const actor = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
+  const acknowledgedAt = now();
+  const response = await fetch(`${config.baseUrl}/rest/v1/contractor_jobs?id=eq.${encodeURIComponent(taskId)}&contractor_id=eq.${encodeURIComponent(task.contractor_id)}&acknowledged_at=is.null&status=not.in.(COMPLETED,CANCELLED)&select=${encodeURIComponent(contractorTaskSelect)}`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ status: "ACKNOWLEDGED", acknowledged_at: acknowledgedAt, acknowledged_by: actor, acknowledgement_note: toTrimmedString(body?.note).slice(0, 1000), updated_at: acknowledgedAt }),
+  });
+  if (!response.ok) throw new Error(`Unable to record contractor acknowledgement (${response.status}): ${await readSupabaseError(response)}`);
+  const updated = ((await response.json()) as ContractorTaskRow[])[0];
+  if (!updated) return c.json({ error: "The task changed before acknowledgement was recorded. Refresh and try again." }, 409);
+  await writeContractorWorkflowEvent(config, { eventType: "contractor.task_acknowledged_by_staff", placementId: task.placement_id, agencyId: admin.agencyId, actor: `user:${actor}`, payload: { contractorJobId: taskId, contractorName: task.contractors?.name ?? "", note: updated.acknowledgement_note ?? "" } });
+  return c.json({ task: updated, acknowledgementRecordedBy: actor });
+}));
+
+app.post("/api/contractor/tasks/:taskId/complete", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Contractor tasks require Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -9582,8 +11086,9 @@ app.post("/api/contractor/tasks/:taskId/complete", requireAgencyAdminAuth, safeA
   const task = rows[0];
   if (!task) return c.json({ error: "Contractor task not found" }, 404);
   if (task.status === "COMPLETED" || task.status === "CANCELLED") return c.json({ error: `This task is already ${task.status.toLowerCase()}` }, 409);
+  if (task.completion_reported_at && notes.trim().length < 5) return c.json({ error: "Add a staff verification note after reviewing the contractor's completion report" }, 400);
   const completedAt = now();
-  const updateResponse = await fetch(`${config.baseUrl}/rest/v1/contractor_jobs?id=eq.${encodeURIComponent(taskId)}`, {
+  const updateResponse = await fetch(`${config.baseUrl}/rest/v1/contractor_jobs?id=eq.${encodeURIComponent(taskId)}&contractor_id=eq.${encodeURIComponent(task.contractor_id)}`, {
     method: "PATCH",
     headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
     body: JSON.stringify({ status: "COMPLETED", completed_at: completedAt, completion_notes: notes, updated_at: completedAt }),
@@ -9591,13 +11096,9 @@ app.post("/api/contractor/tasks/:taskId/complete", requireAgencyAdminAuth, safeA
   if (!updateResponse.ok) throw new Error(`Unable to complete contractor task (${updateResponse.status}): ${await readSupabaseError(updateResponse)}`);
   const updated = ((await updateResponse.json()) as ContractorTaskRow[])[0] ?? { ...task, status: "COMPLETED", completed_at: completedAt, completion_notes: notes };
   if (task.task_type.toLowerCase().includes("arrival")) {
-    const webhookUrl = c.env.MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT?.trim();
-    if (webhookUrl) runChatBackgroundTask(c, fetch(webhookUrl, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ event_type: "arrival.completed", placement_id: task.placement_id, contractor_job_id: task.id, notes }),
-      signal: AbortSignal.timeout(15_000),
-    }).then(async (response) => { if (!response.ok) throw new Error(`Make arrival alert returned HTTP ${response.status}`); })
-      .catch((error) => console.error("Contractor arrival alert failed (task remains completed):", error)));
+    if (makeWebhookUrlForOutbox(c.env, "contractor_arrival")) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "contractor_arrival", `contractor-job:${task.id}:arrival.completed`, task.contractors?.agency_id ?? admin.agencyId, {
+      event_type: "arrival.completed", placement_id: task.placement_id, contractor_job_id: task.id, agency_id: task.contractors?.agency_id ?? admin.agencyId, notes,
+    }).catch((error) => console.error("Contractor arrival alert could not be queued (task remains completed):", errMsg(error))));
   }
   return c.json({ task: updated, alertTriggered: task.task_type.toLowerCase().includes("arrival") });
 }));
@@ -9605,7 +11106,7 @@ app.post("/api/contractor/tasks/:taskId/complete", requireAgencyAdminAuth, safeA
 // Direct milestone updates cover older placements that never received a
 // contractor_jobs record. Each event is immutable, auditable, and unique per
 // placement/milestone so staff cannot accidentally mark it twice.
-app.post("/api/contractor/placements/:placementId/milestones/:milestone", requireAgencyAdminAuth, safeApi(async (c) => {
+app.post("/api/contractor/placements/:placementId/milestones/:milestone", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Placement milestones require Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -9638,12 +11139,10 @@ app.post("/api/contractor/placements/:placementId/milestones/:milestone", requir
   });
   if (!insert.ok) throw new Error(`Unable to record placement milestone (${insert.status}): ${await readSupabaseError(insert)}`);
 
-  const webhookUrl = c.env.MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT?.trim();
-  if (webhookUrl) runChatBackgroundTask(c, fetch(webhookUrl, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ event_type: eventType, placement_id: placementId, actor: `user:${actorName}`, notes }), signal: AbortSignal.timeout(15_000),
-  }).then(async (response) => { if (!response.ok) throw new Error(`Make placement alert returned HTTP ${response.status}`); })
-    .catch((error) => console.error("Placement milestone alert failed (milestone remains completed):", error)));
+  const webhookUrl = makeWebhookUrlForOutbox(c.env, "placement_milestone");
+  if (webhookUrl) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "placement_milestone", `placement:${placementId}:milestone:${eventType}`, admin.agencyId, {
+    event_type: eventType, placement_id: placementId, agency_id: admin.agencyId, actor: `user:${actorName}`, notes,
+  }).catch((error) => console.error("Placement milestone alert could not be queued (milestone remains completed):", errMsg(error))));
 
   return c.json({ ok: true, eventType, completedBy: actorName, completedAt, makeAlertTriggered: Boolean(webhookUrl) });
 }));
@@ -9914,7 +11413,7 @@ const buildMatchCandidates = (maids: MaidRecord[], message: string) => {
 
   return maids
     .filter(isAvailableMaid)
-    .slice(0, 3)
+    .slice(0, 5)
     .map((maid, index) => {
       const reasons = [
         `${maid.nationality} helper profile is publicly available`,
@@ -9969,7 +11468,7 @@ const buildAiMatchReview = async (env: Bindings, maids: MaidRecord[], enquiry: R
   const candidateById = new Map(candidates.map((candidate) => [candidate.maidId, candidate]));
   const ai = await runWorkflowAi<AiMatchResult>(
     env,
-    "You are an internal domestic-helper matching reviewer. Rank candidates only for staff review. Use ONLY the enquiry and candidate records supplied. Return JSON with rankedCandidates (maximum 3 objects, each with maidId, integer score 0-100, and 1-3 factual reasons), requirements (known and missing string arrays), and draftMessage (a concise professional draft). Never invent profile details, availability, salary, identity, promises, or links. Only use maidId values supplied. Do not state that a placement is guaranteed.",
+    "You are an internal domestic-helper matching reviewer. Rank candidates only for staff review. Use ONLY the enquiry and candidate records supplied. Return JSON with rankedCandidates (maximum 5 objects, each with maidId, integer score 0-100, and 1-3 factual reasons), requirements (known and missing string arrays), and draftMessage (a concise professional draft). Never invent profile details, availability, salary, identity, promises, or links. Only use maidId values supplied. Do not state that a placement is guaranteed.",
     { enquiry, candidates },
   );
   const seen = new Set<number>();
@@ -9981,7 +11480,7 @@ const buildAiMatchReview = async (env: Bindings, maids: MaidRecord[], enquiry: R
     const score = Number.isFinite(Number(ranked.score)) ? Math.max(0, Math.min(100, Math.round(Number(ranked.score)))) : 0;
     const reasons = toStringList(ranked.reasons, 3);
     return reasons.length ? [{ maidId, maidReferenceCode: candidate.referenceCode, maidName: candidate.name, score, reasons }] : [];
-  }).slice(0, 3);
+  }).slice(0, 5);
   const aiUsed = Boolean(ai && matches.length);
   const draftMessage = toTrimmedString(ai?.draftMessage).slice(0, 1200);
   return {
@@ -12387,17 +13886,16 @@ app.post(
 const sendInterviewScheduledStaffAlert = async (
   env: Bindings,
   payload: Record<string, unknown>,
+  agencyId: number,
 ): Promise<boolean> => {
-  const webhookUrl = env.MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT?.trim();
+  const webhookUrl = makeWebhookUrlForOutbox(env, "interview_scheduled");
   if (!webhookUrl) return false;
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) throw new Error(`Interview staff alert returned HTTP ${response.status}`);
-  return true;
+  const interviewId = toTrimmedString(payload.interview_id);
+  const scheduledAt = toTrimmedString(payload.scheduled_at);
+  if (!interviewId || !scheduledAt) throw new Error("Interview staff alert requires an interview ID and schedule time");
+  const eventId = `interview:${interviewId}:scheduled:${scheduledAt}`;
+  const state = await enqueueMakeWebhookEvent(env, "interview_scheduled", eventId, agencyId, { ...payload, agency_id: agencyId });
+  return state === "delivered" || state === "pending_retry";
 };
 
 app.post(
@@ -12413,6 +13911,11 @@ app.post(
       scheduledAt?: string;
       mode?: string;
       meetingUrl?: string;
+      remindersEnabled?: boolean;
+      employerName?: string;
+      employerEmail?: string;
+      employerContactVerified?: boolean;
+      sendEmployerInvitation?: boolean;
     }>(c.req.raw);
     const scheduledAt = toTrimmedString(body?.scheduledAt);
     if (!scheduledAt || Number.isNaN(Date.parse(scheduledAt))) {
@@ -12425,7 +13928,37 @@ app.post(
     const applicationId = toTrimmedString(body?.applicationId);
     const placementId = toTrimmedString(body?.placementId);
     const meetingUrl = toTrimmedString(body?.meetingUrl).slice(0, 1000);
-    const response = await fetch(`${config.baseUrl}/rest/v1/interviews?select=id,scheduled_at,application_id,placement_id,meeting_url`, {
+    const employerName = toTrimmedString(body?.employerName).slice(0, 120);
+    const employerEmail = normalizeEmail(toTrimmedString(body?.employerEmail));
+    const employerContactVerified = body?.employerContactVerified === true;
+    if ((employerName || employerEmail) && (!isEmailLike(employerEmail) || !employerContactVerified)) {
+      return c.json({ error: "Verify the employer participant email before saving it" }, 400);
+    }
+    if (body?.sendEmployerInvitation === true && (!employerEmail || !employerContactVerified)) {
+      return c.json({ error: "A verified employer email is required before sending an invitation" }, 400);
+    }
+    if (body?.sendEmployerInvitation === true && (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim())) {
+      return c.json({ error: "Configure the agency email service before sending an employer invitation" }, 503);
+    }
+    let candidateName = "";
+    let candidateEmail = "";
+    if (applicationId) {
+      const data = await loadData(c.env, { readOnly: true });
+      const application = data.ats.applications.find((item) => item.id === applicationId && item.agencyId === admin.agencyId);
+      const profile = data.ats.profiles.find((item) => item.applicationId === applicationId);
+      if (application && profile) {
+        candidateName = toTrimmedString(profile.fullName);
+        candidateEmail = toTrimmedString(profile.email).toLowerCase();
+      } else if (body?.remindersEnabled === true) {
+        return c.json({ error: "Applicant record was not found for this agency" }, 404);
+      }
+    }
+    const remindersEnabled = body?.remindersEnabled === true;
+    if (remindersEnabled && !candidateEmail) return c.json({ error: "An applicant email is required to schedule interview reminders" }, 409);
+    if (remindersEnabled && (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim())) {
+      return c.json({ error: "Configure RESEND_API_KEY and RESEND_FROM before enabling automatic interview reminders" }, 503);
+    }
+    const response = await fetch(`${config.baseUrl}/rest/v1/interviews?select=id,scheduled_at,application_id,placement_id,meeting_url,employer_email,employer_name,employer_contact_verified_at,employer_invitation_sent_at`, {
       method: "POST",
       headers: supabaseHeaders(config, {
         "content-type": "application/json",
@@ -12438,6 +13971,12 @@ app.post(
         scheduled_at: new Date(scheduledAt).toISOString(),
         mode,
         meeting_url: meetingUrl || null,
+        candidate_name: candidateName,
+        candidate_email: candidateEmail,
+        reminders_enabled: remindersEnabled,
+        employer_name: employerName,
+        employer_email: employerEmail,
+        employer_contact_verified_at: employerContactVerified ? now() : null,
       }),
     });
     if (!response.ok) throw new Error(`Could not save interview (${response.status}): ${await readSupabaseError(response)}`);
@@ -12500,13 +14039,245 @@ app.patch(
         scheduled_time: toTrimmedString(body?.scheduledTime),
         interview_mode: toTrimmedString(body?.interviewMode) || "video",
         meeting_url: meetingUrl,
-      });
+      }, admin.agencyId);
     } catch (error) {
       console.error("Interview scheduled staff alert failed:", error);
     }
     return c.json({ interview, staffAlertSent });
   }),
 );
+
+app.post("/api/operations-board/interviews/:interviewId/employer-invitation", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Interview management requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const interviewId = toTrimmedString(c.req.param("interviewId"));
+  const params = new URLSearchParams({
+    select: "id,application_id,agency_id,scheduled_at,mode,meeting_url,status,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at",
+    id: "eq." + interviewId, agency_id: "eq." + admin.agencyId, limit: "1",
+  });
+  const readResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + params, { headers: supabaseHeaders(config, { accept: "application/json" }) });
+  if (!readResponse.ok) throw new Error("Unable to load interview (" + readResponse.status + "): " + await readSupabaseError(readResponse));
+  const [interview] = await readResponse.json() as Array<{
+    id: string; application_id: string; agency_id: number; scheduled_at: string; mode: string; meeting_url: string | null; status: string;
+    employer_name: string; employer_email: string; employer_contact_verified_at: string | null; employer_invitation_sent_at: string | null;
+  }>;
+  if (!interview) return c.json({ error: "Interview was not found" }, 404);
+  if (interview.employer_invitation_sent_at) return c.json({ sent: true, alreadySent: true, sentAt: interview.employer_invitation_sent_at });
+  if (!interview.employer_contact_verified_at || !isEmailLike(interview.employer_email || "")) return c.json({ error: "Record and verify an employer email before sending an invitation" }, 409);
+  if (["CANCELLED", "COMPLETED", "PASSED", "FAILED", "NO_SHOW"].includes(interview.status)) return c.json({ error: "An invitation cannot be sent for a closed interview" }, 409);
+  if (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim()) return c.json({ error: "Configure RESEND_API_KEY and RESEND_FROM before sending employer invitations" }, 503);
+
+  const confirmationToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const confirmationTokenHash = await sha256Hex(confirmationToken);
+  const confirmationExpiresAt = new Date(Date.parse(interview.scheduled_at) + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const tokenSaveResponse = await fetch(config.baseUrl + "/rest/v1/interviews?id=eq." + encodeURIComponent(interview.id) + "&agency_id=eq." + admin.agencyId, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify({ employer_confirmation_token_hash: confirmationTokenHash, employer_confirmation_expires_at: confirmationExpiresAt }),
+  });
+  if (!tokenSaveResponse.ok) throw new Error("Unable to prepare employer confirmation link (" + tokenSaveResponse.status + "): " + await readSupabaseError(tokenSaveResponse));
+  const when = new Intl.DateTimeFormat("en-SG", { timeZone: "Asia/Singapore", dateStyle: "full", timeStyle: "short" }).format(new Date(interview.scheduled_at));
+  const greeting = interview.employer_name ? "Hello " + interview.employer_name : "Hello";
+  const meeting = interview.meeting_url ? "\nMeeting link: " + interview.meeting_url : "\nThe agency will share joining details separately.";
+  const confirmationUrl = new URL("/api/ats/public/employer-interview-confirmation", c.req.url);
+  confirmationUrl.searchParams.set("token", confirmationToken);
+  const text = greeting + ",\n\nYou are invited to an interview scheduled for " + when + " (Singapore time).\nFormat: " + interview.mode.replace(/_/g, " ") + meeting + "\n\nConfirm attendance securely: " + confirmationUrl.toString() + "\nThis link expires seven days after the scheduled interview time. Contact the agency if you need to change the time.\n\nAt The Agency";
+  const idempotencyKey = "interview:" + interview.id + ":employer-invitation:" + confirmationTokenHash;
+  const result = await sendEmailViaResend(c.env, interview.employer_email, "Interview invitation", text, idempotencyKey);
+  if (!result.ok) {
+    await fetch(config.baseUrl + "/rest/v1/workflow_events", {
+      method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+      body: JSON.stringify({ event_type: "interview.employer_invitation_failed", entity_type: "interview", entity_id: interview.id, actor: "user:" + (admin.username || admin.email || "Agency Staff"), status: "failed", payload: { agencyId: admin.agencyId, failureCategory: result.error, scheduled_at: interview.scheduled_at } }),
+    }).catch((error) => console.error("Unable to record employer invitation failure", errMsg(error)));
+    return c.json({ error: result.error === "RESEND_NOT_CONFIGURED" ? "Configure the agency email service before sending employer invitations" : "The employer invitation could not be sent" }, 502);
+  }
+
+  const savedAt = now();
+  const saveParams = new URLSearchParams({ id: "eq." + interview.id, agency_id: "eq." + admin.agencyId, employer_invitation_sent_at: "is.null", select: "id,employer_invitation_sent_at" });
+  const saveResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + saveParams, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ employer_invitation_sent_at: savedAt, updated_at: savedAt, updated_by: admin.username || admin.email || "Agency Staff" }),
+  });
+  if (!saveResponse.ok) throw new Error("Invitation sent but its delivery marker could not be saved (" + saveResponse.status + ")");
+  const eventResponse = await fetch(config.baseUrl + "/rest/v1/workflow_events", {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify({ event_type: "interview.employer_invitation_sent", entity_type: "interview", entity_id: interview.id, actor: "user:" + (admin.username || admin.email || "Agency Staff"), status: "completed", payload: { agencyId: admin.agencyId, scheduled_at: interview.scheduled_at } }),
+  });
+  return c.json({ sent: true, sentAt: savedAt, auditLogged: eventResponse.ok });
+}));
+
+app.get("/api/ats/public/employer-interview-confirmation", safeApi(async (c) => {
+  const token = toTrimmedString(new URL(c.req.url).searchParams.get("token"));
+  if (!/^[a-f0-9]{64}$/i.test(token)) return c.text("Invalid or expired confirmation link.", 400);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm interview</title></head><body style="font:16px system-ui;max-width:560px;margin:12vh auto;padding:24px;color:#111827"><h1>Confirm interview attendance</h1><p>Use the button below to confirm that you can attend the scheduled interview.</p><button id="confirm" style="padding:12px 18px;border:0;border-radius:8px;background:#047857;color:white;font-weight:700;cursor:pointer">Confirm attendance</button><p id="result" role="status"></p><script>document.getElementById('confirm').onclick=async()=>{const b=document.getElementById('confirm'),r=document.getElementById('result');b.disabled=true;try{const x=await fetch('/api/ats/public/employer-interview-confirmation',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:${JSON.stringify(token)}})});const d=await x.json();if(!x.ok)throw Error(d.error||'Could not confirm');r.textContent=d.alreadyConfirmed?'Attendance was already confirmed.':'Thank you. Attendance is confirmed.';b.remove()}catch(e){r.textContent=e.message;b.disabled=false}}</script></body></html>`;
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" } });
+}));
+
+app.post("/api/ats/public/employer-interview-confirmation", safeApi(async (c) => {
+  const body = await parseBody<{ token?: unknown }>(c.req.raw);
+  const token = toTrimmedString(body?.token);
+  if (!/^[a-f0-9]{64}$/i.test(token)) return c.json({ error: "Invalid or expired confirmation link" }, 400);
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Interview confirmation is unavailable" }, 503);
+  const hash = await sha256Hex(token);
+  const params = new URLSearchParams({ select: "id,application_id,agency_id,scheduled_at,status,employer_confirmed_at,applicant_confirmed_at,employer_confirmation_expires_at", employer_confirmation_token_hash: "eq." + hash, limit: "1" });
+  const readResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + params, { headers: supabaseHeaders(config, { accept: "application/json" }) });
+  if (!readResponse.ok) throw new Error("Unable to verify employer confirmation link (" + readResponse.status + "): " + await readSupabaseError(readResponse));
+  const [interview] = await readResponse.json() as Array<{ id: string; application_id: string; agency_id: number; scheduled_at: string; status: string; employer_confirmed_at: string | null; applicant_confirmed_at: string | null; employer_confirmation_expires_at: string | null }>;
+  if (!interview || !interview.employer_confirmation_expires_at || Date.parse(interview.employer_confirmation_expires_at) <= Date.now()) return c.json({ error: "This confirmation link is invalid or expired" }, 404);
+  if (["CANCELLED", "COMPLETED", "PASSED", "FAILED", "NO_SHOW"].includes(interview.status) || Date.parse(interview.scheduled_at) <= Date.now()) return c.json({ error: "This interview is closed and can no longer be confirmed" }, 409);
+  if (interview.employer_confirmed_at) return c.json({ confirmed: true, alreadyConfirmed: true });
+  const confirmedAt = now();
+  const patchParams = new URLSearchParams({ id: "eq." + interview.id, agency_id: "eq." + interview.agency_id, employer_confirmation_token_hash: "eq." + hash, employer_confirmed_at: "is.null", select: "id" });
+  const patchResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + patchParams, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }), body: JSON.stringify({ employer_confirmed_at: confirmedAt, status: interview.applicant_confirmed_at ? "CONFIRMED" : "SCHEDULED", updated_at: confirmedAt, updated_by: "employer" }) });
+  if (!patchResponse.ok) throw new Error("Unable to save employer confirmation (" + patchResponse.status + "): " + await readSupabaseError(patchResponse));
+  const saved = await patchResponse.json() as Array<{ id: string }>;
+  if (!saved.length) return c.json({ confirmed: true, alreadyConfirmed: true });
+  await fetch(config.baseUrl + "/rest/v1/workflow_events", { method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify({ event_type: "interview.employer_confirmed", entity_type: "interview", entity_id: interview.id, actor: "employer", status: "completed", payload: { agencyId: interview.agency_id, applicationId: interview.application_id, scheduled_at: interview.scheduled_at } }) }).catch((error) => console.error("Unable to record employer confirmation", errMsg(error)));
+  return c.json({ confirmed: true, confirmedAt });
+}));
+
+const interviewLifecycleStatuses = new Set([
+  "REQUESTED", "AWAITING_EMPLOYER_CONFIRMATION", "AWAITING_APPLICANT_CONFIRMATION",
+  "SCHEDULED", "CONFIRMED", "RESCHEDULED", "COMPLETED", "PASSED", "FAILED", "SECOND_INTERVIEW",
+  "CANCELLED", "NO_SHOW",
+]);
+
+app.get("/api/operations-board/interviews", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Interview management requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const interviews = await fetchSupabaseTableRows<Record<string, unknown>>(config, "interviews", {
+    select: "id,application_id,placement_id,scheduled_at,duration_minutes,mode,meeting_url,status,notes,outcome,cancellation_reason,reschedule_reason,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at,employer_confirmed_at,applicant_confirmed_at,reminders_enabled,reminder_24h_sent_at,reminder_morning_sent_at,reminder_2h_sent_at,employer_reminder_24h_sent_at,employer_reminder_morning_sent_at,employer_reminder_2h_sent_at,created_at,updated_at",
+    filters: { agency_id: admin.agencyId }, orderBy: "scheduled_at.desc", limit: 200,
+  });
+  return c.json({ interviews });
+}));
+
+app.patch("/api/operations-board/interviews/:interviewId", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Interview management requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const interviewId = toTrimmedString(c.req.param("interviewId"));
+  const body = await parseBody<{
+    status?: unknown; scheduledAt?: unknown; mode?: unknown; notes?: unknown; outcome?: unknown;
+    cancellationReason?: unknown; rescheduleReason?: unknown;
+    employerConfirmed?: unknown; applicantConfirmed?: unknown;
+    employerName?: unknown; employerEmail?: unknown; employerContactVerified?: unknown;
+  }>(c.req.raw);
+  const patch: Record<string, unknown> = { updated_at: now(), updated_by: admin.username || admin.email || "Agency Staff" };
+  let eventType = "interview.updated";
+
+  if (body?.status !== undefined) {
+    const status = toTrimmedString(body.status).toUpperCase();
+    if (!interviewLifecycleStatuses.has(status)) return c.json({ error: "Choose a valid interview status" }, 400);
+    patch.status = status;
+    if (status === "CANCELLED") {
+      patch.cancellation_reason = toTrimmedString(body.cancellationReason).slice(0, 1000);
+      eventType = "interview.cancelled";
+    } else if (status === "COMPLETED" || status === "PASSED" || status === "FAILED" || status === "NO_SHOW") {
+      eventType = "interview.outcome_recorded";
+    }
+    if (body.outcome !== undefined) patch.outcome = toTrimmedString(body.outcome).slice(0, 4000);
+  }
+  if (body?.scheduledAt !== undefined) {
+    const scheduledAt = toTrimmedString(body.scheduledAt);
+    if (!scheduledAt || Number.isNaN(Date.parse(scheduledAt))) return c.json({ error: "Enter a valid interview date and time" }, 400);
+    patch.scheduled_at = new Date(scheduledAt).toISOString();
+    patch.status = "SCHEDULED";
+    patch.reminder_24h_sent_at = null;
+    patch.reminder_morning_sent_at = null;
+    patch.reminder_2h_sent_at = null;
+    patch.employer_reminder_24h_sent_at = null;
+    patch.employer_reminder_morning_sent_at = null;
+    patch.employer_reminder_2h_sent_at = null;
+    patch.employer_invitation_sent_at = null;
+    patch.employer_confirmation_token_hash = null;
+    patch.employer_confirmation_expires_at = null;
+    patch.employer_confirmed_at = null;
+    patch.applicant_confirmed_at = null;
+    patch.reschedule_reason = toTrimmedString(body.rescheduleReason).slice(0, 1000);
+    eventType = "interview.rescheduled";
+  }
+  if (body?.mode !== undefined) {
+    const mode = toTrimmedString(body.mode);
+    if (!["video", "phone", "in_person"].includes(mode)) return c.json({ error: "Interview mode must be video, phone, or in_person" }, 400);
+    patch.mode = mode;
+  }
+  if (body?.notes !== undefined) patch.notes = toTrimmedString(body.notes).slice(0, 4000);
+  if (body?.employerName !== undefined) patch.employer_name = toTrimmedString(body.employerName).slice(0, 120);
+  if (body?.employerEmail !== undefined) {
+    const email = normalizeEmail(toTrimmedString(body.employerEmail));
+    const verified = body.employerContactVerified === true;
+    if (email && (!isEmailLike(email) || !verified)) return c.json({ error: "Verify the employer participant email before saving it" }, 400);
+    if (!email && verified) return c.json({ error: "An employer email is required before verifying this contact" }, 400);
+    patch.employer_email = email;
+    patch.employer_contact_verified_at = email && verified ? now() : null;
+    patch.employer_invitation_sent_at = null;
+    patch.employer_confirmation_token_hash = null;
+    patch.employer_confirmation_expires_at = null;
+    patch.employer_confirmed_at = null;
+  } else if (body?.employerContactVerified === false) {
+    patch.employer_contact_verified_at = null;
+    patch.employer_invitation_sent_at = null;
+    patch.employer_confirmation_token_hash = null;
+    patch.employer_confirmation_expires_at = null;
+    patch.employer_confirmed_at = null;
+  }
+  if (patch.status === "CANCELLED") {
+    patch.employer_confirmation_token_hash = null;
+    patch.employer_confirmation_expires_at = null;
+  }
+  if (body?.employerConfirmed === true && body?.employerEmail === undefined && body?.employerContactVerified !== false) patch.employer_confirmed_at = now();
+  if (body?.employerConfirmed === false) patch.employer_confirmed_at = null;
+  if (body?.applicantConfirmed === true) patch.applicant_confirmed_at = now();
+  if (body?.applicantConfirmed === false) patch.applicant_confirmed_at = null;
+
+  const filters = new URLSearchParams({ id: `eq.${interviewId}`, agency_id: `eq.${admin.agencyId}`, select: "*" });
+  const response = await fetch(`${config.baseUrl}/rest/v1/interviews?${filters.toString()}`, {
+    method: "PATCH",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) throw new Error(`Unable to update interview (${response.status}): ${await readSupabaseError(response)}`);
+  const rows = await response.json() as Array<Record<string, unknown>>;
+  const interview = rows[0];
+  if (!interview) return c.json({ error: "Interview was not found" }, 404);
+
+  if (body?.scheduledAt !== undefined || patch.status === "CANCELLED") {
+    const deliveriesQuery = new URLSearchParams({ interview_id: `eq.${interviewId}`, status: "in.(PENDING,SENDING)" });
+    const cancellation = await fetch(`${config.baseUrl}/rest/v1/interview_reminder_deliveries?${deliveriesQuery}`, {
+      method: "PATCH",
+      headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+      body: JSON.stringify({ status: "CANCELLED", last_error: patch.status === "CANCELLED" ? "Interview cancelled by agency staff" : "Interview rescheduled; reminder time was superseded" }),
+    });
+    if (!cancellation.ok) console.error("Interview updated but pending reminders could not be cancelled", await readSupabaseError(cancellation));
+  }
+
+  const eventResponse = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify({
+      event_type: eventType, entity_type: "interview", entity_id: interviewId,
+      actor: `user:${admin.username || admin.email || "Agency Staff"}`,
+      payload: { status: interview.status, scheduled_at: interview.scheduled_at, event_id: crypto.randomUUID() },
+      status: "completed",
+    }),
+  });
+  if (!eventResponse.ok) console.error("Interview update saved but workflow event could not be recorded", await readSupabaseError(eventResponse));
+  const finalStatus = toTrimmedString(interview.status).toUpperCase();
+  const isInterviewOutcome = ["COMPLETED", "PASSED", "FAILED", "NO_SHOW"].includes(finalStatus);
+  const interviewHook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (isInterviewOutcome && interviewHook) {
+    const eventId = `interview:${interviewId}:completed:${toTrimmedString(interview.scheduled_at)}:${finalStatus}`;
+    runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", eventId, admin.agencyId, {
+      event_type: "interview.completed", agency_id: admin.agencyId, interview_id: interviewId,
+      application_id: toTrimmedString(interview.application_id), status: finalStatus,
+      scheduled_at: toTrimmedString(interview.scheduled_at),
+    }).catch((error) => console.error("Interview outcome Make event could not be queued", errMsg(error))));
+  }
+  return c.json({ interview, auditLogged: eventResponse.ok });
+}));
 
 app.post(
   "/api/ai/hr-interview/session",
@@ -13079,7 +14850,7 @@ const runScheduledMarketing = async (env: Bindings): Promise<MarketingDispatchRe
 
 app.get(
   "/api/ai/direct-marketing/autonomous/status",
-  requireAgencyAdminAuth,
+  requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
     if (!c.env.APP_DATA) return c.json({ lastRun: null });
     const raw = await c.env.APP_DATA.get(MARKETING_LOG_KEY);
@@ -13092,11 +14863,65 @@ app.get(
 
 type DmContact = { id: string; name: string; phone: string; email: string; source: string };
 type DmMessage = { contactId: string; contactName: string; contactPhone: string; contactEmail: string; contactSource: string; message: string; whatsappLink: string; charCount: number; whatsappReady: boolean };
-type DmCampaign = { id: string; goal: string; tone: string; audienceType: string; maidReferences: string[]; messageTemplate: string; subject: string; messages: DmMessage[]; contactCount: number; whatsappReadyCount: number; emailOnlyCount: number; generatedAt: string; aiUsed: boolean };
+type DmCampaign = { id: string; agencyId: number; goal: string; tone: string; audienceType: string; maidReferences: string[]; messageTemplate: string; subject: string; messages: DmMessage[]; contactCount: number; whatsappReadyCount: number; emailOnlyCount: number; generatedAt: string; aiUsed: boolean };
 type DmCampaignSummary = Omit<DmCampaign, "messages" | "messageTemplate">;
 type DmOpportunity = { id: string; triggerType: string; title: string; reasoning: string; goal: string; tone: string; audienceType: string; maidReferences: string[]; estimatedReach: number; priority: string; detectedAt: string };
 
 const MARKETING_CAMPAIGNS_KEY = "marketing-campaigns.json";
+const marketingCampaignSummaryKey = (agencyId: number) => `${MARKETING_CAMPAIGNS_KEY}:${agencyId}`;
+
+const normalizeMarketingConsentSubject = (value: string, channel: "whatsapp" | "email") =>
+  channel === "email" ? value.trim().toLowerCase() : value.replace(/\D/g, "");
+
+const updateWhatsappConsentLedger = async (
+  config: SupabaseAppDataConfig | null,
+  agencyId: number,
+  phone: string,
+  consented: boolean,
+  source: string,
+) => {
+  if (!config) return false;
+  const subject = normalizeMarketingConsentSubject(phone, "whatsapp");
+  if (!subject) return false;
+  const timestamp = now();
+  const headers = supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" });
+  const response = consented
+    ? await fetch(`${config.baseUrl}/rest/v1/consents?on_conflict=agency_id%2Csubject%2Cchannel`, {
+        method: "POST",
+        headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "resolution=merge-duplicates,return=minimal" }),
+        body: JSON.stringify([{ agency_id: agencyId, subject, channel: "whatsapp", source: source.slice(0, 250), consented_at: timestamp, unsubscribed_at: null }]),
+      })
+    : await fetch(`${config.baseUrl}/rest/v1/consents?agency_id=eq.${agencyId}&subject=eq.${encodeURIComponent(subject)}&channel=in.(whatsapp,marketing)`, {
+        method: "PATCH", headers,
+        body: JSON.stringify({ unsubscribed_at: timestamp }),
+      });
+  if (!response.ok) throw new Error(`Unable to update WhatsApp consent ledger (${response.status}): ${await readSupabaseError(response)}`);
+  return true;
+};
+
+const getMarketingConsentFlags = async (config: SupabaseAppDataConfig | null, agencyId: number, contacts: DmContact[]) => {
+  if (!config || !contacts.length) return contacts.map((contact) => ({ ...contact, whatsappConsent: false, emailConsent: false, whatsappConsentSource: "", emailConsentSource: "" }));
+  const params = new URLSearchParams({
+    select: "subject,channel,source", agency_id: `eq.${agencyId}`, consented_at: "not.is.null",
+    unsubscribed_at: "is.null", limit: "10000",
+  });
+  const response = await fetch(`${config.baseUrl}/rest/v1/consents?${params}`, {
+    headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) throw new Error(`Unable to read marketing consent (${response.status}): ${await readSupabaseError(response)}`);
+  const consents = await response.json() as Array<{ subject: string; channel: string; source: string }>;
+  const allowed = new Map(consents.flatMap((consent) => {
+    const value = consent.subject.trim();
+    return value ? [[`${consent.channel}:${value}`, consent.source] as const] : [];
+  }));
+  return contacts.map((contact) => {
+    const phone = normalizeMarketingConsentSubject(contact.phone, "whatsapp");
+    const email = normalizeMarketingConsentSubject(contact.email, "email");
+    const whatsappConsentSource = (phone && (allowed.get(`whatsapp:${phone}`) || allowed.get(`marketing:${phone}`))) || "";
+    const emailConsentSource = (email && (allowed.get(`email:${email}`) || allowed.get(`marketing:${email}`))) || "";
+    return { ...contact, whatsappConsent: Boolean(whatsappConsentSource), emailConsent: Boolean(emailConsentSource), whatsappConsentSource, emailConsentSource };
+  });
+};
 
 const audienceTypeToInternal = (type: string) => {
   if (type === "all_clients") return "clients";
@@ -13130,6 +14955,7 @@ const buildDetailedContacts = (data: AppData, audienceType: string): DmContact[]
 const buildDmCampaign = async (
   env: Bindings,
   data: AppData,
+  agencyId: number,
   goal: string,
   tone: string,
   audienceType: string,
@@ -13144,13 +14970,17 @@ const buildDmCampaign = async (
   const template = await generateMarketingTemplate(env, goal, tone, agencyName, agencyPhone, featured.map((m) => m.fullName), customNote);
   const meta = goalMetaMarketing(goal, agencyName);
   const contacts = buildDetailedContacts(data, audienceType);
-  const messages: DmMessage[] = contacts.map((contact) => {
+  const config = getSupabaseAppDataConfig(env);
+  const eligibleContacts = (await getMarketingConsentFlags(config, agencyId, contacts))
+    .filter((contact) => contact.whatsappConsent || contact.emailConsent);
+  const messages: DmMessage[] = eligibleContacts.map((contact) => {
     const msg = template.replace(/\{\{name\}\}/g, contact.name).replace(/\{\{agencyPhone\}\}/g, agencyPhone || agencyName);
-    const waLink = buildWhatsAppLinkMarketing(contact.phone, msg);
-    return { contactId: contact.id, contactName: contact.name, contactPhone: contact.phone, contactEmail: contact.email, contactSource: contact.source, message: msg, whatsappLink: waLink, charCount: msg.length, whatsappReady: Boolean(contact.phone?.trim()) };
+    const waLink = contact.whatsappConsent ? buildWhatsAppLinkMarketing(contact.phone, msg) : "";
+    return { contactId: contact.id, contactName: contact.name, contactPhone: contact.whatsappConsent ? contact.phone : "", contactEmail: contact.emailConsent ? contact.email : "", contactSource: contact.source, message: msg, whatsappLink: waLink, charCount: msg.length, whatsappReady: Boolean(contact.whatsappConsent && contact.phone?.trim()) };
   });
   return {
     id: crypto.randomUUID(),
+    agencyId,
     goal, tone, audienceType,
     maidReferences: featured.map((m) => m.referenceCode),
     messageTemplate: template,
@@ -13166,35 +14996,108 @@ const buildDmCampaign = async (
 
 const saveCampaignSummary = async (env: Bindings, campaign: DmCampaign) => {
   if (!env.APP_DATA) return;
-  const raw = await env.APP_DATA.get(MARKETING_CAMPAIGNS_KEY);
+  await env.APP_DATA.put(`${MARKETING_CAMPAIGNS_KEY}:${campaign.agencyId}:${campaign.id}`, JSON.stringify(campaign), { expirationTtl: 30 * 86400 });
+  const summaryKey = marketingCampaignSummaryKey(campaign.agencyId);
+  const raw = await env.APP_DATA.get(summaryKey);
   const existing: DmCampaignSummary[] = raw ? (JSON.parse(raw) as DmCampaignSummary[]) : [];
   const { messages: _m, messageTemplate: _t, ...summary } = campaign;
   existing.unshift(summary);
   if (existing.length > 50) existing.length = 50;
-  await env.APP_DATA.put(MARKETING_CAMPAIGNS_KEY, JSON.stringify(existing), { expirationTtl: 30 * 86400 });
+  await env.APP_DATA.put(summaryKey, JSON.stringify(existing), { expirationTtl: 30 * 86400 });
+};
+
+const claimSupabaseMarketingEmail = async (config: SupabaseAppDataConfig, agencyId: number, campaignId: string, contactId: string) => {
+  const key = { agency_id: agencyId, campaign_id: campaignId, contact_id: contactId, channel: "email" };
+  const insert = await fetch(`${config.baseUrl}/rest/v1/marketing_message_deliveries?on_conflict=agency_id%2Ccampaign_id%2Ccontact_id%2Cchannel`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "resolution=ignore-duplicates,return=representation" }),
+    body: JSON.stringify([{ ...key, status: "SENDING", attempts: 1, lease_expires_at: new Date(Date.now() + 15 * 60_000).toISOString() }]),
+  });
+  if (!insert.ok) throw new Error(`Unable to claim campaign email delivery (${insert.status}): ${await readSupabaseError(insert)}`);
+  const inserted = await insert.json() as Array<{ attempts: number }>;
+  if (inserted.length) return { state: "claimed" as const, attempts: 1 };
+  const existing = await fetchSupabaseTableRows<{ status: string; attempts: number; lease_expires_at: string | null }>(config, "marketing_message_deliveries", { select: "status,attempts,lease_expires_at", filters: key, limit: 1 });
+  const row = existing[0];
+  if (!row) throw new Error("Campaign email delivery state could not be read");
+  if (row.status === "SENT") return { state: "sent" as const, attempts: row.attempts };
+  if (row.status !== "FAILED") return { state: "in_progress" as const, attempts: row.attempts };
+  const params = new URLSearchParams({ agency_id: `eq.${agencyId}`, campaign_id: `eq.${campaignId}`, contact_id: `eq.${contactId}`, channel: "eq.email", status: `eq.${row.status}` });
+  const retry = await fetch(`${config.baseUrl}/rest/v1/marketing_message_deliveries?${params}`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ status: "SENDING", attempts: row.attempts + 1, lease_expires_at: new Date(Date.now() + 15 * 60_000).toISOString(), last_error: "", updated_at: now() }),
+  });
+  if (!retry.ok) throw new Error(`Unable to claim campaign email retry (${retry.status}): ${await readSupabaseError(retry)}`);
+  const retried = await retry.json() as Array<{ attempts: number }>;
+  return retried.length ? { state: "claimed" as const, attempts: row.attempts + 1 } : { state: "in_progress" as const, attempts: row.attempts };
+};
+
+const updateSupabaseMarketingEmail = async (config: SupabaseAppDataConfig, agencyId: number, campaignId: string, contactId: string, status: "SENT" | "FAILED", lastError = "") => {
+  const params = new URLSearchParams({ agency_id: `eq.${agencyId}`, campaign_id: `eq.${campaignId}`, contact_id: `eq.${contactId}`, channel: "eq.email", status: "eq.SENDING" });
+  return fetch(`${config.baseUrl}/rest/v1/marketing_message_deliveries?${params}`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify({ status, sent_at: status === "SENT" ? now() : null, lease_expires_at: null, last_error: lastError.slice(0, 120), updated_at: now() }),
+  });
 };
 
 // ─── GET /api/ai/direct-marketing/audience ───────────────────────────────────
 
 app.get(
   "/api/ai/direct-marketing/audience",
-  requireAgencyAdminAuth,
+  requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
     const type = c.req.query("type") ?? "all_contacts";
+    if (!["all_contacts", "all_clients", "enquiry_leads", "direct_sale_leads"].includes(type)) return c.json({ error: "Invalid audience type" }, 400);
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const data = await loadData(c.env, { readOnly: true });
-    const contacts = buildDetailedContacts(data, type);
-    return c.json({ contacts, total: contacts.length });
+    const allContacts = buildDetailedContacts(data, type);
+    const consented = await getMarketingConsentFlags(getSupabaseAppDataConfig(c.env), admin.agencyId, allContacts);
+    const contacts = c.req.query("manage") === "true" ? consented : consented.filter((contact) => contact.whatsappConsent || contact.emailConsent);
+    return c.json({ contacts, total: allContacts.length, eligibleTotal: consented.filter((contact) => contact.whatsappConsent || contact.emailConsent).length });
   }),
 );
+
+app.post("/api/ai/direct-marketing/audience/consent", requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"), safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Marketing consent storage is not configured" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{ audienceType?: unknown; contactId?: unknown; channel?: unknown; consented?: unknown; source?: unknown }>(c.req.raw);
+  const audienceType = toTrimmedString(body?.audienceType);
+  const contactId = toTrimmedString(body?.contactId);
+  const channel = body?.channel === "whatsapp" || body?.channel === "email" ? body.channel : null;
+  const consented = body?.consented === true;
+  const source = toTrimmedString(body?.source).slice(0, 250);
+  if (!["all_contacts", "all_clients", "enquiry_leads", "direct_sale_leads"].includes(audienceType) || !contactId || !channel || typeof body?.consented !== "boolean") {
+    return c.json({ error: "A valid audience, contact, channel, and consent state are required" }, 400);
+  }
+  if (consented && source.length < 5) return c.json({ error: "Enter where the explicit opt-in was recorded (at least 5 characters)" }, 400);
+  const data = await loadData(c.env, { readOnly: true });
+  const contact = buildDetailedContacts(data, audienceType).find((item) => item.id === contactId);
+  if (!contact) return c.json({ error: "Audience contact not found" }, 404);
+  const rawSubject = channel === "email" ? contact.email : contact.phone;
+  const subject = normalizeMarketingConsentSubject(rawSubject, channel);
+  if (!subject) return c.json({ error: `This contact has no valid ${channel} address` }, 400);
+  const filter = `agency_id=eq.${admin.agencyId}&subject=eq.${encodeURIComponent(subject)}&channel=${consented ? `eq.${channel}` : `in.(${channel}${channel === "whatsapp" ? ",marketing" : ""})`}`;
+  const response = consented
+    ? await fetch(`${config.baseUrl}/rest/v1/consents?on_conflict=agency_id%2Csubject%2Cchannel`, {
+        method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "resolution=merge-duplicates,return=minimal" }),
+        body: JSON.stringify([{ agency_id: admin.agencyId, subject, channel, source, consented_at: now(), unsubscribed_at: null }]),
+      })
+    : await fetch(`${config.baseUrl}/rest/v1/consents?${filter}`, {
+        method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+        body: JSON.stringify({ unsubscribed_at: now() }),
+      });
+  if (!response.ok) throw new Error(`Unable to update marketing consent (${response.status}): ${await readSupabaseError(response)}`);
+  return c.json({ ok: true, consented });
+}));
 
 // ─── GET /api/ai/direct-marketing/campaigns ──────────────────────────────────
 
 app.get(
   "/api/ai/direct-marketing/campaigns",
-  requireAgencyAdminAuth,
+  requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
     if (!c.env.APP_DATA) return c.json({ campaigns: [] });
-    const raw = await c.env.APP_DATA.get(MARKETING_CAMPAIGNS_KEY);
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const raw = await c.env.APP_DATA.get(marketingCampaignSummaryKey(admin.agencyId));
     const campaigns: DmCampaignSummary[] = raw ? (JSON.parse(raw) as DmCampaignSummary[]) : [];
     return c.json({ campaigns });
   }),
@@ -13202,10 +15105,56 @@ app.get(
 
 // ─── GET /api/ai/direct-marketing/autonomous/scan ────────────────────────────
 
+app.post("/api/ai/direct-marketing/send-email", requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"), safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !c.env.APP_DATA) return c.json({ error: "Campaign delivery storage is not configured" }, 503);
+  if (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim()) return c.json({ error: "Email delivery is not configured" }, 503);
+  const body = await parseBody<{ campaignId?: unknown; contactId?: unknown }>(c.req.raw);
+  const campaignId = toTrimmedString(body?.campaignId);
+  const contactId = toTrimmedString(body?.contactId);
+  if (!/^[0-9a-f-]{36}$/i.test(campaignId) || !contactId || contactId.length > 200) return c.json({ error: "A valid campaign and contact are required" }, 400);
+  const rawCampaign = await c.env.APP_DATA.get(`${MARKETING_CAMPAIGNS_KEY}:${admin.agencyId}:${campaignId}`);
+  if (!rawCampaign) return c.json({ error: "Campaign draft not found. Generate it again before sending." }, 404);
+  const campaign = JSON.parse(rawCampaign) as DmCampaign;
+  if (campaign.agencyId !== admin.agencyId || campaign.id !== campaignId) return c.json({ error: "Campaign not found" }, 404);
+  const message = campaign.messages.find((item) => item.contactId === contactId);
+  if (!message?.contactEmail) return c.json({ error: "This campaign has no email recipient for that contact" }, 404);
+  const consent = await getMarketingConsentFlags(config, admin.agencyId, [{ id: contactId, name: message.contactName, phone: "", email: message.contactEmail, source: message.contactSource }]);
+  if (!consent[0]?.emailConsent) return c.json({ error: "This contact no longer has active email marketing consent" }, 403);
+  const claim = await claimSupabaseMarketingEmail(config, admin.agencyId, campaignId, contactId);
+  if (claim.state === "sent") return c.json({ error: "This campaign email was already sent to this contact" }, 409);
+  if (claim.state === "in_progress") return c.json({ error: "This campaign email is sending or its result is uncertain. Check the email provider before retrying." }, 409);
+
+  const contactRefHash = await sha256Hex(contactId);
+  const hook = makeWebhookUrlForOutbox(c.env, "marketing_campaign_event");
+  if (hook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "marketing_campaign_event", `campaign-email:${campaignId}:${contactRefHash}:approved`, admin.agencyId, {
+    event_type: "marketing.email.approved", agency_id: admin.agencyId, campaign_id: campaignId, contact_ref_hash: contactRefHash,
+  }).catch((error) => console.error("Campaign email approval event could not be queued", errMsg(error))));
+  const idempotencyKey = `campaign-email/${await sha256Hex(`${admin.agencyId}:${campaignId}:${contactId}`)}`;
+  const result = await sendEmailViaResend(c.env, message.contactEmail, campaign.subject, message.message, idempotencyKey);
+  if (!result.ok) {
+    await updateSupabaseMarketingEmail(config, admin.agencyId, campaignId, contactId, "FAILED", result.error)
+      .catch((error) => console.error("Could not record failed campaign email", errMsg(error)));
+    if (hook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "marketing_campaign_event", `campaign-email:${campaignId}:${contactRefHash}:failed:${claim.attempts}`, admin.agencyId, {
+      event_type: "marketing.email.failed", agency_id: admin.agencyId, campaign_id: campaignId, contact_ref_hash: contactRefHash, error_code: result.error,
+    }).catch((error) => console.error("Campaign email failure event could not be queued", errMsg(error))));
+    return c.json({ error: "Email provider could not accept the message" }, 502);
+  }
+
+  const statusResponse = await updateSupabaseMarketingEmail(config, admin.agencyId, campaignId, contactId, "SENT");
+  if (!statusResponse.ok) console.error("Email provider accepted the campaign send but delivery status could not be saved", statusResponse.status);
+  if (hook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "marketing_campaign_event", `campaign-email:${campaignId}:${contactRefHash}:sent`, admin.agencyId, {
+    event_type: "marketing.email.sent", agency_id: admin.agencyId, campaign_id: campaignId, contact_ref_hash: contactRefHash,
+  }).catch((error) => console.error("Campaign email sent event could not be queued", errMsg(error))));
+  return c.json({ ok: true, trackingPending: !statusResponse.ok });
+}));
+
 app.get(
   "/api/ai/direct-marketing/autonomous/scan",
-  requireAgencyAdminAuth,
+  requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const data = await loadData(c.env, { readOnly: true });
     const rawOps = detectMarketingOpportunities(data);
     const goalToTrigger: Record<string, string> = { new_arrivals: "new_helpers", follow_up: "stale_enquiries", re_engage: "cold_leads", holiday: "upcoming_holiday" };
@@ -13214,10 +15163,13 @@ app.get(
     const audToType: Record<string, string> = { all: "all_contacts", clients: "all_clients", enquiries: "enquiry_leads", leads: "direct_sale_leads" };
     const featured = data.maids.filter((m) => m.isPublic).slice(0, 3).map((m) => m.referenceCode);
     const now = new Date().toISOString();
-    const opportunities: DmOpportunity[] = rawOps.map((op) => {
+    const opportunities = (await Promise.all(rawOps.map(async (op) => {
       const audienceType = audToType[op.audience] ?? "all_contacts";
+      const audience = await getMarketingConsentFlags(getSupabaseAppDataConfig(c.env), admin.agencyId, buildDetailedContacts(data, audienceType));
+      const eligibleCount = audience.filter((contact) => contact.whatsappConsent || contact.emailConsent).length;
+      if (eligibleCount === 0) return null;
       return {
-        id: crypto.randomUUID(),
+        id: String(crypto.randomUUID()),
         triggerType: goalToTrigger[op.goal] ?? "new_helpers",
         title: goalToTitle[op.goal] ?? op.goal,
         reasoning: op.triggerReason,
@@ -13225,12 +15177,12 @@ app.get(
         tone: op.tone,
         audienceType,
         maidReferences: featured,
-        estimatedReach: buildDetailedContacts(data, audienceType).length,
+        estimatedReach: eligibleCount,
         priority: goalToPriority[op.goal] ?? "low",
         detectedAt: now,
       };
-    });
-    return c.json({ scannedAt: now, agencyId: 0, opportunities });
+    }))).filter((op): op is DmOpportunity => op !== null);
+    return c.json({ scannedAt: now, agencyId: admin.agencyId, opportunities });
   }),
 );
 
@@ -13238,14 +15190,21 @@ app.get(
 
 app.post(
   "/api/ai/direct-marketing/autonomous/run",
-  requireAgencyAdminAuth,
+  requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const body = await parseBody<{ opportunity?: DmOpportunity }>(c.req.raw);
     if (!body?.opportunity) return c.json({ error: "opportunity is required" }, 400);
     const opp = body.opportunity;
     const data = await loadData(c.env, { readOnly: true });
-    const campaign = await buildDmCampaign(c.env, data, opp.goal, opp.tone, opp.audienceType, opp.maidReferences ?? []);
+    const campaign = await buildDmCampaign(c.env, data, admin.agencyId, opp.goal, opp.tone, opp.audienceType, opp.maidReferences ?? []);
     await saveCampaignSummary(c.env, campaign);
+    const hook = makeWebhookUrlForOutbox(c.env, "marketing_campaign_event");
+    if (hook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "marketing_campaign_event", `marketing-draft:${campaign.id}:created`, admin.agencyId, {
+      event_type: "marketing.campaign.draft_created", agency_id: admin.agencyId, campaign_id: campaign.id,
+      goal: campaign.goal, tone: campaign.tone, audience_type: campaign.audienceType,
+      contact_count: campaign.contactCount, generated_at: campaign.generatedAt,
+    }).catch((error) => console.error("Marketing draft Make event could not be queued", errMsg(error))));
     return c.json({ campaigns: [campaign] });
   }),
 );
@@ -13254,16 +15213,23 @@ app.post(
 
 app.post(
   "/api/ai/direct-marketing/generate",
-  requireAgencyAdminAuth,
+  requireAgencyAdminRoleAuth("SUPER_ADMIN", "admin", "agency", "RECRUITER", "staff"),
   safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const body = await parseBody<{ goal?: string; tone?: string; maidReferences?: string[]; audienceType?: string; customNote?: string }>(c.req.raw);
     const goal = body?.goal ?? "new_arrivals";
     const tone = body?.tone ?? "warm";
     const audienceType = body?.audienceType ?? "all_contacts";
     const maidRefs = body?.maidReferences ?? [];
     const data = await loadData(c.env, { readOnly: true });
-    const campaign = await buildDmCampaign(c.env, data, goal, tone, audienceType, maidRefs, body?.customNote);
+    const campaign = await buildDmCampaign(c.env, data, admin.agencyId, goal, tone, audienceType, maidRefs, body?.customNote);
     await saveCampaignSummary(c.env, campaign);
+    const hook = makeWebhookUrlForOutbox(c.env, "marketing_campaign_event");
+    if (hook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "marketing_campaign_event", `marketing-draft:${campaign.id}:created`, admin.agencyId, {
+      event_type: "marketing.campaign.draft_created", agency_id: admin.agencyId, campaign_id: campaign.id,
+      goal: campaign.goal, tone: campaign.tone, audience_type: campaign.audienceType,
+      contact_count: campaign.contactCount, generated_at: campaign.generatedAt,
+    }).catch((error) => console.error("Marketing draft Make event could not be queued", errMsg(error))));
     return c.json({ campaign });
   }),
 );
@@ -13473,7 +15439,10 @@ app.post(
 
 app.post(
   "/api/contracts/generate",
+  requireAgencyAdminAuth,
+  canManageAgencyRecords,
   safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const body = await parseBody<{
       maidId?: number | null;
       employerId?: number | null;
@@ -13499,7 +15468,7 @@ app.post(
     }
 
     const data = await loadData(c.env);
-    const maid = data.maids.find((item) => item.id === maidId) ?? null;
+    const maid = data.maids.find((item) => item.id === maidId && item.agencyId === admin.agencyId) ?? null;
     if (!maid) {
       return c.json(
         buildWorkflowResponse(c.req.raw, {
@@ -13512,8 +15481,20 @@ app.post(
       );
     }
 
-    const employer =
-      data.employers.find((item) => item.id === employerId) ?? null;
+    const employer = data.employers.find((item) =>
+      item.id === employerId && (item.agencyId ?? 1) === admin.agencyId,
+    ) ?? null;
+    if (!employer) {
+      return c.json(
+        buildWorkflowResponse(c.req.raw, {
+          workflow: "validation_error",
+          intent: "validation_error",
+          fallbackUsed: true,
+          data: { error: "Employer not found in this agency" },
+        }),
+        404,
+      );
+    }
     const contractId = data.counters.employmentContracts++;
     const refCode = `WF-${formatEmployerRefCode(contractId)}`;
     const employerName =
@@ -14443,6 +16424,7 @@ app.post("/api/agency-auth/register", async (c) => {
   const admin: AgencyAdminRecord = {
     id: data.counters.agencyAdmins++,
     agencyId: 1,
+    role: "agency",
     username: body.username.trim(),
     email,
     password: await hashPassword(body.password.trim()),
@@ -16239,24 +18221,143 @@ const dispatchApplicantIntakeToMake = async (
 ) => {
   const webhookUrl = env.MAKE_WEBHOOK_URL_APPLICANT_INTAKE?.trim();
   if (!webhookUrl) return;
-
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      event_type: "candidate.created",
-      application_id: application.id,
-      application_code: application.applicationCode,
-      status: application.status,
-      agency_id: application.agencyId,
-      full_name: profile.fullName,
-      nationality: profile.nationality,
-    }),
-    signal: AbortSignal.timeout(15_000),
+  const eventId = "candidate.created:" + application.id;
+  const deliveryState = await enqueueMakeWebhookEvent(env, "applicant_intake", eventId, application.agencyId, {
+    event_type: "candidate.created", application_id: application.id, application_code: application.applicationCode,
+    status: application.status, agency_id: application.agencyId, full_name: profile.fullName, nationality: profile.nationality,
   });
-  if (!response.ok) {
-    throw new Error(`Applicant-intake Make webhook failed (${response.status})`);
+  await recordApplicantIntakeDeliveryEvent(env, application, eventId, deliveryState === "delivered" ? "completed" : deliveryState === "failed" ? "failed" : "pending", deliveryState);
+};
+
+const postMakeEventWithRetry = async (webhookUrl: string, body: string, eventId: string, timeoutMs = 15_000) => {
+  let url: URL;
+  try { url = new URL(webhookUrl); } catch { throw new Error("Make event webhook URL is invalid"); }
+  if (url.protocol !== "https:" || !/\.make\.com$/i.test(url.hostname)) throw new Error("Make event webhook must use an HTTPS Make.com URL");
+  let lastStatus: number | null = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST", headers: { "content-type": "application/json", "x-idempotency-key": eventId }, body,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch {
+      if (attempt === 2) throw new Error("Make event webhook delivery failed after " + attempt + " attempts");
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      continue;
+    }
+    if (response.ok) return { response, attempts: attempt };
+    lastStatus = response.status;
+    if (attempt === 2 || (response.status !== 408 && response.status !== 429 && response.status < 500)) {
+      throw new Error("Make event webhook returned HTTP " + response.status + " after " + attempt + " attempt" + (attempt === 1 ? "" : "s"));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
   }
+  throw new Error("Make event webhook delivery failed after 2 attempts" + (lastStatus ? " (HTTP " + lastStatus + ")" : ""));
+};
+
+type MakeWebhookOutboxHook = "applicant_intake" | "fdw_event" | "maid_referral_sheet" | "placement_milestone" | "contractor_arrival" | "interview_scheduled" | "rolling_arrival_report" | "deployment_task_event" | "marketing_campaign_event";
+type MakeWebhookDelivery = { id: string; event_id: string; hook_key: MakeWebhookOutboxHook; agency_id: number | null; payload: Record<string, unknown>; status: string; attempts: number; max_attempts: number };
+
+const makeWebhookUrlForOutbox = (env: Bindings, hook: MakeWebhookOutboxHook) => ({
+  applicant_intake: env.MAKE_WEBHOOK_URL_APPLICANT_INTAKE,
+  fdw_event: env.MAKE_WEBHOOK_URL_FDW_CHATBOT,
+  maid_referral_sheet: env.MAKE_WEBHOOK_URL_MAID_REFERRAL,
+  placement_milestone: env.MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT,
+  contractor_arrival: env.MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT,
+  interview_scheduled: env.MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT,
+  rolling_arrival_report: env.MAKE_WEBHOOK_URL_ROLLING_ARRIVAL_REPORT,
+  deployment_task_event: env.MAKE_WEBHOOK_URL_DEPLOYMENT_TASK_EVENTS,
+  marketing_campaign_event: env.MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS,
+}[hook]?.trim());
+
+const deliverMakeWebhookOutboxRow = async (env: Bindings, deliveryId: string) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) return "not_configured";
+  const readQuery = new URLSearchParams({ select: "id,event_id,hook_key,agency_id,payload,status,attempts,max_attempts", id: `eq.${deliveryId}`, limit: "1" });
+  const readResponse = await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?${readQuery}`, { headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(8_000) });
+  if (!readResponse.ok) throw new Error(`Unable to read Make outbox row (${readResponse.status}): ${await readSupabaseError(readResponse)}`);
+  const [row] = await readResponse.json() as MakeWebhookDelivery[];
+  if (!row || row.status !== "PENDING") return row?.status ?? "missing";
+  const url = makeWebhookUrlForOutbox(env, row.hook_key);
+  if (!url) return "not_configured";
+  const claimQuery = new URLSearchParams({ id: `eq.${row.id}`, status: "eq.PENDING", attempts: `eq.${row.attempts}`, select: "id" });
+  const claimResponse = await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?${claimQuery}`, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }), body: JSON.stringify({ status: "SENDING", attempts: row.attempts + 1 }), signal: AbortSignal.timeout(8_000) });
+  if (!claimResponse.ok) throw new Error(`Unable to claim Make outbox row (${claimResponse.status}): ${await readSupabaseError(claimResponse)}`);
+  if (((await claimResponse.json()) as unknown[]).length === 0) return "claimed_elsewhere";
+  const attempt = row.attempts + 1;
+  try {
+    await postMakeEventWithRetry(url, JSON.stringify(row.payload), row.event_id, 15_000);
+    const saved = await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?id=eq.${encodeURIComponent(row.id)}&status=eq.SENDING`, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify({ status: "DELIVERED", delivered_at: now(), last_error: "" }) });
+    if (!saved.ok) throw new Error(`Make accepted event but delivery status could not be saved (${saved.status})`);
+    return "delivered";
+  } catch (error) {
+    const delays = [1, 5, 15, 60, 240];
+    const message = errMsg(error);
+    const httpStatus = Number(message.match(/HTTP (\d{3})/i)?.[1] ?? 0);
+    const nonRetryable = (httpStatus >= 400 && httpStatus < 500 && httpStatus !== 408 && httpStatus !== 429) || /webhook URL is invalid|must use an HTTPS Make\.com URL/i.test(message);
+    const failed = attempt >= row.max_attempts || nonRetryable;
+    const updated = await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?id=eq.${encodeURIComponent(row.id)}&status=eq.SENDING`, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify({ status: failed ? "FAILED" : "PENDING", next_attempt_at: new Date(Date.now() + delays[Math.min(attempt - 1, delays.length - 1)] * 60_000).toISOString(), last_error: message.slice(0, 1000) }) });
+    if (!updated.ok) console.error("Unable to record Make outbox failure", row.event_id, updated.status);
+    return failed ? "failed" : "pending_retry";
+  }
+};
+
+const enqueueMakeWebhookEvent = async (env: Bindings, hook: MakeWebhookOutboxHook, eventId: string, agencyId: number | null, payload: Record<string, unknown>) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) throw new Error("Durable Make delivery requires normalized Supabase storage");
+  if (!makeWebhookUrlForOutbox(env, hook)) return "not_configured";
+  const completePayload = { ...payload, event_id: eventId };
+  const body = JSON.stringify(completePayload);
+  if (new TextEncoder().encode(body).byteLength > 256_000) throw new Error("Make event payload exceeds the 256 KB outbox limit");
+  const insertResponse = await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?on_conflict=event_id`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "resolution=ignore-duplicates,return=minimal" }),
+    body: JSON.stringify({ event_id: eventId, hook_key: hook, agency_id: agencyId, payload: completePayload, status: "PENDING", next_attempt_at: now(), expires_at: new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString() }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!insertResponse.ok) throw new Error(`Unable to enqueue Make event (${insertResponse.status}): ${await readSupabaseError(insertResponse)}`);
+  const findQuery = new URLSearchParams({ select: "id,status,next_attempt_at", event_id: `eq.${eventId}`, limit: "1" });
+  const findResponse = await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?${findQuery}`, { headers: supabaseHeaders(config, { accept: "application/json" }) });
+  if (!findResponse.ok) throw new Error(`Unable to find Make outbox event (${findResponse.status}): ${await readSupabaseError(findResponse)}`);
+  const [delivery] = await findResponse.json() as Array<{ id: string; status: string; next_attempt_at: string }>;
+  if (!delivery) throw new Error("Make event was not persisted to the outbox");
+  if (delivery.status === "PENDING" && Date.parse(delivery.next_attempt_at) <= Date.now()) return deliverMakeWebhookOutboxRow(env, delivery.id);
+  if (delivery.status === "PENDING") return "pending_retry";
+  return delivery.status.toLowerCase();
+};
+
+const dispatchPendingMakeWebhookOutbox = async (env: Bindings) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) return;
+  const cutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+  const stale = await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?status=eq.SENDING&updated_at=lt.${encodeURIComponent(cutoff)}&select=id`, { headers: supabaseHeaders(config, { accept: "application/json" }) });
+  if (stale.ok) for (const row of await stale.json() as Array<{ id: string }>) await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?id=eq.${encodeURIComponent(row.id)}&status=eq.SENDING`, { method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }), body: JSON.stringify({ status: "PENDING", next_attempt_at: now(), last_error: "Recovered interrupted delivery" }) });
+  const expiredAt = now();
+  await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?expires_at=lt.${encodeURIComponent(expiredAt)}&status=in.(DELIVERED,FAILED)`, { method: "DELETE", headers: supabaseHeaders(config, { prefer: "return=minimal" }) });
+  const dueQuery = new URLSearchParams({ status: "eq.PENDING", next_attempt_at: `lte.${now()}`, select: "id", order: "created_at.asc", limit: "20" });
+  const dueResponse = await fetch(`${config.baseUrl}/rest/v1/make_webhook_deliveries?${dueQuery}`, { headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(8_000) });
+  if (!dueResponse.ok) throw new Error(`Make outbox dispatch query failed (${dueResponse.status}): ${await readSupabaseError(dueResponse)}`);
+  for (const row of await dueResponse.json() as Array<{ id: string }>) await deliverMakeWebhookOutboxRow(env, row.id).catch((error) => console.error("Make outbox retry failed", row.id, errMsg(error)));
+};
+
+const recordApplicantIntakeDeliveryEvent = async (
+  env: Bindings,
+  application: AtsApplicationRecord,
+  eventId: string,
+  status: "completed" | "failed" | "pending",
+  deliveryState: string,
+) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) return;
+  const response = await fetch(config.baseUrl + "/rest/v1/workflow_events", {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify({
+      event_type: status === "completed" ? "candidate.screening_dispatched" : status === "failed" ? "candidate.screening_dispatch_failed" : "candidate.screening_dispatch_queued",
+      entity_type: "application", entity_id: application.id, actor: "website:make-applicant-intake",
+      status, payload: { eventId, agencyId: application.agencyId, deliveryState },
+    }),
+  });
+  if (!response.ok) console.error("Applicant intake delivery event write failed", response.status, await readSupabaseError(response));
 };
 
 // The public application form runs through this Worker in production, so it
@@ -16314,15 +18415,19 @@ type FdwMakeResult = { ok: boolean; status: number; text: string; body: unknown 
 const callFdwMakeEngine = async (
   env: Bindings,
   payload: Record<string, unknown>,
+  eventId?: string,
 ): Promise<FdwMakeResult> => {
   const webhookUrl = env.MAKE_WEBHOOK_URL_FDW_CHATBOT?.trim();
   if (!webhookUrl) throw new Error("FDW chatbot Make webhook is not configured");
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(30_000),
-  });
+  const bodyText = JSON.stringify(payload);
+  const response = eventId
+    ? (await postMakeEventWithRetry(webhookUrl, bodyText, eventId, 20_000)).response
+    : await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: bodyText,
+        signal: AbortSignal.timeout(30_000),
+      });
   const text = await response.text();
   let body: unknown = text;
   try {
@@ -16363,9 +18468,12 @@ const fdwWebhookConfigured = (env: Bindings) => Boolean(env.MAKE_WEBHOOK_URL_FDW
 
 // Relays a completed-application / referral event to Make's router.
 const forwardFdwEventToMake = async (env: Bindings, payload: Record<string, unknown>) => {
-  const result = await callFdwMakeEngine(env, payload);
-  if (!result.ok) throw new Error(`Make FDW event engine returned ${result.status}`);
-  return result;
+  const eventType = toTrimmedString(payload.event_type);
+  const entityId = toTrimmedString(payload.application_id) || toTrimmedString(payload.referral_id);
+  const eventId = toTrimmedString(payload.event_id) || (eventType && entityId ? eventType + ":" + entityId : "");
+  if (!eventId) throw new Error("FDW Make event is missing a stable event identifier");
+  const agencyId = Number(payload.agency_id ?? payload.agencyId);
+  return enqueueMakeWebhookEvent(env, "fdw_event", eventId, Number.isInteger(agencyId) && agencyId > 0 ? agencyId : null, payload);
 };
 
 // One chat turn -> Make's AI Agent. Returns Make's reply.
@@ -16403,6 +18511,7 @@ const dispatchFdwApplicationCompleted = async (
   await forwardFdwEventToMake(env, {
     event_type: "fdw_application.completed",
     submitted_at: application.appliedAt,
+    agency_id: application.agencyId,
     application_code: application.applicationCode,
     application_id: application.id,
     full_name: profile.fullName,
@@ -16530,6 +18639,188 @@ app.post(
   }),
 );
 
+const atsReferralLeadsKey = (agencyId: number) => `ats-referral-leads:${agencyId}`;
+const canonicalReferralPhone = (value: unknown) => {
+  let digits = typeof value === "string" ? value.replace(/\D/g, "") : "";
+  if (digits.length === 8) digits = `65${digits}`;
+  return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : "";
+};
+const loadAtsReferralLeads = async (kv: KVNamespace, agencyId: number) => {
+  const raw = await kv.get(atsReferralLeadsKey(agencyId));
+  if (!raw) return [] as AtsReferralLeadRecord[];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is AtsReferralLeadRecord => Boolean(item && typeof item === "object" && item.id && item.agencyId === agencyId))
+      : [];
+  } catch {
+    return [] as AtsReferralLeadRecord[];
+  }
+};
+const saveAtsReferralLeads = async (kv: KVNamespace, agencyId: number, leads: AtsReferralLeadRecord[]) => {
+  await kv.put(atsReferralLeadsKey(agencyId), JSON.stringify(leads.slice(0, 5000)));
+};
+type AtsReferralLeadDbRow = {
+  id: string; agency_id: number; name: string; phone: string; normalized_phone: string; country: string; source: string;
+  preferred_language: string; campaign_id: string; whatsapp_consent_at: string | null; whatsapp_consent_withdrawn_at: string | null;
+  whatsapp_consent_source: string; share_contact_consent_at: string | null; possible_duplicate_of: string | null;
+  referrer_name: string; referrer_phone: string; notes: string; interest_status: AtsReferralLeadRecord["interestStatus"];
+  lead_classification: NonNullable<AtsReferralLeadRecord["leadClassification"]>;
+  lead_hunter_status: NonNullable<AtsReferralLeadRecord["leadHunterStatus"]>; eligible_for_next_step: boolean;
+  staff_review_required: boolean; last_delivery_status: AtsReferralLeadRecord["lastDeliveryStatus"];
+  last_message_at: string | null; created_at: string; updated_at: string;
+};
+const referralLeadToDbRow = (lead: AtsReferralLeadRecord): AtsReferralLeadDbRow => ({
+  id: lead.id, agency_id: lead.agencyId, name: lead.name, phone: lead.phone,
+  normalized_phone: canonicalReferralPhone(lead.phone), country: lead.country, source: lead.source,
+  preferred_language: lead.preferredLanguage, campaign_id: lead.campaignId,
+  whatsapp_consent_at: lead.whatsappConsentAt, whatsapp_consent_withdrawn_at: lead.whatsappConsentWithdrawnAt,
+  whatsapp_consent_source: lead.whatsappConsentSource, share_contact_consent_at: lead.shareContactConsentAt,
+  possible_duplicate_of: lead.possibleDuplicateOf ?? null, referrer_name: lead.referrerName,
+  referrer_phone: lead.referrerPhone, notes: lead.notes, interest_status: lead.interestStatus,
+  lead_classification: lead.leadClassification ?? "unknown", lead_hunter_status: lead.leadHunterStatus ?? "not_configured",
+  eligible_for_next_step: lead.eligibleForNextStep ?? false, staff_review_required: lead.staffReviewRequired ?? true,
+  last_delivery_status: lead.lastDeliveryStatus, last_message_at: lead.lastMessageAt,
+  created_at: lead.createdAt, updated_at: lead.updatedAt,
+});
+const referralLeadFromDbRow = (row: AtsReferralLeadDbRow): AtsReferralLeadRecord => ({
+  id: row.id, agencyId: row.agency_id, name: row.name, phone: row.phone, country: row.country, source: row.source,
+  preferredLanguage: row.preferred_language, campaignId: row.campaign_id,
+  whatsappConsentAt: row.whatsapp_consent_at, whatsappConsentWithdrawnAt: row.whatsapp_consent_withdrawn_at,
+  whatsappConsentSource: row.whatsapp_consent_source, shareContactConsentAt: row.share_contact_consent_at,
+  ...(row.possible_duplicate_of ? { possibleDuplicateOf: row.possible_duplicate_of } : {}),
+  referrerName: row.referrer_name, referrerPhone: row.referrer_phone, notes: row.notes,
+  interestStatus: row.interest_status, leadClassification: row.lead_classification, leadHunterStatus: row.lead_hunter_status,
+  eligibleForNextStep: row.eligible_for_next_step, staffReviewRequired: row.staff_review_required,
+  lastDeliveryStatus: row.last_delivery_status, lastMessageAt: row.last_message_at,
+  createdAt: row.created_at, updatedAt: row.updated_at,
+});
+const loadAtsReferralLeadsFromSupabase = async (config: SupabaseAppDataConfig, agencyId: number) => {
+  const leads: AtsReferralLeadRecord[] = [];
+  for (let page = 0; page < 5; page += 1) {
+    const start = page * 1000;
+    const end = start + 999;
+    const params = new URLSearchParams({ select: "*", agency_id: `eq.${agencyId}`, order: "created_at.desc,id.asc", limit: "1000" });
+    const response = await fetch(`${config.baseUrl}/rest/v1/ats_referral_leads?${params}`, {
+      headers: supabaseHeaders(config, { accept: "application/json", "range-unit": "items", range: `${start}-${end}`, prefer: "statement_timeout=8000" }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error(`Unable to load referral leads (${response.status}): ${await readSupabaseError(response)}`);
+    const rows = await response.json() as AtsReferralLeadDbRow[];
+    leads.push(...rows.map(referralLeadFromDbRow));
+    if (rows.length < 1000) break;
+  }
+  return leads;
+};
+const saveAtsReferralLeadsToSupabase = async (config: SupabaseAppDataConfig, leads: AtsReferralLeadRecord[]) => {
+  for (let offset = 0; offset < leads.length; offset += 250) {
+    await upsertSupabaseTableRows(config, "ats_referral_leads", leads.slice(offset, offset + 250).map(referralLeadToDbRow), "agency_id,id");
+  }
+};
+const loadAtsReferralLeadsForAgency = async (env: Bindings, agencyId: number) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) {
+    if (!env.APP_DATA) throw new Error("Referral storage is not configured");
+    return loadAtsReferralLeads(env.APP_DATA, agencyId);
+  }
+  const migrationMarker = `ats-referral-leads-supabase-v1:${agencyId}`;
+  if (env.APP_DATA && !(await env.APP_DATA.get(migrationMarker))) {
+    const legacy = await loadAtsReferralLeads(env.APP_DATA, agencyId);
+    if (legacy.length) await saveAtsReferralLeadsToSupabase(config, legacy);
+    await env.APP_DATA.put(migrationMarker, now());
+  }
+  return loadAtsReferralLeadsFromSupabase(config, agencyId);
+};
+const saveAtsReferralLeadRecords = async (env: Bindings, agencyId: number, leads: AtsReferralLeadRecord[]) => {
+  if (!leads.length) return;
+  const config = getSupabaseAppDataConfig(env);
+  if (config) return saveAtsReferralLeadsToSupabase(config, leads);
+  if (!env.APP_DATA) throw new Error("Referral storage is not configured");
+  const current = await loadAtsReferralLeads(env.APP_DATA, agencyId);
+  const byId = new Map(current.map((lead) => [lead.id, lead]));
+  for (const lead of leads) byId.set(lead.id, lead);
+  await saveAtsReferralLeads(env.APP_DATA, agencyId, [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+};
+const isAtsReferralLeadWhatsappConsented = (lead: AtsReferralLeadRecord) => Boolean(
+  lead.whatsappConsentAt &&
+  (!lead.whatsappConsentWithdrawnAt || lead.whatsappConsentWithdrawnAt < lead.whatsappConsentAt),
+);
+const classifyReferralLeadWithAgent1 = async (
+  env: Bindings,
+  input: { referralId: string; name: string; phone: string; country: string; source: string },
+) => {
+  const fallback = {
+    classification: "unknown" as const,
+    status: "not_configured" as "classified" | "not_configured" | "failed",
+    eligibleForNextStep: false,
+    staffReviewRequired: true,
+  };
+  const webhookUrl = env.MAKE_WEBHOOK_URL_AGENT_1_LEAD_HUNTER?.trim();
+  if (!webhookUrl) return fallback;
+  try {
+    const url = new URL(webhookUrl);
+    if (url.protocol !== "https:" || !/\.make\.com$/i.test(url.hostname)) {
+      console.error("Agent 1 referral webhook rejected: expected HTTPS Make.com URL");
+      return { ...fallback, status: "failed" as const };
+    }
+    const payload = JSON.stringify({
+        event_id: input.referralId,
+        lead_id: input.referralId,
+        contact: { name: input.name, phone: input.phone || null },
+        channel: "website_referral_form",
+        source: input.source,
+        campaign_id: null,
+        referrer_id: null,
+        preferred_language: null,
+        consent: true,
+        message: `Consented referral from ${input.country || "unspecified country"}. The person agreed to share their contact with the agency.`,
+      });
+    let response: Response | null = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-idempotency-key": "agent-1-referral:" + input.referralId },
+          body: payload,
+          signal: AbortSignal.timeout(12_000),
+        });
+      } catch {
+        if (attempt === 2) return { ...fallback, status: "failed" as const };
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      if (response.ok || attempt === 2 || ![408, 429].includes(response.status) && response.status < 500) break;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    if (!response?.ok) return { ...fallback, status: "failed" as const };
+    let result: unknown;
+    try { result = await response.json(); } catch { result = null; }
+    const parseJson = (value: string): unknown => { try { return JSON.parse(value); } catch { return null; } };
+    if (typeof result === "string") result = parseJson(result);
+    if (isPlainObject(result) && typeof result.body === "string") result = parseJson(result.body);
+    if (isPlainObject(result) && typeof result.response === "string") result = parseJson(result.response);
+    const classifications = ["new_applicant", "existing_applicant", "referral", "general_enquiry", "unknown"] as const;
+    if (!isPlainObject(result) || result.lead_id !== input.referralId || !classifications.includes(result.classification as typeof classifications[number]) ||
+      result.consent !== true || typeof result.eligible_for_agent_2 !== "boolean" || typeof result.staff_review_required !== "boolean" ||
+      !Array.isArray(result.missing_fields) || !result.missing_fields.every((item) => typeof item === "string" && item.length <= 100)) {
+      return { ...fallback, status: "failed" as const };
+    }
+    const classification = result.classification as typeof classifications[number];
+    const eligibleForNextStep = result.eligible_for_agent_2 === true && Boolean(input.phone) &&
+      (classification === "new_applicant" || classification === "referral") && result.missing_fields.length === 0;
+    return {
+      classification,
+      status: "classified" as const,
+      eligibleForNextStep,
+      staffReviewRequired: result.staff_review_required === true || result.missing_fields.length > 0 ||
+        classification === "unknown" || classification === "general_enquiry" || classification === "existing_applicant",
+    };
+  } catch (error) {
+    console.error("Agent 1 referral classification failed", errMsg(error));
+    return { ...fallback, status: "failed" as const };
+  }
+};
+
 app.post(
   "/api/ats/public/referrals",
   safeApi(async (c) => {
@@ -16567,66 +18858,246 @@ app.post(
       return c.json({ error: "Permission to share the maid’s contact details is required" }, 400);
     }
 
-    const webhookUrl = c.env.MAKE_WEBHOOK_URL_MAID_REFERRAL?.trim();
-    if (!webhookUrl) {
-      return c.json({ error: "Maid referrals are temporarily unavailable" }, 503);
-    }
-    try {
-      if (new URL(webhookUrl).protocol !== "https:") {
-        return c.json({ error: "Maid referral webhook must use HTTPS" }, 503);
-      }
-    } catch {
-      return c.json({ error: "Maid referral webhook is not configured correctly" }, 503);
-    }
-
     const referralId = crypto.randomUUID();
-    try {
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scenario: "maid_referral",
-          referralId,
-          submittedAt: new Date().toISOString(),
-          source: "fdw_application_referral_chat",
-          referrerName,
-          referrerPhone,
-          maidName,
-          maidPhone,
-          maidNationality,
-          relationship,
-          notes,
-          consentToShareContact: true,
-        }),
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!response.ok) {
-        console.error("Maid referral Make delivery failed", response.status);
-        return c.json({ error: "Referral could not be delivered. Please try again later." }, 502);
-      }
-      // Also feed the FDW application-chatbot scenario (fdw_referral.created) so
-      // referrals land in its Google Sheet. Independent of the maid-referral webhook.
-      runChatBackgroundTask(
-        c,
-        dispatchFdwReferralCreated(c.env, referralId, {
-          submitted_at: new Date().toISOString(),
-          referrer_name: referrerName,
-          referrer_contact: referrerPhone,
-          relationship,
-          referred_name: maidName,
-          referred_contact: maidPhone,
-          note: [maidNationality, notes].filter(Boolean).join(" · "),
-          source_application_id:
-            toTrimmedString(body.sourceApplicationId) || toTrimmedString(body.source_application_id),
-        }),
-      );
-      return c.json({ referralId, message: "Referral submitted successfully" }, 201);
-    } catch (error) {
-      console.error("Maid referral Make request failed", error);
-      return c.json({ error: "Referral could not be delivered. Please try again later." }, 502);
+    if (!getSupabaseAppDataConfig(c.env) && !c.env.APP_DATA) return c.json({ error: "Referral storage is not configured" }, 503);
+    const submittedAt = now();
+    const referralLeads = await loadAtsReferralLeadsForAgency(c.env, 1);
+    if (referralLeads.length >= 5000) {
+      return c.json({ error: "The referral contact list is full. Archive older leads before accepting more." }, 503);
     }
+    const normalizedMaidPhone = canonicalReferralPhone(maidPhone);
+    const possibleDuplicate = normalizedMaidPhone
+      ? referralLeads.find((lead) => canonicalReferralPhone(lead.phone) === normalizedMaidPhone)
+      : undefined;
+    const referralLead: AtsReferralLeadRecord = {
+      id: referralId,
+      agencyId: 1,
+      name: maidName,
+      phone: normalizedMaidPhone || maidPhone,
+      country: maidNationality,
+      source: "Website referral form",
+      preferredLanguage: "",
+      campaignId: "",
+      whatsappConsentAt: null,
+      whatsappConsentWithdrawnAt: null,
+      whatsappConsentSource: "",
+      shareContactConsentAt: submittedAt,
+      referrerName,
+      referrerPhone: canonicalReferralPhone(referrerPhone) || referrerPhone,
+      notes: [relationship, notes].filter(Boolean).join(" · ").slice(0, 1000),
+      interestStatus: "new",
+      leadClassification: "unknown",
+      leadHunterStatus: "not_configured",
+      eligibleForNextStep: false,
+      staffReviewRequired: true,
+      lastDeliveryStatus: "not_sent",
+      lastMessageAt: null,
+      createdAt: submittedAt,
+      updatedAt: submittedAt,
+      ...(possibleDuplicate ? { possibleDuplicateOf: possibleDuplicate.id } : {}),
+    };
+    referralLeads.unshift(referralLead);
+    await saveAtsReferralLeadRecords(c.env, 1, [referralLead]);
+
+    const leadHunter = await classifyReferralLeadWithAgent1(c.env, {
+      referralId,
+      name: maidName,
+      phone: normalizedMaidPhone,
+      country: maidNationality,
+      source: "Website referral form",
+    });
+    referralLead.leadClassification = leadHunter.classification;
+    referralLead.leadHunterStatus = leadHunter.status;
+    referralLead.eligibleForNextStep = leadHunter.eligibleForNextStep && !possibleDuplicate;
+    referralLead.staffReviewRequired = leadHunter.staffReviewRequired || Boolean(possibleDuplicate);
+    referralLead.updatedAt = now();
+    await saveAtsReferralLeadRecords(c.env, 1, [referralLead]);
+
+    // Sharing a referral with the agency is not WhatsApp marketing consent.
+    // This separately queues a source-system sync; campaign eligibility still
+    // requires its own documented WhatsApp opt-in.
+    const referralSheetConfigured = Boolean(makeWebhookUrlForOutbox(c.env, "maid_referral_sheet"));
+    const referralSheetState = referralSheetConfigured ? "queued" : "not_configured";
+    if (referralSheetConfigured) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "maid_referral_sheet", `maid-referral:${referralId}:sheet`, 1, {
+        scenario: "maid_referral", referralId, submittedAt, source: "fdw_application_referral_chat",
+        referrerName, referrerPhone, maidName, maidPhone, maidNationality, relationship, notes,
+        consentToShareContact: true,
+      }).catch((error) => console.error("Maid referral outbox enqueue failed", errMsg(error))));
+    const referralSheetSynced = false;
+    runChatBackgroundTask(
+      c,
+      dispatchFdwReferralCreated(c.env, referralId, {
+        submitted_at: submittedAt,
+        referrer_name: referrerName,
+        referrer_contact: referrerPhone,
+        relationship,
+        referred_name: maidName,
+        referred_contact: maidPhone,
+        note: [maidNationality, notes].filter(Boolean).join(" · "),
+        source_application_id:
+          toTrimmedString(body.sourceApplicationId) || toTrimmedString(body.source_application_id),
+      }),
+    );
+    return c.json({ referralId, message: "Referral submitted successfully", referralSheetSynced, referralSheetDeliveryStatus: referralSheetState, classification: leadHunter.classification }, 201);
   }),
 );
+
+app.get("/api/ats/referral-leads", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  if (!getSupabaseAppDataConfig(c.env) && !c.env.APP_DATA) return c.json({ error: "Referral storage is not configured" }, 503);
+  const leads = await loadAtsReferralLeadsForAgency(c.env, admin.agencyId);
+  const withConsent = leads.map((lead) => ({
+    ...lead,
+    whatsappConsentActive: isAtsReferralLeadWhatsappConsented(lead),
+    whatsappOptedOut: Boolean(lead.whatsappConsentWithdrawnAt &&
+      (!lead.whatsappConsentAt || lead.whatsappConsentWithdrawnAt >= lead.whatsappConsentAt)),
+  }));
+  const summary = {
+    total: leads.length,
+    eligible: withConsent.filter((lead) => lead.whatsappConsentActive).length,
+    awaitingConsent: withConsent.filter((lead) => !lead.whatsappConsentActive && !lead.whatsappOptedOut).length,
+    optedOut: withConsent.filter((lead) => lead.whatsappOptedOut).length,
+    interested: leads.filter((lead) => lead.interestStatus === "interested" || lead.interestStatus === "replied").length,
+    needsReview: leads.filter((lead) => lead.staffReviewRequired === true).length,
+    acceptedByMake: leads.filter((lead) => lead.lastDeliveryStatus === "accepted").length,
+    failed: leads.filter((lead) => lead.lastDeliveryStatus === "failed").length,
+    countries: new Set(leads.map((lead) => toTrimmedString(lead.country).toLowerCase()).filter(Boolean)).size,
+  };
+  const query = (c.req.query("q") || "").trim().toLowerCase();
+  const country = (c.req.query("country") || "").trim().toLowerCase();
+  const filtered = withConsent.filter((lead) => {
+    const matchesQuery = !query || `${lead.name} ${lead.phone} ${lead.country} ${lead.source} ${lead.referrerName}`.toLowerCase().includes(query);
+    const matchesCountry = !country || toTrimmedString(lead.country).toLowerCase() === country;
+    return matchesQuery && matchesCountry;
+  });
+  const pageSize = Math.min(200, Math.max(1, Number(c.req.query("pageSize")) || 100));
+  const page = Math.max(1, Number(c.req.query("page")) || 1);
+  const start = (page - 1) * pageSize;
+  return c.json({
+    leads: filtered.slice(start, start + pageSize),
+    total: filtered.length,
+    page,
+    pageSize,
+    pageCount: Math.ceil(filtered.length / pageSize),
+    countries: [...new Set(leads.map((lead) => toTrimmedString(lead.country)).filter(Boolean))].sort(),
+    summary,
+  });
+});
+
+app.post("/api/ats/referral-leads/import", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  if (!getSupabaseAppDataConfig(c.env) && !c.env.APP_DATA) return c.json({ error: "Referral storage is not configured" }, 503);
+  const body = await parseBody<{ leads?: unknown[]; defaultSource?: string }>(c.req.raw);
+  if (!Array.isArray(body?.leads) || body.leads.length === 0 || body.leads.length > 500) {
+    return c.json({ error: "Import between 1 and 500 referral leads per upload" }, 400);
+  }
+  const leads = await loadAtsReferralLeadsForAgency(c.env, admin.agencyId);
+  const existingPhones = new Set(leads.map((lead) => canonicalReferralPhone(lead.phone)).filter(Boolean));
+  const seenPhones = new Set<string>();
+  const timestamp = now();
+  let duplicateCount = 0;
+  let invalidCount = 0;
+  const accepted: AtsReferralLeadRecord[] = [];
+  for (const candidate of body.leads) {
+    if (!isPlainObject(candidate)) { invalidCount++; continue; }
+    const name = toTrimmedString(candidate.name).slice(0, 160);
+    const phone = canonicalReferralPhone(candidate.phone);
+    const country = toTrimmedString(candidate.country).slice(0, 100);
+    const source = (toTrimmedString(candidate.source) || toTrimmedString(body.defaultSource) || "Spreadsheet import").slice(0, 160);
+    const preferredLanguage = toTrimmedString(candidate.preferredLanguage).slice(0, 80);
+    const whatsappConsent = candidate.whatsappConsent === true;
+    const whatsappConsentSource = toTrimmedString(candidate.whatsappConsentSource).slice(0, 240);
+    if (!name || !phone || (whatsappConsent && whatsappConsentSource.length < 5)) { invalidCount++; continue; }
+    if (existingPhones.has(phone) || seenPhones.has(phone)) { duplicateCount++; continue; }
+    seenPhones.add(phone);
+    accepted.push({
+      id: crypto.randomUUID(), agencyId: admin.agencyId, name, phone, country, source,
+      preferredLanguage, campaignId: toTrimmedString(candidate.campaignId).slice(0, 160),
+      whatsappConsentAt: whatsappConsent ? timestamp : null,
+      whatsappConsentWithdrawnAt: null,
+      whatsappConsentSource: whatsappConsent ? whatsappConsentSource : "",
+      shareContactConsentAt: null, referrerName: "", referrerPhone: "",
+      notes: toTrimmedString(candidate.notes).slice(0, 1000),
+      interestStatus: "new", leadClassification: "unknown", leadHunterStatus: "not_configured",
+      eligibleForNextStep: false, staffReviewRequired: true,
+      lastDeliveryStatus: "not_sent", lastMessageAt: null,
+      createdAt: timestamp, updatedAt: timestamp,
+    });
+  }
+  if (leads.length + accepted.length > 5000) return c.json({ error: "This agency already has 5,000 leads. Export or archive records before importing more." }, 413);
+  if (accepted.length) await saveAtsReferralLeadRecords(c.env, admin.agencyId, accepted);
+  return c.json({ imported: accepted.length, duplicateCount, invalidCount, total: leads.length + accepted.length }, 201);
+});
+
+app.post("/api/ats/referral-leads/google-sheets/read", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{ range?: unknown }>(c.req.raw);
+  const range = toTrimmedString(body?.range);
+  if (!range || range.length > 160 || !range.includes("!")) return c.json({ error: "Enter a sheet range such as Referrals!A1:Z501" }, 400);
+  const data = await loadData(c.env, { readOnly: true });
+  const reportConfig = readAgencyReportConfig(data, admin.agencyId);
+  const resolved = resolveGoogleSheetsCredentials(c.env, reportConfig.spreadsheetIdOrUrl);
+  if (!resolved.credentials) return c.json({ error: resolved.reason || "Google Sheets is not configured for this agency" }, 503);
+  const values = await readGoogleSheetsRange(resolved.credentials, range);
+  return c.json({ values, rowCount: values.length, columnLimit: 50, rowLimit: 501 });
+}));
+
+app.patch("/api/ats/referral-leads/:leadId", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  if (!getSupabaseAppDataConfig(c.env) && !c.env.APP_DATA) return c.json({ error: "Referral storage is not configured" }, 503);
+  const body = await parseBody<Record<string, unknown>>(c.req.raw);
+  if (!body) return c.json({ error: "JSON updates are required" }, 400);
+  const leads = await loadAtsReferralLeadsForAgency(c.env, admin.agencyId);
+  const lead = leads.find((item) => item.id === c.req.param("leadId"));
+  if (!lead) return c.json({ error: "Referral lead not found" }, 404);
+  if (typeof body.whatsappConsent === "boolean") {
+    if (body.whatsappConsent) {
+      const source = toTrimmedString(body.whatsappConsentSource).slice(0, 240);
+      if (source.length < 5) return c.json({ error: "Record where and when WhatsApp permission was given" }, 400);
+      lead.whatsappConsentAt = now();
+      lead.whatsappConsentSource = source;
+    } else {
+      lead.whatsappConsentWithdrawnAt = now();
+    }
+  }
+  if (typeof body.interestStatus === "string") {
+    if (!["new", "interested", "not_interested", "replied"].includes(body.interestStatus)) {
+      return c.json({ error: "Unsupported referral status" }, 400);
+    }
+    lead.interestStatus = body.interestStatus as AtsReferralLeadRecord["interestStatus"];
+  }
+  lead.updatedAt = now();
+  await saveAtsReferralLeadRecords(c.env, admin.agencyId, [lead]);
+  if (typeof body.whatsappConsent === "boolean") {
+    await updateWhatsappConsentLedger(
+      getSupabaseAppDataConfig(c.env),
+      admin.agencyId,
+      lead.phone,
+      body.whatsappConsent,
+      body.whatsappConsent ? lead.whatsappConsentSource : "Referral lead WhatsApp opt-out",
+    );
+    if (c.env.APP_DATA) {
+      const key = `${WHATSAPP_OPT_OUT_CONTACT_PREFIX}${lead.phone.replace(/\D/g, "")}`;
+      const rawState = await c.env.APP_DATA.get(key);
+      const currentState = rawState ? JSON.parse(rawState) as Partial<WhatsAppOptOutState> : {};
+      await c.env.APP_DATA.put(key, JSON.stringify({
+        ...currentState,
+        optedOut: !body.whatsappConsent,
+        consentSource: body.whatsappConsent ? lead.whatsappConsentSource : "Referral lead WhatsApp opt-out",
+        consentedAt: body.whatsappConsent ? lead.whatsappConsentAt ?? now() : currentState.consentedAt,
+        processedMessageIds: Array.isArray(currentState.processedMessageIds) ? currentState.processedMessageIds.slice(-100) : [],
+      } satisfies WhatsAppOptOutState), { expirationTtl: 180 * 86400 });
+    }
+  }
+  return c.json({
+    lead: {
+      ...lead,
+      whatsappConsentActive: isAtsReferralLeadWhatsappConsented(lead),
+      whatsappOptedOut: Boolean(lead.whatsappConsentWithdrawnAt &&
+        (!lead.whatsappConsentAt || lead.whatsappConsentWithdrawnAt >= lead.whatsappConsentAt)),
+    },
+  });
+});
 
 app.get(
   "/api/ats/public/applications/:applicationId",
@@ -16646,13 +19117,723 @@ app.get(
   }),
 );
 
-app.get("/api/ats/dashboard", requireAgencyAdminAuth, async (c) => {
+type AtsApplicantWorkflowRow = {
+  app_id: string;
+  application_id: string;
+  agency_id: number;
+  conversation_id: string;
+  profile_state: Record<string, unknown>;
+  missing_fields: string[];
+  last_reply: string;
+  confirmation_summary: string;
+  profile_ready_for_confirmation: boolean;
+  processing_consent_at: string | null;
+  processing_consent_source: string;
+  applicant_confirmed_at: string | null;
+  publication_consent_at: string | null;
+  publication_consent_source: string;
+  publication_consent_withdrawn_at: string | null;
+  public_profile_draft: Record<string, unknown> | null;
+  draft_status: string;
+  staff_review_note: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  published_reference_code: string;
+  published_at: string | null;
+  published_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const applicantProfileAgentFields = [
+  "nationality", "years_of_experience", "previous_countries_worked_in", "childcare_experience",
+  "newborn_care_experience", "elderly_care_experience", "disabled_care_experience",
+  "housekeeping_experience", "cooking_skills", "languages", "available_date",
+  "expected_salary", "employment_preference",
+] as const;
+const applicantProfileRequiredFields = ["nationality", "years_of_experience", "languages", "available_date"] as const;
+
+const readPublicAtsApplication = async (env: Bindings, applicationId: string, token: string) => {
+  const data = await loadData(env, { readOnly: true });
+  const application = data.ats.applications.find((item) => item.id === applicationId && item.applicantAccessToken === token);
+  if (!application) return null;
+  const profile = data.ats.profiles.find((item) => item.applicationId === applicationId);
+  return profile ? { application, profile } : null;
+};
+
+const getApplicantProfileWorkflow = async (config: SupabaseAppDataConfig, applicationId: string, agencyId: number) => {
+  const rows = await fetchSupabaseTableRows<AtsApplicantWorkflowRow>(config, "helped_ats_applicant_workflows", {
+    select: "*", filters: { app_id: config.rowId, application_id: applicationId, agency_id: agencyId }, limit: 1,
+  });
+  return rows[0] ?? null;
+};
+
+const saveApplicantProfileWorkflow = async (config: SupabaseAppDataConfig, row: AtsApplicantWorkflowRow) => {
+  await upsertSupabaseTableRows(config, "helped_ats_applicant_workflows", [row], "app_id,application_id");
+};
+
+type AtsDataSubjectRequestRow = {
+  id: string; app_id: string; application_id: string; agency_id: number;
+  request_type: "ACCESS" | "CORRECTION" | "ERASURE";
+  status: "PENDING" | "IN_REVIEW" | "FULFILLED" | "DECLINED";
+  applicant_note: string; resolution_note: string; submitted_at: string;
+  resolved_at: string | null; resolved_by: string | null; updated_at: string;
+};
+
+const getApplicantDataSubjectRequests = async (config: SupabaseAppDataConfig, applicationId: string, agencyId: number) =>
+  fetchSupabaseTableRows<AtsDataSubjectRequestRow>(config, "ats_data_subject_requests", {
+    select: "id,app_id,application_id,agency_id,request_type,status,applicant_note,resolution_note,submitted_at,resolved_at,resolved_by,updated_at",
+    filters: { app_id: config.rowId, application_id: applicationId, agency_id: agencyId },
+    orderBy: "submitted_at.desc", limit: 20,
+  });
+
+const hidePublishedAtsProfile = async (env: Bindings, config: SupabaseAppDataConfig, agencyId: number, referenceCode: string) => {
+  const maid = isNormalizedSupabaseEnabled(env)
+    ? await getMaidFromSupabaseNormalized(config, referenceCode)
+    : await getMaidFromSupabaseAppView(config, referenceCode);
+  if (!maid) return true;
+  if (maid.agencyId !== agencyId) return false;
+  if (!maid.isPublic) return true;
+  const updated = isNormalizedSupabaseEnabled(env)
+    ? await updateMaidVisibilityInSupabaseNormalized(config, referenceCode, false)
+    : await updateMaidVisibilityInSupabaseAppData(config, referenceCode, false);
+  return Boolean(updated && !updated.isPublic);
+};
+
+const parseMakeAgentJson = (value: unknown): Record<string, unknown> | null => {
+  const parseText = (text: string): unknown => {
+    const clean = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    try { return JSON.parse(clean); } catch {
+      const match = clean.match(/\{[\s\S]*\}/);
+      if (!match) return null;
+      try { return JSON.parse(match[0]); } catch { return null; }
+    }
+  };
+  let current: unknown = value;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (typeof current === "string") current = parseText(current);
+    if (!isPlainObject(current)) return null;
+    if (typeof current.applicant_id === "string") return current;
+    current = current.response ?? current.body ?? current.output ?? current.result;
+  }
+  return null;
+};
+
+const callApplicantProfileAgent = async (webhook: string | undefined, payload: Record<string, unknown>) => {
+  const endpoint = webhook?.trim();
+  if (!endpoint) throw new Error("This applicant profile assistant is not configured yet");
+  let url: URL;
+  try { url = new URL(endpoint); } catch { throw new Error("Applicant profile assistant webhook is invalid"); }
+  if (url.protocol !== "https:" || !/\.make\.com$/i.test(url.hostname)) {
+    throw new Error("Applicant profile assistant must use an HTTPS Make.com webhook");
+  }
+  const body = JSON.stringify(payload);
+  const idempotencyKey = `applicant-profile-agent:${await sha256Hex(body)}`;
+  let lastError = "Applicant profile assistant failed";
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-idempotency-key": idempotencyKey },
+        body,
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch {
+      lastError = "Applicant profile assistant could not be reached";
+      if (attempt < 2) { await new Promise((resolve) => setTimeout(resolve, 250)); continue; }
+      throw new Error(`${lastError} after ${attempt} attempts`);
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      lastError = `Applicant profile assistant returned HTTP ${response.status}`;
+      if (attempt < 2 && (response.status === 408 || response.status === 429 || response.status >= 500)) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      throw new Error(`${lastError} after ${attempt} attempt${attempt === 1 ? "" : "s"}`);
+    }
+    const result = parseMakeAgentJson(text);
+    if (result) return result;
+    lastError = "Applicant profile assistant returned an invalid JSON response";
+    if (attempt < 2) { await new Promise((resolve) => setTimeout(resolve, 250)); continue; }
+  }
+  throw new Error(`${lastError} after 2 attempts`);
+};
+
+const applicantProfileStateFromAts = (profile: AtsApplicationProfileRecord): Record<string, unknown> => ({
+  nationality: profile.nationality || null,
+  years_of_experience: Number.isFinite(profile.yearsOfExperience) ? profile.yearsOfExperience : null,
+  previous_countries_worked_in: profile.previousCountriesWorkedIn ?? [],
+  childcare_experience: profile.childcareExperience ?? null,
+  newborn_care_experience: profile.newbornCareExperience ?? null,
+  elderly_care_experience: profile.elderlyCareExperience ?? null,
+  disabled_care_experience: profile.disabledCareExperience ?? null,
+  housekeeping_experience: profile.housekeepingExperience ?? null,
+  cooking_skills: profile.cookingSkills ?? [],
+  languages: profile.languageSkills ?? [],
+  available_date: profile.availableDate || null,
+  expected_salary: profile.expectedSalary ?? null,
+  employment_preference: profile.employmentPreference || null,
+});
+
+const validateApplicantProfileFields = (value: unknown) => {
+  if (!isPlainObject(value)) return null;
+  const fields: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (!(applicantProfileAgentFields as readonly string[]).includes(key)) return null;
+    if (raw === null) { fields[key] = null; continue; }
+    if (["cooking_skills", "languages", "previous_countries_worked_in"].includes(key)) {
+      if (!Array.isArray(raw) || raw.length > 30 || raw.some((entry) => typeof entry !== "string" || entry.length > 120)) return null;
+      fields[key] = raw.map((entry) => String(entry).trim()).filter(Boolean);
+    } else if (["years_of_experience", "childcare_experience", "newborn_care_experience", "elderly_care_experience", "disabled_care_experience", "housekeeping_experience", "expected_salary"].includes(key)) {
+      if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0 || raw > 100_000) return null;
+      fields[key] = raw;
+    } else {
+      if (typeof raw !== "string" || raw.length > 500) return null;
+      fields[key] = raw.trim();
+    }
+  }
+  return fields;
+};
+
+const validatePublicProfileDraft = (value: unknown) => {
+  if (!isPlainObject(value)) return null;
+  const allowed = new Set(["display_name", "summary", "skills", "languages", "experience_summary", "availability", "approved_media_ids"]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) return null;
+  const nullableText = (key: string, max: number) => value[key] == null ? null :
+    typeof value[key] === "string" && (value[key] as string).length <= max ? (value[key] as string).trim() : undefined;
+  const stringList = (key: string, maxItems: number, maxLength: number) => {
+    const list = value[key];
+    if (!Array.isArray(list) || list.length > maxItems || list.some((item) => typeof item !== "string" || item.length > maxLength)) return undefined;
+    return list.map((item) => item.trim()).filter(Boolean);
+  };
+  const displayName = nullableText("display_name", 100);
+  const summary = nullableText("summary", 1200);
+  const experience = nullableText("experience_summary", 1200);
+  const availability = nullableText("availability", 200);
+  const skills = stringList("skills", 30, 120);
+  const languages = stringList("languages", 30, 80);
+  const mediaIds = stringList("approved_media_ids", 20, 120);
+  if (displayName === undefined || summary === undefined || experience === undefined || availability === undefined || !skills || !languages || !mediaIds || mediaIds.length !== 0) return null;
+  return {
+    display_name: displayName, summary, skills, languages,
+    experience_summary: experience, availability, approved_media_ids: [] as string[],
+  };
+};
+
+const writeApplicantWorkflowEvent = async (config: SupabaseAppDataConfig, event: {
+  applicationId: string; agencyId: number; eventType: string; actor: string; status?: string; payload?: Record<string, unknown>;
+}) => {
+  const response = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify([{
+      event_type: event.eventType, entity_type: "application", entity_id: event.applicationId,
+      actor: event.actor, status: event.status ?? "completed", payload: { agencyId: event.agencyId, ...event.payload },
+    }]),
+  });
+  return response.ok;
+};
+
+app.get("/api/ats/public/applications/:applicationId/data-requests", safeApi(async (c) => {
+  const applicationId = c.req.param("applicationId");
+  const token = toTrimmedString(new URL(c.req.url).searchParams.get("token"));
+  if (!token) return c.json({ error: "Application access token is required" }, 400);
+  const found = await readPublicAtsApplication(c.env, applicationId, token);
+  if (!found) return c.json({ error: "Application not found" }, 404);
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant data request tracking requires normalized ATS storage" }, 503);
+  const requests = await getApplicantDataSubjectRequests(config, applicationId, found.application.agencyId);
+  return c.json({ requests: requests.map(({ id, request_type, status, applicant_note, resolution_note, submitted_at, resolved_at }) => ({ id, requestType: request_type, status, applicantNote: applicant_note, resolutionNote: resolution_note, submittedAt: submitted_at, resolvedAt: resolved_at })) });
+}));
+
+app.post("/api/ats/public/applications/:applicationId/data-requests", safeApi(async (c) => {
+  const applicationId = c.req.param("applicationId");
+  const body = await parseBody<{ token?: unknown; requestType?: unknown; note?: unknown }>(c.req.raw);
+  const token = toTrimmedString(body?.token);
+  if (!token) return c.json({ error: "Application access token is required" }, 400);
+  const found = await readPublicAtsApplication(c.env, applicationId, token);
+  if (!found) return c.json({ error: "Application not found" }, 404);
+  const requestType = toTrimmedString(body?.requestType).toUpperCase();
+  if (!["ACCESS", "CORRECTION", "ERASURE"].includes(requestType)) return c.json({ error: "Choose access, correction, or erasure" }, 400);
+  const note = typeof body?.note === "string" ? body.note.trim() : "";
+  if (note.length > 500) return c.json({ error: "Request details must be 500 characters or fewer" }, 400);
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant data request tracking requires normalized ATS storage" }, 503);
+  const existing = await getApplicantDataSubjectRequests(config, applicationId, found.application.agencyId);
+  const activeRequest = existing.find((item) => item.request_type === requestType && ["PENDING", "IN_REVIEW"].includes(item.status));
+  if (activeRequest) return c.json({ request: { id: activeRequest.id, requestType: activeRequest.request_type, status: activeRequest.status, applicantNote: activeRequest.applicant_note, resolutionNote: activeRequest.resolution_note, submittedAt: activeRequest.submitted_at, resolvedAt: activeRequest.resolved_at }, alreadyOpen: true }, 200);
+
+  const timestamp = now();
+  const requestRow: AtsDataSubjectRequestRow = {
+    id: crypto.randomUUID(), app_id: config.rowId, application_id: applicationId,
+    agency_id: found.application.agencyId, request_type: requestType as AtsDataSubjectRequestRow["request_type"],
+    status: "PENDING", applicant_note: note, resolution_note: "", submitted_at: timestamp,
+    resolved_at: null, resolved_by: null, updated_at: timestamp,
+  };
+  const insertResponse = await fetch(`${config.baseUrl}/rest/v1/ats_data_subject_requests?select=id,request_type,status,applicant_note,resolution_note,submitted_at,resolved_at`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify([requestRow]),
+  });
+  if (!insertResponse.ok) {
+    if (insertResponse.status === 409) return c.json({ error: "A request of this type is already being reviewed. Refresh to see its status." }, 409);
+    throw new Error(`Unable to save applicant data request (${insertResponse.status}): ${await readSupabaseError(insertResponse)}`);
+  }
+  const [saved] = await insertResponse.json() as Array<Pick<AtsDataSubjectRequestRow, "id" | "request_type" | "status" | "applicant_note" | "resolution_note" | "submitted_at" | "resolved_at">>;
+  const auditLogged = await writeApplicantWorkflowEvent(config, { applicationId, agencyId: found.application.agencyId, eventType: "applicant.data_subject_request_submitted", actor: "applicant", payload: { requestId: requestRow.id, requestType: requestRow.request_type } }).catch((error) => { console.error("Applicant data request audit event failed", errMsg(error)); return false; });
+  return c.json({ request: { id: saved.id, requestType: saved.request_type, status: saved.status, applicantNote: saved.applicant_note, resolutionNote: saved.resolution_note, submittedAt: saved.submitted_at, resolvedAt: saved.resolved_at }, auditLogged }, 201);
+}));
+
+app.get("/api/ats/public/applications/:applicationId/interview", safeApi(async (c) => {
+  const applicationId = c.req.param("applicationId");
+  const token = toTrimmedString(new URL(c.req.url).searchParams.get("token"));
+  if (!token) return c.json({ error: "Application access token is required" }, 400);
+  const found = await readPublicAtsApplication(c.env, applicationId, token);
+  if (!found) return c.json({ error: "Application not found" }, 404);
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Interview confirmation requires normalized ATS storage" }, 503);
+  const params = new URLSearchParams({
+    select: "id,scheduled_at,duration_minutes,mode,meeting_url,status,applicant_confirmed_at",
+    application_id: "eq." + applicationId, agency_id: "eq." + found.application.agencyId,
+    order: "scheduled_at.desc", limit: "10",
+  });
+  const response = await fetch(config.baseUrl + "/rest/v1/interviews?" + params, { headers: supabaseHeaders(config, { accept: "application/json" }) });
+  if (!response.ok) throw new Error("Unable to load interview schedule (" + response.status + "): " + await readSupabaseError(response));
+  const rows = await response.json() as Array<{ id: string; scheduled_at: string; duration_minutes: number; mode: string; meeting_url: string | null; status: string; applicant_confirmed_at: string | null }>;
+  const interview = rows.find((row) => !["CANCELLED", "COMPLETED", "PASSED", "FAILED", "NO_SHOW"].includes(row.status)) ?? null;
+  return c.json({ interview });
+}));
+
+app.post("/api/ats/public/applications/:applicationId/interview/confirm", safeApi(async (c) => {
+  const applicationId = c.req.param("applicationId");
+  const body = await parseBody<{ token?: unknown; interviewId?: unknown }>(c.req.raw);
+  const token = toTrimmedString(body?.token);
+  const interviewId = toTrimmedString(body?.interviewId);
+  if (!token || !interviewId) return c.json({ error: "Application access token and interview ID are required" }, 400);
+  const found = await readPublicAtsApplication(c.env, applicationId, token);
+  if (!found) return c.json({ error: "Application not found" }, 404);
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Interview confirmation requires normalized ATS storage" }, 503);
+  const params = new URLSearchParams({
+    select: "id,scheduled_at,status,employer_confirmed_at,applicant_confirmed_at",
+    id: "eq." + interviewId, application_id: "eq." + applicationId, agency_id: "eq." + found.application.agencyId, limit: "1",
+  });
+  const readResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + params, { headers: supabaseHeaders(config, { accept: "application/json" }) });
+  if (!readResponse.ok) throw new Error("Unable to verify interview ownership (" + readResponse.status + "): " + await readSupabaseError(readResponse));
+  const [interview] = await readResponse.json() as Array<{ id: string; scheduled_at: string; status: string; employer_confirmed_at: string | null; applicant_confirmed_at: string | null }>;
+  if (!interview) return c.json({ error: "Interview was not found for this application" }, 404);
+  if (["CANCELLED", "COMPLETED", "PASSED", "FAILED", "NO_SHOW"].includes(interview.status)) return c.json({ error: "This interview is no longer open for confirmation" }, 409);
+  if (Date.parse(interview.scheduled_at) <= Date.now()) return c.json({ error: "This interview time has passed. Contact agency staff for next steps." }, 409);
+  if (interview.applicant_confirmed_at) return c.json({ confirmed: true, alreadyConfirmed: true });
+
+  const confirmedAt = now();
+  const patchParams = new URLSearchParams({ id: "eq." + interviewId, application_id: "eq." + applicationId, agency_id: "eq." + found.application.agencyId, applicant_confirmed_at: "is.null", select: "id,applicant_confirmed_at" });
+  const patch = { applicant_confirmed_at: confirmedAt, status: interview.employer_confirmed_at ? "CONFIRMED" : "SCHEDULED", updated_at: confirmedAt, updated_by: "applicant" };
+  const patchResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + patchParams, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }), body: JSON.stringify(patch),
+  });
+  if (!patchResponse.ok) throw new Error("Unable to save interview confirmation (" + patchResponse.status + "): " + await readSupabaseError(patchResponse));
+  const saved = await patchResponse.json() as Array<{ id: string }>;
+  if (!saved.length) return c.json({ confirmed: true, alreadyConfirmed: true });
+  const eventResponse = await fetch(config.baseUrl + "/rest/v1/workflow_events", {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify({ event_type: "interview.applicant_confirmed", entity_type: "interview", entity_id: interviewId, actor: "applicant", status: "completed", payload: { agencyId: found.application.agencyId, applicationId, scheduled_at: interview.scheduled_at } }),
+  });
+  return c.json({ confirmed: true, confirmedAt, auditLogged: eventResponse.ok });
+}));
+
+app.get("/api/ats/public/applications/:applicationId/profile-agent", safeApi(async (c) => {
+  const applicationId = c.req.param("applicationId");
+  const token = toTrimmedString(new URL(c.req.url).searchParams.get("token"));
+  if (!token) return c.json({ error: "token is required" }, 400);
+  const found = await readPublicAtsApplication(c.env, applicationId, token);
+  if (!found) return c.json({ error: "Application not found" }, 404);
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant profile assistant requires normalized ATS storage" }, 503);
+  const workflow = await getApplicantProfileWorkflow(config, applicationId, found.application.agencyId);
+  return c.json({ workflow: workflow ? {
+    profileState: workflow.profile_state, missingFields: workflow.missing_fields,
+    reply: workflow.last_reply, confirmationSummary: workflow.confirmation_summary,
+    readyForConfirmation: workflow.profile_ready_for_confirmation,
+    processingConsent: Boolean(workflow.processing_consent_at), applicantConfirmed: Boolean(workflow.applicant_confirmed_at),
+    publicationConsent: Boolean(workflow.publication_consent_at && (!workflow.publication_consent_withdrawn_at || workflow.publication_consent_withdrawn_at < workflow.publication_consent_at)),
+    draftStatus: workflow.draft_status, draft: workflow.public_profile_draft,
+  } : null, agents: {
+    collectorConfigured: Boolean(c.env.MAKE_WEBHOOK_URL_AGENT_2_PROFILE_COLLECTOR?.trim()),
+    profileBuilderConfigured: Boolean(c.env.MAKE_WEBHOOK_URL_AGENT_3_PROFILE_BUILDER?.trim()),
+  } });
+}));
+
+app.post("/api/ats/public/applications/:applicationId/profile-agent", safeApi(async (c) => {
+  const applicationId = c.req.param("applicationId");
+  const body = await parseBody<Record<string, unknown>>(c.req.raw);
+  const token = toTrimmedString(body?.token);
+  if (!token) return c.json({ error: "Application access token is required" }, 400);
+  const found = await readPublicAtsApplication(c.env, applicationId, token);
+  if (!found) return c.json({ error: "Application not found" }, 404);
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant profile assistant requires normalized ATS storage" }, 503);
+  const action = toTrimmedString(body?.action);
+  const current = await getApplicantProfileWorkflow(config, applicationId, found.application.agencyId);
+  const timestamp = now();
+  const base: AtsApplicantWorkflowRow = current ?? {
+    app_id: config.rowId, application_id: applicationId, agency_id: found.application.agencyId,
+    conversation_id: crypto.randomUUID(), profile_state: applicantProfileStateFromAts(found.profile), missing_fields: [],
+    last_reply: "", confirmation_summary: "", profile_ready_for_confirmation: false,
+    processing_consent_at: null, processing_consent_source: "", applicant_confirmed_at: null,
+    publication_consent_at: null, publication_consent_source: "", publication_consent_withdrawn_at: null, public_profile_draft: null,
+    draft_status: "not_started", staff_review_note: "", reviewed_by: null, reviewed_at: null,
+    published_reference_code: "", published_at: null, published_by: null,
+    created_at: timestamp, updated_at: timestamp,
+  };
+
+  if (action === "chat") {
+    if (base.applicant_confirmed_at) return c.json({ error: "Your profile is already confirmed. Contact agency staff if you need to change it." }, 409);
+    const message = toTrimmedString(body?.message);
+    if (!message || message.length > 2000) return c.json({ error: "Enter a message of up to 2,000 characters" }, 400);
+    if (!base.processing_consent_at) {
+      if (body?.consentToAiProcessing !== true) return c.json({ error: "Applicant permission is required before using the profile assistant" }, 400);
+      const consentSource = toTrimmedString(body?.consentSource);
+      if (consentSource.length < 8 || consentSource.length > 300) return c.json({ error: "Record a valid applicant consent statement" }, 400);
+      base.processing_consent_at = timestamp;
+      base.processing_consent_source = consentSource;
+    }
+    const profileState = validateApplicantProfileFields(base.profile_state);
+    if (!profileState) return c.json({ error: "Saved applicant profile fields need staff review before continuing" }, 409);
+    const preferredLanguage = toTrimmedString(body?.preferredLanguage) || "English";
+    if (!new Set(["English", "Nepali", "Bahasa Indonesia", "Tagalog", "Hindi", "Burmese", "Sinhala", "Tamil"]).has(preferredLanguage)) {
+      return c.json({ error: "Choose a supported assistant language" }, 400);
+    }
+    let result: Record<string, unknown>;
+    try {
+      result = await callApplicantProfileAgent(c.env.MAKE_WEBHOOK_URL_AGENT_2_PROFILE_COLLECTOR, {
+        applicant_id: found.application.id,
+        conversation_id: base.conversation_id,
+        preferred_language: preferredLanguage,
+        message,
+        current_profile: profileState,
+        current_profile_json: JSON.stringify(profileState),
+        required_fields: applicantProfileRequiredFields,
+        required_fields_json: JSON.stringify(applicantProfileRequiredFields),
+        applicant_consent_to_process: true,
+      });
+    } catch (error) {
+      const attempts = Number(error instanceof Error ? error.message.match(/after (\d+) attempts?$/i)?.[1] : 0) || 1;
+      await writeApplicantWorkflowEvent(config, {
+        applicationId, agencyId: found.application.agencyId, eventType: "applicant.profile_assistant_failed", actor: "website", status: "failed",
+        payload: { agent: "agent_2", attempts, failureCategory: "make_webhook" },
+      }).catch((logError) => console.error("Unable to persist Agent 2 failure event", errMsg(logError)));
+      return c.json({ error: error instanceof Error ? error.message : "Applicant profile assistant failed" }, 502);
+    }
+    const extracted = validateApplicantProfileFields(result.extracted_fields);
+    const missingFields = Array.isArray(result.missing_fields) && result.missing_fields.length <= 40 && result.missing_fields.every((item) => typeof item === "string" && (applicantProfileAgentFields as readonly string[]).includes(item)) ? result.missing_fields as string[] : null;
+    const reply = toTrimmedString(result.reply);
+    if (result.applicant_id !== found.application.id || !reply || reply.length > 3000 || !extracted || !missingFields ||
+      typeof result.needs_clarification !== "boolean" || typeof result.profile_ready_for_confirmation !== "boolean" || typeof result.handoff_to_staff !== "boolean") {
+      await writeApplicantWorkflowEvent(config, {
+        applicationId, agencyId: found.application.agencyId, eventType: "applicant.profile_assistant_failed", actor: "website", status: "failed",
+        payload: { agent: "agent_2", attempts: 1, failureCategory: "invalid_response_contract" },
+      }).catch((logError) => console.error("Unable to persist Agent 2 contract failure event", errMsg(logError)));
+      return c.json({ error: "Applicant profile assistant returned fields outside the approved response contract" }, 502);
+    }
+    base.profile_state = { ...profileState, ...extracted };
+    base.missing_fields = missingFields;
+    base.last_reply = reply;
+    base.confirmation_summary = typeof result.confirmation_summary === "string" ? result.confirmation_summary.slice(0, 2000) : "";
+    const stillMissing = applicantProfileRequiredFields.some((field) => {
+      const value = base.profile_state[field];
+      return value == null || value === "" || (Array.isArray(value) && value.length === 0);
+    });
+    base.profile_ready_for_confirmation = result.profile_ready_for_confirmation === true && missingFields.length === 0 && !stillMissing && result.needs_clarification === false;
+    base.applicant_confirmed_at = null;
+    base.public_profile_draft = null;
+    base.draft_status = "not_started";
+    base.updated_at = timestamp;
+    await saveApplicantProfileWorkflow(config, base);
+    await writeApplicantWorkflowEvent(config, { applicationId, agencyId: found.application.agencyId, eventType: "applicant.profile_assistant_turn", actor: "applicant", payload: { readyForConfirmation: base.profile_ready_for_confirmation } });
+    return c.json({ workflow: { profileState: base.profile_state, missingFields: base.missing_fields, reply, confirmationSummary: base.confirmation_summary, readyForConfirmation: base.profile_ready_for_confirmation, processingConsent: true, applicantConfirmed: false, publicationConsent: false, draftStatus: base.draft_status, needsClarification: result.needs_clarification, handoffToStaff: result.handoff_to_staff === true } });
+  }
+
+  if (action === "confirm_profile") {
+    if (!base.processing_consent_at || !base.profile_ready_for_confirmation || body?.confirmed !== true) return c.json({ error: "The applicant cannot confirm a profile that is not ready" }, 409);
+    base.applicant_confirmed_at = timestamp;
+    base.updated_at = timestamp;
+    await saveApplicantProfileWorkflow(config, base);
+    await writeApplicantWorkflowEvent(config, { applicationId, agencyId: found.application.agencyId, eventType: "applicant.profile_confirmed", actor: "applicant" });
+    return c.json({ ok: true, applicantConfirmed: true });
+  }
+
+  if (action === "withdraw_publication_consent") {
+    const publishedReferenceCode = base.published_reference_code;
+    base.publication_consent_withdrawn_at = timestamp;
+    base.public_profile_draft = null;
+    base.draft_status = "withdrawn";
+    base.updated_at = timestamp;
+    await saveApplicantProfileWorkflow(config, base);
+    let profileHidden = true;
+    if (publishedReferenceCode) {
+      try { profileHidden = await hidePublishedAtsProfile(c.env, config, found.application.agencyId, publishedReferenceCode); }
+      catch (error) { profileHidden = false; console.error("Publication consent was withdrawn but public profile could not be hidden", errMsg(error)); }
+    }
+    await writeApplicantWorkflowEvent(config, { applicationId, agencyId: found.application.agencyId, eventType: "applicant.publication_consent_withdrawn", actor: "applicant", payload: { publishedReferenceCode, profileHidden } });
+    return profileHidden
+      ? c.json({ ok: true, publicationConsent: false, draftStatus: base.draft_status, profileHidden: true })
+      : c.json({ error: "Consent withdrawal was recorded, but the public profile could not be hidden automatically. Contact agency staff to hide it immediately.", publicationConsent: false, draftStatus: base.draft_status, profileHidden: false }, 502);
+  }
+
+  if (action === "withdraw_processing_consent") {
+    const publishedReferenceCode = base.published_reference_code;
+    base.processing_consent_at = null;
+    base.processing_consent_source = "";
+    base.profile_state = {};
+    base.missing_fields = [];
+    base.last_reply = "";
+    base.confirmation_summary = "";
+    base.profile_ready_for_confirmation = false;
+    base.applicant_confirmed_at = null;
+    base.publication_consent_withdrawn_at = timestamp;
+    base.public_profile_draft = null;
+    base.draft_status = "withdrawn";
+    base.updated_at = timestamp;
+    await saveApplicantProfileWorkflow(config, base);
+    let profileHidden = true;
+    if (publishedReferenceCode) {
+      try { profileHidden = await hidePublishedAtsProfile(c.env, config, found.application.agencyId, publishedReferenceCode); }
+      catch (error) { profileHidden = false; console.error("AI processing consent was withdrawn but public profile could not be hidden", errMsg(error)); }
+    }
+    await writeApplicantWorkflowEvent(config, { applicationId, agencyId: found.application.agencyId, eventType: "applicant.ai_processing_consent_withdrawn", actor: "applicant", payload: { publishedReferenceCode, profileHidden } });
+    return profileHidden
+      ? c.json({ ok: true, processingConsent: false, draftStatus: base.draft_status, profileHidden: true })
+      : c.json({ error: "Consent withdrawal was recorded, but the public profile could not be hidden automatically. Contact agency staff to hide it immediately.", processingConsent: false, draftStatus: base.draft_status, profileHidden: false }, 502);
+  }
+
+  if (action === "create_public_profile_draft") {
+    if (!base.applicant_confirmed_at || !base.profile_ready_for_confirmation) return c.json({ error: "Applicant must confirm the profile details first" }, 409);
+    if (["pending_staff_review", "approved", "published"].includes(base.draft_status)) return c.json({ error: "This profile draft is already with staff or approved" }, 409);
+    if (body?.publicationConsent !== true) return c.json({ error: "Separate permission to prepare a profile for employers is required" }, 400);
+    const consentSource = toTrimmedString(body?.publicationConsentSource);
+    if (consentSource.length < 8 || consentSource.length > 300) return c.json({ error: "Record the applicant's publication permission" }, 400);
+    base.publication_consent_at = timestamp;
+    base.publication_consent_source = consentSource;
+    base.publication_consent_withdrawn_at = null;
+    const profileState = validateApplicantProfileFields(base.profile_state);
+    if (!profileState) return c.json({ error: "Saved applicant profile fields need staff review" }, 409);
+    let draftResult: Record<string, unknown> | null = null;
+    try {
+      draftResult = await callApplicantProfileAgent(c.env.MAKE_WEBHOOK_URL_AGENT_3_PROFILE_BUILDER, {
+        applicant_id: found.application.id,
+        applicant_confirmed: true,
+        publication_consent_active: true,
+        public_fields: profileState,
+        public_fields_json: JSON.stringify(profileState),
+        approved_media_ids: [],
+        approved_media_ids_json: JSON.stringify([]),
+      });
+    } catch (error) {
+      const attempts = Number(error instanceof Error ? error.message.match(/after (\d+) attempts?$/i)?.[1] : 0) || 1;
+      await writeApplicantWorkflowEvent(config, {
+        applicationId, agencyId: found.application.agencyId, eventType: "applicant.profile_assistant_failed", actor: "website", status: "failed",
+        payload: { agent: "agent_3", attempts, failureCategory: "make_webhook" },
+      }).catch((logError) => console.error("Unable to persist Agent 3 failure event", errMsg(logError)));
+      return c.json({ error: error instanceof Error ? error.message : "Profile draft assistant failed" }, 502);
+    }
+    const validatedDraft = draftResult ? validatePublicProfileDraft(draftResult.public_profile) : null;
+    const safeExcluded = draftResult && Array.isArray(draftResult.excluded_fields) && draftResult.excluded_fields.length <= 30 && draftResult.excluded_fields.every((item) => typeof item === "string" && item.length <= 120);
+    const safeGates = draftResult && Array.isArray(draftResult.missing_gates) && draftResult.missing_gates.length <= 20 && draftResult.missing_gates.every((item) => typeof item === "string" && item.length <= 160);
+    if (!draftResult || draftResult.applicant_id !== found.application.id || !["not_ready", "draft_created"].includes(String(draftResult.publication_state)) || !validatedDraft || !safeExcluded || !safeGates) {
+      await writeApplicantWorkflowEvent(config, {
+        applicationId, agencyId: found.application.agencyId, eventType: "applicant.profile_assistant_failed", actor: "website", status: "failed",
+        payload: { agent: "agent_3", attempts: 1, failureCategory: "invalid_response_contract" },
+      }).catch((logError) => console.error("Unable to persist Agent 3 contract failure event", errMsg(logError)));
+      return c.json({ error: "Profile draft assistant failed or returned an invalid response" }, 502);
+    }
+    base.public_profile_draft = draftResult.publication_state === "draft_created" ? validatedDraft : null;
+    base.draft_status = draftResult.publication_state === "draft_created" ? "pending_staff_review" : "not_ready";
+    base.updated_at = timestamp;
+    await saveApplicantProfileWorkflow(config, base);
+    await writeApplicantWorkflowEvent(config, { applicationId, agencyId: found.application.agencyId, eventType: "applicant.profile_draft_created", actor: "website", payload: { draftStatus: base.draft_status } });
+    return c.json({ ok: true, draftStatus: base.draft_status, draft: base.public_profile_draft });
+  }
+
+  return c.json({ error: "Choose a supported profile action" }, 400);
+}));
+
+app.get("/api/ats/data-subject-requests", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant data request tracking requires normalized ATS storage" }, 503);
+  const requests = await fetchSupabaseTableRows<AtsDataSubjectRequestRow>(config, "ats_data_subject_requests", {
+    select: "id,application_id,agency_id,request_type,status,applicant_note,resolution_note,submitted_at,resolved_at,resolved_by,updated_at",
+    filters: { app_id: config.rowId, agency_id: admin.agencyId }, orderBy: "submitted_at.desc", limit: 200,
+  });
+  return c.json({ requests: requests.map(({ id, application_id, request_type, status, applicant_note, resolution_note, submitted_at, resolved_at, resolved_by }) => ({ id, applicationId: application_id, requestType: request_type, status, applicantNote: applicant_note, resolutionNote: resolution_note, submittedAt: submitted_at, resolvedAt: resolved_at, resolvedBy: resolved_by })) });
+}));
+
+app.patch("/api/ats/data-subject-requests/:requestId", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const requestId = c.req.param("requestId");
+  if (!/^[0-9a-f-]{36}$/i.test(requestId)) return c.json({ error: "Invalid request ID" }, 400);
+  const body = await parseBody<{ status?: unknown; resolutionNote?: unknown }>(c.req.raw);
+  const status = toTrimmedString(body?.status).toUpperCase();
+  if (!["IN_REVIEW", "FULFILLED", "DECLINED"].includes(status)) return c.json({ error: "Choose in review, fulfilled, or declined" }, 400);
+  const resolutionNote = typeof body?.resolutionNote === "string" ? body.resolutionNote.trim() : "";
+  if (resolutionNote.length > 1000) return c.json({ error: "Resolution notes must be 1,000 characters or fewer" }, 400);
+  if (["FULFILLED", "DECLINED"].includes(status) && resolutionNote.length < 10) return c.json({ error: "Record how the request was handled before closing it" }, 400);
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Applicant data request tracking requires normalized ATS storage" }, 503);
+  const rows = await fetchSupabaseTableRows<AtsDataSubjectRequestRow>(config, "ats_data_subject_requests", {
+    select: "id,application_id,agency_id,request_type,status,applicant_note,resolution_note,submitted_at,resolved_at,resolved_by,updated_at",
+    filters: { id: requestId, app_id: config.rowId, agency_id: admin.agencyId }, limit: 1,
+  });
+  const current = rows[0];
+  if (!current) return c.json({ error: "Applicant data request not found" }, 404);
+  if (["FULFILLED", "DECLINED"].includes(current.status)) return c.json({ error: "This data request is already closed" }, 409);
+  const timestamp = now();
+  const actor = admin.username || admin.email || "Agency Staff";
+  const patch: Partial<AtsDataSubjectRequestRow> = {
+    status: status as AtsDataSubjectRequestRow["status"], resolution_note: resolutionNote,
+    resolved_at: ["FULFILLED", "DECLINED"].includes(status) ? timestamp : null,
+    resolved_by: ["FULFILLED", "DECLINED"].includes(status) ? actor : null, updated_at: timestamp,
+  };
+  const updateResponse = await fetch(`${config.baseUrl}/rest/v1/ats_data_subject_requests?id=eq.${encodeURIComponent(requestId)}&app_id=eq.${encodeURIComponent(config.rowId)}&agency_id=eq.${encodeURIComponent(String(admin.agencyId))}&status=eq.${encodeURIComponent(current.status)}&select=id,application_id,request_type,status,applicant_note,resolution_note,submitted_at,resolved_at,resolved_by`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }), body: JSON.stringify(patch),
+  });
+  if (!updateResponse.ok) throw new Error(`Unable to update applicant data request (${updateResponse.status}): ${await readSupabaseError(updateResponse)}`);
+  const [saved] = await updateResponse.json() as Array<Pick<AtsDataSubjectRequestRow, "id" | "application_id" | "request_type" | "status" | "applicant_note" | "resolution_note" | "submitted_at" | "resolved_at" | "resolved_by">>;
+  if (!saved) return c.json({ error: "Applicant data request was changed by another staff member; refresh and try again" }, 409);
+  const auditLogged = await writeApplicantWorkflowEvent(config, { applicationId: saved.application_id, agencyId: admin.agencyId, eventType: `applicant.data_subject_request_${status.toLowerCase()}`, actor: `user:${actor}`, status: status.toLowerCase(), payload: { requestId: saved.id, requestType: saved.request_type } }).catch((error) => { console.error("Applicant data request resolution audit event failed", errMsg(error)); return false; });
+  return c.json({ request: { id: saved.id, applicationId: saved.application_id, requestType: saved.request_type, status: saved.status, applicantNote: saved.applicant_note, resolutionNote: saved.resolution_note, submittedAt: saved.submitted_at, resolvedAt: saved.resolved_at, resolvedBy: saved.resolved_by }, auditLogged });
+}));
+
+app.get("/api/ats/profile-drafts", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Profile draft review requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const rows = await fetchSupabaseTableRows<AtsApplicantWorkflowRow>(config, "helped_ats_applicant_workflows", {
+    select: "*", filters: { app_id: config.rowId, agency_id: admin.agencyId },
+    orderBy: "updated_at.desc", limit: 100,
+  });
+  const data = await loadData(c.env, { readOnly: true });
+  const items = rows.filter((row) => ["pending_staff_review", "approved"].includes(row.draft_status)).map((row) => {
+    const application = data.ats.applications.find((item) => item.id === row.application_id && item.agencyId === admin.agencyId);
+    const profile = data.ats.profiles.find((item) => item.applicationId === row.application_id);
+    if (!application || !profile) return null;
+    return {
+      applicationId: row.application_id, applicationCode: application.applicationCode, applicantName: profile.fullName,
+      nationality: profile.nationality, createdAt: row.created_at, updatedAt: row.updated_at,
+      draft: row.public_profile_draft, publicationConsentAt: row.publication_consent_at,
+      applicantConfirmedAt: row.applicant_confirmed_at,
+      draftStatus: row.draft_status, publishedReferenceCode: row.published_reference_code ?? "",
+    };
+  }).filter((item): item is NonNullable<typeof item> => Boolean(item));
+  return c.json({ drafts: items, count: items.length });
+}));
+
+app.post("/api/ats/profile-drafts/:applicationId/publish", requireAgencyAdminAuth, canAdministerAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Profile draft publishing requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const applicationId = toTrimmedString(c.req.param("applicationId"));
+  const body = await parseBody<{ referenceCode?: unknown }>(c.req.raw);
+  const referenceCode = normalizeReferenceCode(toTrimmedString(body?.referenceCode));
+  if (!referenceCode || referenceCode.length > 80) return c.json({ error: "Enter the public profile reference code" }, 400);
+  const workflow = await getApplicantProfileWorkflow(config, applicationId, admin.agencyId);
+  const consentActive = Boolean(workflow?.publication_consent_at &&
+    (!workflow.publication_consent_withdrawn_at || workflow.publication_consent_withdrawn_at < workflow.publication_consent_at));
+  if (!workflow || workflow.draft_status !== "approved" || !workflow.public_profile_draft || !workflow.applicant_confirmed_at || !consentActive) {
+    return c.json({ error: "Publishing requires an approved draft, applicant confirmation, and active publication consent" }, 409);
+  }
+  const data = await loadData(c.env, { readOnly: true });
+  const application = data.ats.applications.find((item) => item.id === applicationId && item.agencyId === admin.agencyId);
+  const applicantProfile = data.ats.profiles.find((item) => item.applicationId === applicationId);
+  if (!application || !applicantProfile) return c.json({ error: "Applicant record was not found for this agency" }, 404);
+  const maid = isNormalizedSupabaseEnabled(c.env)
+    ? await getMaidFromSupabaseNormalized(config, referenceCode)
+    : await getMaidFromSupabaseAppView(config, referenceCode);
+  if (!maid || maid.agencyId !== admin.agencyId) return c.json({ error: "Public profile does not belong to this agency" }, 404);
+  const normalizeName = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const allowedNames = [applicantProfile.fullName, String(workflow.public_profile_draft.display_name ?? "")].map(normalizeName).filter(Boolean);
+  if (!allowedNames.includes(normalizeName(maid.fullName))) return c.json({ error: "The selected profile name does not match this applicant" }, 409);
+  if (!String(maid.introduction?.publicIntro ?? "").trim()) return c.json({ error: "Complete and save the Public Introduction before publishing this profile" }, 409);
+  let visibilityChanged = false;
+  if (!maid.isPublic) {
+    const updated = isNormalizedSupabaseEnabled(c.env)
+      ? await updateMaidVisibilityInSupabaseNormalized(config, referenceCode, true)
+      : await updateMaidVisibilityInSupabaseAppData(config, referenceCode, true);
+    if (!updated?.isPublic) return c.json({ error: "The public profile could not be enabled" }, 500);
+    visibilityChanged = true;
+  }
+  const publishedBy = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
+  workflow.draft_status = "published";
+  workflow.published_reference_code = referenceCode;
+  workflow.published_at = now();
+  workflow.published_by = publishedBy;
+  workflow.updated_at = workflow.published_at;
+  try {
+    await saveApplicantProfileWorkflow(config, workflow);
+  } catch (error) {
+    if (visibilityChanged) {
+      await (isNormalizedSupabaseEnabled(c.env)
+        ? updateMaidVisibilityInSupabaseNormalized(config, referenceCode, false)
+        : updateMaidVisibilityInSupabaseAppData(config, referenceCode, false)).catch((rollbackError) => console.error("Profile publication rollback failed", errMsg(rollbackError)));
+    }
+    throw error;
+  }
+  await writeApplicantWorkflowEvent(config, { applicationId, agencyId: admin.agencyId, eventType: "applicant.public_profile_published", actor: publishedBy, payload: { referenceCode } });
+  return c.json({ ok: true, draftStatus: "published", referenceCode, publishedAt: workflow.published_at });
+}));
+
+app.get("/api/ats/profile-drafts/:applicationId/prefill", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Profile draft setup requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const applicationId = toTrimmedString(c.req.param("applicationId"));
+  const workflow = await getApplicantProfileWorkflow(config, applicationId, admin.agencyId);
+  const consentActive = Boolean(workflow?.publication_consent_at &&
+    (!workflow.publication_consent_withdrawn_at || workflow.publication_consent_withdrawn_at < workflow.publication_consent_at));
+  if (!workflow || workflow.draft_status !== "approved" || !workflow.applicant_confirmed_at || !consentActive || !workflow.public_profile_draft) {
+    return c.json({ error: "An approved draft with active applicant confirmation and publication consent is required" }, 409);
+  }
+  return c.json({ applicationId, draft: workflow.public_profile_draft, consentActive: true, approvedAt: workflow.reviewed_at });
+}));
+
+app.patch("/api/ats/profile-drafts/:applicationId/review", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Profile draft review requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const applicationId = toTrimmedString(c.req.param("applicationId"));
+  const body = await parseBody<Record<string, unknown>>(c.req.raw);
+  const decision = toTrimmedString(body?.decision).toLowerCase();
+  const note = toTrimmedString(body?.note).slice(0, 1000);
+  if (!["approve", "reject"].includes(decision)) return c.json({ error: "Choose approve or reject" }, 400);
+  if (decision === "reject" && note.length < 5) return c.json({ error: "Add a reason when rejecting a draft" }, 400);
+  const workflow = await getApplicantProfileWorkflow(config, applicationId, admin.agencyId);
+  if (!workflow || workflow.draft_status !== "pending_staff_review" || !workflow.public_profile_draft ||
+    !workflow.applicant_confirmed_at || !workflow.publication_consent_at ||
+    (workflow.publication_consent_withdrawn_at && workflow.publication_consent_withdrawn_at >= workflow.publication_consent_at)) {
+    return c.json({ error: "This applicant has no draft awaiting review with active consent" }, 409);
+  }
+  workflow.draft_status = decision === "approve" ? "approved" : "rejected";
+  workflow.staff_review_note = note;
+  workflow.reviewed_by = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
+  workflow.reviewed_at = now();
+  workflow.updated_at = workflow.reviewed_at;
+  await saveApplicantProfileWorkflow(config, workflow);
+  await writeApplicantWorkflowEvent(config, {
+    applicationId, agencyId: admin.agencyId,
+    eventType: decision === "approve" ? "applicant.profile_draft_approved" : "applicant.profile_draft_rejected",
+    actor: workflow.reviewed_by, payload: { note },
+  });
+  return c.json({ ok: true, draftStatus: workflow.draft_status, reviewedAt: workflow.reviewed_at });
+}));
+
+app.get("/api/ats/dashboard", requireAgencyAdminAuth, canReviewAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const data = await loadData(c.env, { readOnly: true });
   return c.json(buildAtsDashboard(data, admin.agencyId));
 });
 
-app.get("/api/ats/applications/unread-count", requireAgencyAdminAuth, async (c) => {
+app.get("/api/ats/applications/unread-count", requireAgencyAdminAuth, canReviewAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const data = await loadData(c.env, { readOnly: true });
   const applications = data.ats?.applications ?? [];
@@ -16665,7 +19846,7 @@ app.get("/api/ats/applications/unread-count", requireAgencyAdminAuth, async (c) 
   return c.json({ unreadCount });
 });
 
-app.post("/api/ats/applications/mark-viewed", requireAgencyAdminAuth, async (c) => {
+app.post("/api/ats/applications/mark-viewed", requireAgencyAdminAuth, canReviewAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const data = await loadData(c.env);
   const viewedAt = now();
@@ -16689,7 +19870,7 @@ app.post("/api/ats/applications/mark-viewed", requireAgencyAdminAuth, async (c) 
   return c.json({ ok: true, markedCount });
 });
 
-app.get("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
+app.get("/api/ats/applications", requireAgencyAdminAuth, canReviewAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const data = await loadData(c.env, { readOnly: true });
   const url = new URL(c.req.url);
@@ -16747,7 +19928,7 @@ app.get("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
   });
 });
 
-app.post("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
+app.post("/api/ats/applications", requireAgencyAdminAuth, canManageAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const body = await parseBody<Record<string, unknown>>(c.req.raw);
 
@@ -16853,11 +20034,11 @@ app.post("/api/ats/applications", requireAgencyAdminAuth, async (c) => {
   );
 });
 
-app.get("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, async (c) => {
+app.get("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, canReviewAgencyRecords, async (c) => {
   return c.json({ error: "Method not allowed" }, 405);
 });
 
-app.post("/api/ats/applications/delete", requireAgencyAdminAuth, async (c) => {
+app.post("/api/ats/applications/delete", requireAgencyAdminAuth, canAdministerAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const body = await parseBody<{ applicationIds?: string[] }>(c.req.raw);
   const applicationIds = Array.isArray(body?.applicationIds)
@@ -16886,7 +20067,7 @@ app.post("/api/ats/applications/delete", requireAgencyAdminAuth, async (c) => {
   return c.json({ deleted: removable.size });
 });
 
-app.patch("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, async (c) => {
+app.patch("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, canManageAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const applicationId = c.req.param("applicationId");
   const body = await parseBody<{ stage?: RecruitmentStage; reason?: string }>(c.req.raw);
@@ -16924,10 +20105,16 @@ app.patch("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, 
   ];
 
   await saveData(c.env, data);
+  if (stage === "Approved" && previousStage !== "Approved" && makeWebhookUrlForOutbox(c.env, "deployment_task_event")) {
+    runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `applicant:${applicationId}:approved:${previousStage}`, admin.agencyId, {
+      event_type: "applicant.approved", agency_id: admin.agencyId, application_id: applicationId,
+      approved_at: application.updatedAt, previous_stage: previousStage,
+    }).catch((error) => console.error("Applicant approval Make event could not be queued", errMsg(error))));
+  }
   return c.json(buildAtsBundle(data, applicationId));
 });
 
-app.get("/api/ats/applications/:applicationId", requireAgencyAdminAuth, async (c) => {
+app.get("/api/ats/applications/:applicationId", requireAgencyAdminAuth, canReviewAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const applicationId = c.req.param("applicationId");
   const data = await loadData(c.env, { readOnly: true });
@@ -16938,7 +20125,7 @@ app.get("/api/ats/applications/:applicationId", requireAgencyAdminAuth, async (c
   return c.json(bundle);
 });
 
-app.post("/api/ats/bulk-actions", requireAgencyAdminAuth, async (c) => {
+app.post("/api/ats/bulk-actions", requireAgencyAdminAuth, canManageAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const body = await parseBody<{
     applicationIds?: string[];
@@ -16958,6 +20145,7 @@ app.post("/api/ats/bulk-actions", requireAgencyAdminAuth, async (c) => {
 
   const data = await loadData(c.env);
   const updatedIds: string[] = [];
+  const newlyApprovedIds: string[] = [];
 
   for (const applicationId of body.applicationIds) {
     const application = data.ats.applications.find(
@@ -16966,6 +20154,7 @@ app.post("/api/ats/bulk-actions", requireAgencyAdminAuth, async (c) => {
     if (!application) continue;
     const nextStage = actionStageMap[body.action];
     const previousStage = application.status;
+    if (body.action === "approve" && previousStage !== "Approved") newlyApprovedIds.push(applicationId);
     application.status = nextStage;
     application.updatedAt = now();
     data.ats.history[applicationId] = [
@@ -16983,6 +20172,15 @@ app.post("/api/ats/bulk-actions", requireAgencyAdminAuth, async (c) => {
   }
 
   await saveData(c.env, data);
+  if (body.action === "approve" && makeWebhookUrlForOutbox(c.env, "deployment_task_event")) {
+    for (const applicationId of newlyApprovedIds) {
+      runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `applicant:${applicationId}:approved:bulk`, admin.agencyId, {
+        event_type: "applicant.approved", agency_id: admin.agencyId, application_id: applicationId,
+        approved_at: data.ats.applications.find((item) => item.id === applicationId)?.updatedAt ?? now(),
+        approval_source: "staff_bulk_action",
+      }).catch((error) => console.error("Bulk applicant approval Make event could not be queued", errMsg(error))));
+    }
+  }
   return c.json({
     updated: updatedIds.length,
     data: updatedIds
@@ -16991,7 +20189,7 @@ app.post("/api/ats/bulk-actions", requireAgencyAdminAuth, async (c) => {
   });
 });
 
-app.post("/api/ats/match", requireAgencyAdminAuth, async (c) => {
+app.post("/api/ats/match", requireAgencyAdminAuth, canManageAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const body = await parseBody<{ requirementText?: string; top?: number }>(c.req.raw);
   const requirementText = toTrimmedString(body?.requirementText).toLowerCase();
@@ -17051,7 +20249,7 @@ app.post("/api/ats/match", requireAgencyAdminAuth, async (c) => {
   return c.json({ matches });
 });
 
-app.get("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
+app.get("/api/ats/presets", requireAgencyAdminAuth, canManageAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const data = await loadData(c.env);
   return c.json({
@@ -17059,7 +20257,7 @@ app.get("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
   });
 });
 
-app.post("/api/ats/presets", requireAgencyAdminAuth, async (c) => {
+app.post("/api/ats/presets", requireAgencyAdminAuth, canManageAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const body = await parseBody<{ name?: string; filters?: Record<string, unknown> }>(c.req.raw);
   const name = toTrimmedString(body?.name);
@@ -17693,6 +20891,8 @@ type WhatsAppOptOutState = {
   language?: string;
   name?: string;
   optedOut: boolean;
+  consentSource?: string;
+  consentedAt?: string;
   processedMessageIds: string[];
 };
 
@@ -17726,19 +20926,51 @@ const processWhatsAppIncomingMessages = async (env: Bindings, payload: any) => {
 
     const stateKey = `${WHATSAPP_OPT_OUT_CONTACT_PREFIX}${sender}`;
     const rawState = await env.APP_DATA.get(stateKey);
-    if (!rawState) continue;
-    const state = JSON.parse(rawState) as WhatsAppOptOutState;
+    const state = rawState ? JSON.parse(rawState) as WhatsAppOptOutState : { optedOut: false, processedMessageIds: [] } satisfies WhatsAppOptOutState;
     if ((state.processedMessageIds ?? []).includes(messageId)) continue;
 
     const isOptOut = /^(stop|unsubscribe|cancel|end|quit|no more messages|tigil|para|huwag na|hindi na)$/i.test(incomingText);
     const isOptIn = /^start$/i.test(incomingText);
-    if (!isOptOut && !isOptIn) continue;
+    const referralLeads = await loadAtsReferralLeadsForAgency(env, 1);
+    const referralLead = referralLeads.find((lead) => canonicalReferralPhone(lead.phone).replace(/\D/g, "") === sender);
+    if (!isOptOut && !isOptIn) {
+      if (referralLead) {
+        referralLead.interestStatus = "replied";
+        referralLead.lastMessageAt = now();
+        referralLead.updatedAt = now();
+        await saveAtsReferralLeadRecords(env, 1, [referralLead]);
+      }
+      await env.APP_DATA.put(stateKey, JSON.stringify({
+        ...state,
+        processedMessageIds: [...(state.processedMessageIds ?? []), messageId].slice(-100),
+      } satisfies WhatsAppOptOutState), { expirationTtl: 180 * 86400 });
+      continue;
+    }
 
+    // Preserve a local suppression marker first so broadcast checks remain
+    // fail-closed even if the consent database is temporarily unavailable.
     await env.APP_DATA.put(stateKey, JSON.stringify({
       ...state,
       optedOut: isOptOut ? true : false,
       processedMessageIds: [...(state.processedMessageIds ?? []), messageId].slice(-100),
     } satisfies WhatsAppOptOutState), { expirationTtl: 180 * 86400 });
+    if (referralLead) {
+      const updateAt = now();
+      if (isOptOut) referralLead.whatsappConsentWithdrawnAt = updateAt;
+      else {
+        referralLead.whatsappConsentAt = updateAt;
+        referralLead.whatsappConsentSource = "WhatsApp START opt-in";
+      }
+      referralLead.updatedAt = updateAt;
+      await saveAtsReferralLeadRecords(env, 1, [referralLead]);
+    }
+    await updateWhatsappConsentLedger(
+      getSupabaseAppDataConfig(env),
+      1,
+      sender,
+      isOptIn,
+      isOptIn ? "WhatsApp START opt-in" : "WhatsApp STOP opt-out",
+    );
   }
 };
 
@@ -17839,7 +21071,7 @@ app.post("/api/whatsapp-broadcast", requireAgencyAdminAuth, async (c) => {
     return c.json({ error: "The configured broadcast webhook URL is invalid." }, 503);
   }
 
-  const body = await parseBody<{ message?: string; mediaType?: string; mediaUrl?: string; contacts?: Array<{ name?: string; phone?: string; language?: string }> }>(c.req.raw);
+  const body = await parseBody<{ message?: string; mediaType?: string; mediaUrl?: string; contacts?: Array<{ name?: string; phone?: string; language?: string; whatsappConsent?: boolean; consentSource?: string }> }>(c.req.raw);
   const message = body?.message?.trim();
   const mediaType = body?.mediaType === "image" || body?.mediaType === "video" ? body.mediaType : "text";
   if (!message || message.length > 1000) {
@@ -17866,7 +21098,7 @@ app.post("/api/whatsapp-broadcast", requireAgencyAdminAuth, async (c) => {
     }
   }
 
-  const contacts: Array<{ name: string; phone: string; language: string }> = [];
+  const contacts: Array<{ name: string; phone: string; language: string; whatsappConsent: boolean; consentSource: string }> = [];
   const seenPhones = new Set<string>();
   for (const row of body.contacts) {
     const phoneText = String(row?.phone ?? "").trim();
@@ -17879,6 +21111,8 @@ app.post("/api/whatsapp-broadcast", requireAgencyAdminAuth, async (c) => {
       name: String(row?.name ?? "").trim().slice(0, 120),
       phone: `+${digits}`,
       language: String(row?.language ?? "").trim().slice(0, 80),
+      whatsappConsent: row?.whatsappConsent === true,
+      consentSource: String(row?.consentSource ?? "").trim().slice(0, 240),
     });
   }
   if (contacts.length === 0) {
@@ -17887,18 +21121,50 @@ app.post("/api/whatsapp-broadcast", requireAgencyAdminAuth, async (c) => {
   if (!c.env.APP_DATA) {
     return c.json({ error: "WhatsApp reply language storage is unavailable. No messages were sent." }, 503);
   }
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const referralLeads = await loadAtsReferralLeadsForAgency(c.env, admin.agencyId);
+  const referralByPhone = new Map(referralLeads.map((lead) => [canonicalReferralPhone(lead.phone).replace(/\D/g, ""), lead]));
+  const whatsappConsentContacts = await getMarketingConsentFlags(
+    getSupabaseAppDataConfig(c.env),
+    admin.agencyId,
+    contacts.map((contact, index) => ({ id: String(index), name: contact.name, phone: contact.phone, email: "", source: "" })),
+  );
+  const consentedByPhone = new Map(whatsappConsentContacts.map((contact) => [normalizeMarketingConsentSubject(contact.phone, "whatsapp"), contact] as const));
   const eligibleContacts: typeof contacts = [];
   for (const contact of contacts) {
-    const previous = await c.env.APP_DATA.get(`${WHATSAPP_OPT_OUT_CONTACT_PREFIX}${contact.phone.replace(/\D/g, "")}`);
+    const phone = contact.phone.replace(/\D/g, "");
+    const knownReferralLead = referralByPhone.get(phone);
+    const activeReferralConsent = Boolean(knownReferralLead && isAtsReferralLeadWhatsappConsented(knownReferralLead));
+    if (knownReferralLead && !activeReferralConsent) continue;
+    const ledgerConsent = consentedByPhone.get(phone);
+    if (!activeReferralConsent && !ledgerConsent?.whatsappConsent) continue;
+    contact.whatsappConsent = true;
+    contact.consentSource = activeReferralConsent
+      ? knownReferralLead!.whatsappConsentSource
+      : ledgerConsent?.whatsappConsentSource ?? "";
+    if (contact.consentSource.length < 5) continue;
+    const previous = await c.env.APP_DATA.get(`${WHATSAPP_OPT_OUT_CONTACT_PREFIX}${phone}`);
     if (previous && (JSON.parse(previous) as Partial<WhatsAppOptOutState>).optedOut) continue;
     eligibleContacts.push(contact);
   }
   if (eligibleContacts.length === 0) {
-    return c.json({ error: "All contacts in this list have opted out of WhatsApp replies. No messages were sent." }, 409);
+    return c.json({ error: "Every contact is suppressed or lacks active WhatsApp consent. No messages were sent." }, 409);
   }
-  if (contacts.some((contact) => !contact.language)) {
+  if (eligibleContacts.some((contact) => !contact.language)) {
     return c.json({ error: "Every contact needs a preferred language before a multilingual broadcast can be sent." }, 400);
   }
+  const updateReferralLeadMessageStatus = async (status: AtsReferralLeadRecord["lastDeliveryStatus"]) => {
+    const agencyId = admin.agencyId;
+    const sentPhones = new Set(eligibleContacts.map((contact) => canonicalReferralPhone(contact.phone)));
+    const timestamp = now();
+    const changed = referralLeads.filter((lead) => sentPhones.has(canonicalReferralPhone(lead.phone)));
+    for (const lead of changed) {
+      lead.lastDeliveryStatus = status;
+      lead.lastMessageAt = timestamp;
+      lead.updatedAt = timestamp;
+    }
+    if (changed.length) await saveAtsReferralLeadRecords(c.env, agencyId, changed);
+  };
   try {
     // Save language and consent state before Make starts delivery so fast replies
     // can be matched to the recipient's preferred language immediately.
@@ -17910,6 +21176,8 @@ app.post("/api/whatsapp-broadcast", requireAgencyAdminAuth, async (c) => {
         language: contact.language,
         name: contact.name || previousState.name || "",
         optedOut: false,
+        consentSource: contact.consentSource,
+        consentedAt: now(),
         processedMessageIds: Array.isArray(previousState.processedMessageIds) ? previousState.processedMessageIds.slice(-100) : [],
       } satisfies WhatsAppOptOutState), { expirationTtl: 180 * 86400 });
     }
@@ -17932,11 +21200,14 @@ app.post("/api/whatsapp-broadcast", requireAgencyAdminAuth, async (c) => {
     });
     if (!response.ok) {
       console.error("WhatsApp broadcast Make webhook failed:", response.status);
+      await updateReferralLeadMessageStatus("failed");
       return c.json({ error: "Make.com could not accept this broadcast. Check the scenario and try again." }, 502);
     }
+    await updateReferralLeadMessageStatus("accepted");
     return c.json({ accepted: true, contactCount: eligibleContacts.length, optedOutSkipped: contacts.length - eligibleContacts.length });
   } catch (error) {
     console.error("WhatsApp broadcast preparation or webhook request failed:", errMsg(error));
+    try { await updateReferralLeadMessageStatus("failed"); } catch (statusError) { console.error("Could not record referral broadcast failure:", errMsg(statusError)); }
     return c.json({ error: error instanceof Error ? `${error.message} No broadcast was sent.` : "Could not prepare or send the broadcast. No messages were sent." }, 502);
   }
 });
@@ -17945,7 +21216,7 @@ const uploadOperationFileToPrivateStorage = async (
   config: SupabaseStorageConfig,
   file: File,
   agencyId: number,
-  prefix: "google-drive-sync" | "media-transcription",
+  prefix: "google-drive-sync" | "media-transcription" | "placement-documents",
 ) => {
   await ensureExternalSyncPrivateBucket(config);
   const safeName = sanitizeStoragePathSegment(file.name, "upload.bin");
@@ -18044,10 +21315,16 @@ app.post(
       await finishExternalSyncJob(appDataConfig, jobId, "FAILED", {
         error: error instanceof Error ? error.message : "Google Drive workflow failed",
       }).catch((persistError) => console.error("Could not mark Google Drive sync failed", persistError));
+      if (makeWebhookUrlForOutbox(c.env, "deployment_task_event")) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `external-sync:${jobId}:google-drive:failed`, admin.agencyId, {
+        event_type: "document.drive_sync.failed", agency_id: admin.agencyId, job_id: jobId, status: "FAILED",
+      }).catch((queueError) => console.error("Google Drive sync failure event could not be queued", errMsg(queueError))));
       return c.json({ error: error instanceof Error ? error.message : "Google Drive sync failed" }, 502);
     }
     await finishExternalSyncJob(appDataConfig, jobId, "COMPLETED", result)
       .catch((error) => console.error("Could not mark Google Drive sync complete", error));
+      if (makeWebhookUrlForOutbox(c.env, "deployment_task_event")) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `external-sync:${jobId}:google-drive:accepted`, admin.agencyId, {
+        event_type: "document.drive_sync.accepted", agency_id: admin.agencyId, job_id: jobId, status: "ACCEPTED",
+    }).catch((error) => console.error("Google Drive sync completion event could not be queued", errMsg(error))));
     return c.json({ jobId, result, fileName });
   }),
 );
@@ -18108,10 +21385,16 @@ app.post(
       await finishExternalSyncJob(appDataConfig, jobId, "FAILED", {
         error: error instanceof Error ? error.message : "Media transcription failed",
       }).catch((persistError) => console.error("Could not mark media transcription failed", persistError));
+      if (makeWebhookUrlForOutbox(c.env, "deployment_task_event")) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `external-sync:${jobId}:media-transcription:failed`, admin.agencyId, {
+        event_type: "media.transcription.failed", agency_id: admin.agencyId, job_id: jobId, status: "FAILED",
+      }).catch((queueError) => console.error("Media transcription failure event could not be queued", errMsg(queueError))));
       return c.json({ error: error instanceof Error ? error.message : "Media transcription failed" }, 502);
     }
     await finishExternalSyncJob(appDataConfig, jobId, "COMPLETED", { transcriptLength: transcript.length })
       .catch((error) => console.error("Could not mark media transcription complete", error));
+    if (makeWebhookUrlForOutbox(c.env, "deployment_task_event")) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `external-sync:${jobId}:media-transcription:completed`, admin.agencyId, {
+      event_type: "media.transcription.completed", agency_id: admin.agencyId, job_id: jobId, status: "COMPLETED",
+    }).catch((error) => console.error("Media transcription completion event could not be queued", errMsg(error))));
     return c.json({ jobId, transcript, result });
   }),
 );
@@ -18251,10 +21534,25 @@ const withServerRenderedSeo = async (response: Response, pathname: string) => {
 
 export default {
   async scheduled(
-    _controller: unknown,
+    controller: ScheduledController,
     env: Bindings,
     executionContext: ExecutionContext,
   ) {
+    // Publish the three-day arrivals report at 08:00 Singapore time. The
+    // existing 30-minute schedule provides retries at 08:30 and 09:00, up to
+    // three attempts per Singapore day with a stable Make idempotency key.
+    if (controller.cron === "*/30 * * * *") {
+      executionContext.waitUntil(runScheduledRollingArrivalReport(env).catch((error) => {
+        console.error("Scheduled rolling arrival report failed", errMsg(error));
+      }));
+      executionContext.waitUntil(runScheduledInterviewReminders(env).catch((error) => {
+        console.error("Scheduled interview reminders failed", errMsg(error));
+      }));
+      executionContext.waitUntil(dispatchPendingMakeWebhookOutbox(env).catch((error) => {
+        console.error("Scheduled Make webhook outbox delivery failed", errMsg(error));
+      }));
+    }
+
     // Autopilot: draft actions + notify admin via Make.com if any high-priority actions were created
     executionContext.waitUntil(
       (async () => {

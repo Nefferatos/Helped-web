@@ -17,25 +17,28 @@ import {
   upsertBackgroundCheckController,
   upsertInterviewController,
 } from '../controllers/atsController'
-import { requireAgencyAuth } from '../middleware/requireAgencyAuth'
+import { requireAgencyAuth, requireAgencyRole } from '../middleware/requireAgencyAuth'
 
 const router: Router = express.Router()
+
+const canReviewApplicant = requireAgencyRole('SUPER_ADMIN', 'admin', 'agency', 'RECRUITER', 'staff', 'DOCUMENT_REVIEWER')
+const canRecruitApplicant = requireAgencyRole('SUPER_ADMIN', 'admin', 'agency', 'RECRUITER', 'staff')
 
 router.post('/public/apply', createPublicAtsApplicationController)
 router.post('/public/referrals', submitPublicMaidReferralController)
 router.get('/public/applications/:applicationId', getPublicAtsApplicationSummaryController)
-router.get('/dashboard', requireAgencyAuth, getAtsDashboardController)
-router.get('/applications', requireAgencyAuth, listAtsApplicationsController)
-router.get('/applications/unread-count', requireAgencyAuth, getUnreadAtsApplicationCountController)
-router.post('/applications/mark-viewed', requireAgencyAuth, markAtsApplicationsViewedController)
-router.post('/sync-from-maids', requireAgencyAuth, syncAtsFromMaidsController)
-router.get('/presets', requireAgencyAuth, listAtsPresetsController)
-router.post('/presets', requireAgencyAuth, saveAtsPresetController)
-router.post('/bulk-actions', requireAgencyAuth, bulkAtsActionController)
-router.post('/match', requireAgencyAuth, matchAtsApplicationsController)
-router.get('/applications/:applicationId', requireAgencyAuth, getAtsApplicationController)
-router.patch('/applications/:applicationId/stage', requireAgencyAuth, updateAtsStageController)
-router.put('/applications/:applicationId/interview', requireAgencyAuth, upsertInterviewController)
-router.put('/applications/:applicationId/background-check', requireAgencyAuth, upsertBackgroundCheckController)
+router.get('/dashboard', requireAgencyAuth, canReviewApplicant, getAtsDashboardController)
+router.get('/applications', requireAgencyAuth, canReviewApplicant, listAtsApplicationsController)
+router.get('/applications/unread-count', requireAgencyAuth, canReviewApplicant, getUnreadAtsApplicationCountController)
+router.post('/applications/mark-viewed', requireAgencyAuth, canReviewApplicant, markAtsApplicationsViewedController)
+router.post('/sync-from-maids', requireAgencyAuth, canRecruitApplicant, syncAtsFromMaidsController)
+router.get('/presets', requireAgencyAuth, canRecruitApplicant, listAtsPresetsController)
+router.post('/presets', requireAgencyAuth, canRecruitApplicant, saveAtsPresetController)
+router.post('/bulk-actions', requireAgencyAuth, canRecruitApplicant, bulkAtsActionController)
+router.post('/match', requireAgencyAuth, canRecruitApplicant, matchAtsApplicationsController)
+router.get('/applications/:applicationId', requireAgencyAuth, canReviewApplicant, getAtsApplicationController)
+router.patch('/applications/:applicationId/stage', requireAgencyAuth, canRecruitApplicant, updateAtsStageController)
+router.put('/applications/:applicationId/interview', requireAgencyAuth, canRecruitApplicant, upsertInterviewController)
+router.put('/applications/:applicationId/background-check', requireAgencyAuth, canReviewApplicant, upsertBackgroundCheckController)
 
 export default router

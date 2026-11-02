@@ -114,6 +114,19 @@ export interface PublicAtsApplicationSummary {
   notifications: Array<{ id: string; channel: string; event: string; message: string; createdAt: string }>;
 }
 
+export interface PublicAtsProfileWorkflow {
+  profileState: Record<string, unknown>;
+  missingFields: string[];
+  reply: string;
+  confirmationSummary: string;
+  readyForConfirmation: boolean;
+  processingConsent: boolean;
+  applicantConfirmed: boolean;
+  publicationConsent: boolean;
+  draftStatus: string;
+  draft: Record<string, unknown> | null;
+}
+
 export const fetchAtsDashboard = async () => {
   const response = await fetch("/api/ats/dashboard", {
     headers: { ...getAgencyAdminAuthHeaders() },
@@ -251,4 +264,37 @@ export const fetchPublicAtsApplicationSummary = async (applicationId: string, to
     `/api/ats/public/applications/${encodeURIComponent(applicationId)}?token=${encodeURIComponent(token)}`,
   );
   return ensureOk<PublicAtsApplicationSummary & { error?: string }>(response);
+};
+
+export const fetchPublicAtsProfileWorkflow = async (applicationId: string, token: string) => {
+  const response = await fetch(`/api/ats/public/applications/${encodeURIComponent(applicationId)}/profile-agent?token=${encodeURIComponent(token)}`);
+  return ensureOk<{ workflow: PublicAtsProfileWorkflow | null; agents: { collectorConfigured: boolean; profileBuilderConfigured: boolean }; error?: string }>(response);
+};
+
+export const updatePublicAtsProfileWorkflow = async (
+  applicationId: string,
+  payload: Record<string, unknown> & { token: string },
+) => {
+  const response = await fetch(`/api/ats/public/applications/${encodeURIComponent(applicationId)}/profile-agent`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+  return ensureOk<{ workflow?: PublicAtsProfileWorkflow; ok?: boolean; applicantConfirmed?: boolean; publicationConsent?: boolean; draftStatus?: string; draft?: Record<string, unknown> | null; error?: string }>(response);
+};
+
+export type PublicAtsDataSubjectRequest = {
+  id: string; requestType: "ACCESS" | "CORRECTION" | "ERASURE";
+  status: "PENDING" | "IN_REVIEW" | "FULFILLED" | "DECLINED";
+  applicantNote: string; resolutionNote: string; submittedAt: string; resolvedAt: string | null;
+};
+
+export const fetchPublicAtsDataSubjectRequests = async (applicationId: string, token: string) => {
+  const response = await fetch(`/api/ats/public/applications/${encodeURIComponent(applicationId)}/data-requests?token=${encodeURIComponent(token)}`);
+  return ensureOk<{ requests: PublicAtsDataSubjectRequest[]; error?: string }>(response);
+};
+
+export const submitPublicAtsDataSubjectRequest = async (applicationId: string, payload: { token: string; requestType: PublicAtsDataSubjectRequest["requestType"]; note: string }) => {
+  const response = await fetch(`/api/ats/public/applications/${encodeURIComponent(applicationId)}/data-requests`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+  return ensureOk<{ request: PublicAtsDataSubjectRequest; alreadyOpen?: boolean; auditLogged?: boolean; error?: string }>(response);
 };

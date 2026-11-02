@@ -54,6 +54,7 @@ const HomePage = lazyRoute(() => import("@/pages/HomePage"));
 const AgencyProfile = lazyRoute(() => import("@/pages/AgencyProfile"));
 const AgencyProfileEdit = lazyRoute(() => import("@/pages/AgencyProfileEdit"));
 const AgencyChatbotConfig = lazyRoute(() => import("@/pages/AgencyChatbotConfig"));
+const TechnicalSettingsPage = lazyRoute(() => import("@/pages/TechnicalSettingsPage"));
 const AddMaid = lazyRoute(() => import("@/pages/AddMaid"));
 const EditMaids = lazyRoute(() => import("@/pages/EditMaids"));
 const MaidProfile = lazyRoute(() => import("@/pages/MaidProfile"));
@@ -75,8 +76,10 @@ const AgencyOperationsCenterPage = lazyRoute(() => import("@/pages/AgencyOperati
 const ContractorTasksPage = lazyRoute(() => import("@/pages/ContractorTasksPage"));
 const AgencyReportsPage = lazyRoute(() => import("@/pages/AgencyReportsPage"));
 const WhatsAppBroadcastPage = lazyRoute(() => import("@/pages/WhatsAppBroadcastPage"));
+const ReferralLeadsPage = lazyRoute(() => import("@/pages/ReferralLeadsPage"));
 const PublicMaidApplicationPage = lazyRoute(() => import("@/pages/PublicMaidApplicationPage"));
 const PublicMaidApplicationStatusPage = lazyRoute(() => import("@/pages/PublicMaidApplicationStatusPage"));
+const ContractorAcknowledgementPage = lazyRoute(() => import("@/pages/ContractorAcknowledgementPage"));
 const FdwApplicationChatPage = lazyRoute(() => import("@/pages/FdwApplicationChatPage"));
 const NotFound = lazyRoute(() => import("@/pages/NotFound"));
 const AuthCallback = lazyRoute(() => import("@/pages/AuthCallback"));
@@ -98,6 +101,7 @@ const MaidSearchPage = lazyRoute(() => import("@/ClientPage/MaidSearchPage"));
 const ClientProfilePage = lazyRoute(() => import("@/ClientPage/ClientProfilePage"));
 const ClientPortalHome = lazyRoute(() => import("@/ClientPage/ClientPortalHome"));
 const ClientRequestsPage = lazyRoute(() => import("@/ClientPage/ClientRequestsPage"));
+const ClientPlacementDocumentsPage = lazyRoute(() => import("@/ClientPage/ClientPlacementDocumentsPage"));
 const ClientChangePasswordPage = lazyRoute(() => import("@/ClientPage/ClientChangePasswordPage"));
 const AboutUs = lazyRoute(() => import("./ClientPage/AboutUs"));
 const Enquiry2 = lazyRoute(() => import("./ClientPage/Enquiry"));
@@ -359,6 +363,7 @@ const App = () => {
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <SeoMetadata />
           <Routes>
+            <Route path="/contractor/acknowledge" element={withRouteLoader(<ContractorAcknowledgementPage />)} />
             <Route path="/employer-login" element={withRouteLoader(<ClientEmployerLogin />)} />
             <Route path="/auth/callback" element={withRouteLoader(<AuthCallback />)} />
             <Route path="/auth/tiktok/callback" element={withRouteLoader(<TikTokCallback />)} />
@@ -370,6 +375,7 @@ const App = () => {
             <Route path="/agencyadmin/agency-profile" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/chatbot-config" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyChatbotConfig /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/technical" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><TechnicalSettingsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/add-maid" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/edit-maids" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/maid/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>)} />
@@ -381,12 +387,14 @@ const App = () => {
             <Route path="/agencyadmin/requests" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><RequestsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/requests/:requestId" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><RequestDetailsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/whatsapp-broadcast" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><WhatsAppBroadcastPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/referral-leads" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><ReferralLeadsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-agents" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiAgentsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-hr-interviewer" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiHrInterviewerPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-marketing" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiDirectMarketingPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/recruitment" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AtsRecruitmentPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/recruitment/applicant/:applicantId" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AtsRecruitmentPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/operations" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><OperationsBoardPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/operations/placements/:placementId" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><OperationsBoardPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/operations-center" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyOperationsCenterPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/contractor-tasks" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><ContractorTasksPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/reports" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyReportsPage /></AdminShell></ProtectedAdminRoute>)} />
@@ -410,6 +418,7 @@ const App = () => {
               <Route path="maids/search" element={withRouteLoader(<MaidSearchPage embedded />)} />
               <Route path="faq" element={withRouteLoader(<FaqPage />)} />
               <Route path="requests" element={withRouteLoader(<ClientRequestsPage />)} />
+              <Route path="placement-documents" element={withRouteLoader(<ClientPlacementDocumentsPage />)} />
               <Route path="ai-assistant" element={<Navigate to="../home" replace />} />
               <Route path="messages" element={<Navigate to="../support-chat" replace />} />
               <Route path="support-chat" element={withRouteLoader(<ClientSupportChat />)} />

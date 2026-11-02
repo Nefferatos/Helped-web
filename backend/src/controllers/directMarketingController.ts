@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { createHash } from 'crypto'
 import { getRequestAgencyId } from '../auth'
 import {
   buildAudience,
@@ -7,7 +8,7 @@ import {
   type CampaignGoal,
   type CampaignTone,
 } from '../services/directMarketingAiService'
-import { getMarketingCampaign, getMarketingCampaigns } from '../repositories/marketingCampaignRepository'
+import { claimMarketingEmailDelivery, finishMarketingEmailDelivery, getMarketingCampaign, getMarketingCampaigns } from '../repositories/marketingCampaignRepository'
 import { filterContactsWithMarketingConsent, hasActiveConsent, recordConsent, withdrawConsent } from '../services/consentService'
 import { MailConfigurationError, MailDeliveryError, sendMarketingEmail } from '../email'
 import {
@@ -233,13 +234,35 @@ export const sendCampaignEmail = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'This contact has not opted in to email marketing' })
     }
 
-    await sendMarketingEmail({
-      toEmail: message.contactEmail,
-      toName: message.contactName,
-      subject: campaign.subject,
-      text: message.message,
-      html: message.html || undefined,
-    })
+    const delivery = await claimMarketingEmailDelivery(agencyId, campaignId, contactId)
+    if (delivery === 'sent') return res.status(409).json({ error: 'This campaign email was already sent to this contact.' })
+    if (delivery === 'in_progress') return res.status(409).json({ error: 'This campaign email is already being sent or needs staff review before retrying.' })
+
+    const idempotencyKey = `campaign-email/${createHash('sha256').update(`${agencyId}:${campaignId}:${contactId}`).digest('hex')}`
+    try {
+      await sendMarketingEmail({
+        toEmail: message.contactEmail,
+        toName: message.contactName,
+        subject: campaign.subject,
+        text: message.message,
+        html: message.html || undefined,
+        idempotencyKey,
+      })
+    } catch (error) {
+      const safeError = error instanceof MailDeliveryError ? error.code : error instanceof MailConfigurationError ? 'MAIL_NOT_CONFIGURED' : 'DELIVERY_FAILED'
+      await finishMarketingEmailDelivery(agencyId, campaignId, contactId, 'FAILED', safeError)
+        .catch((persistError) => console.error('[directMarketing] Could not record failed email delivery:', persistError))
+      throw error
+    }
+
+    try {
+      await finishMarketingEmailDelivery(agencyId, campaignId, contactId, 'SENT')
+    } catch (error) {
+      // The provider accepted the send; leave its database lease in place so a
+      // second click cannot immediately duplicate it while tracking is repaired.
+      console.error('[directMarketing] Email sent but delivery status was not saved:', error)
+      return res.status(202).json({ ok: true, trackingPending: true, message: 'Email accepted; delivery tracking is still updating.' })
+    }
 
     return res.status(200).json({ ok: true, to: message.contactEmail })
   } catch (error) {

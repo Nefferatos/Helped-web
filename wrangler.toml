@@ -86,6 +86,10 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 # Maid Referral chatbot — create a Make custom webhook, then add Google Sheets
 # > Add a Row to store the maid_referral payload. Keep the URL in a Worker secret:
 #   npx wrangler secret put MAKE_WEBHOOK_URL_MAID_REFERRAL
+# Agent 1 referral classification: import make/agent-1-lead-referral-hunter.blueprint.json
+# and configure its HTTPS webhook as a Worker secret:
+#   npx wrangler secret put MAKE_WEBHOOK_URL_AGENT_1_LEAD_HUNTER
+# The website stores the referral first; the classifier never sends marketing messages.
 
 # FDW Application Chatbot — import make/helped-fdw-application-chatbot.blueprint.json,
 # create its Custom Webhook, then set the URL as a secret (never in client code):
@@ -99,6 +103,17 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 # Operations Center staff milestone notifications (Flight, Medical, SIP, Handover):
 # import make/helped-placement-milestone-alert.blueprint.json, then set:
 #   npx wrangler secret put MAKE_WEBHOOK_URL_PLACEMENT_MILESTONE_ALERT
+# Durable staff-verified deployment/document events (deployment.task.completed,
+# document.uploaded/document.verified, contract and milestone events):
+#   npx wrangler secret put MAKE_WEBHOOK_URL_DEPLOYMENT_TASK_EVENTS
+# Privacy-minimized AI Marketing campaign draft lifecycle notifications:
+#   npx wrangler secret put MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS
+# Daily rolling arrival digest at 08:00 Singapore time (with retries at 08:30 and 09:00):
+# import and activate the reviewed Make delivery scenario, then set:
+#   npx wrangler secret put MAKE_WEBHOOK_URL_ROLLING_ARRIVAL_REPORT
+# Set the exact agency ID served by this digest. This is mandatory tenant scope;
+# use a Wrangler variable for each environment, for example:
+#   ROLLING_ARRIVAL_REPORT_AGENCY_ID = "1"
 
 # Operations Center private document upload and media transcription:
 # configure each Make custom webhook URL as a Worker secret. Both flows use
@@ -134,4 +149,6 @@ invocation_logs = true
 binding = "AI"
 
 [triggers]
+# The existing 30-minute cron also sends the airport report at 08:00 Singapore time,
+# with delivery retries at 08:30 and 09:00 Singapore time if needed.
 crons = ["*/30 * * * *"]

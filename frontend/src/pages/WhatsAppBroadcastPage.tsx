@@ -35,10 +35,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Contact = { name: string; phone: string; language: string };
-type SheetData = { headers: string[]; rows: unknown[][]; fileName: string; nameColumn: number; languageColumn: number };
+type Contact = { name: string; phone: string; language: string; whatsappConsent: boolean; consentSource: string };
+type SheetData = { headers: string[]; rows: unknown[][]; fileName: string; nameColumn: number; languageColumn: number; consentColumn: number; consentSourceColumn: number };
 type AutomationStatus = { configured: boolean; optOutCaptureConfigured: boolean };
 type BroadcastRunStatus = { state: "accepted" | "failed"; detail: string; checkedAt: Date };
+
+const REFERRAL_BROADCAST_HANDOFF_KEY = "referral-leads:broadcast:v1";
 
 const findPhone = (value: unknown) => {
   const text = String(value ?? "").trim();
@@ -53,6 +55,9 @@ const findPhone = (value: unknown) => {
 const isPhoneHeader = (value: string) => /phone|mobile|whatsapp|telephone|contact number|number/i.test(value);
 const isNameHeader = (value: string) => /^(name|full name|contact name|customer)$/i.test(value.trim());
 const isLanguageHeader = (value: string) => /^(native language|mother tongue|preferred language|language|lang)$/i.test(value.trim());
+const isConsentHeader = (value: string) => /^(whatsapp consent|marketing consent|consent|opt in|whatsapp opt in)$/i.test(value.trim());
+const isConsentSourceHeader = (value: string) => /^(consent source|whatsapp consent source|opt in source|consent evidence)$/i.test(value.trim());
+const isAffirmativeConsent = (value: unknown) => /^(yes|true|1|active|opted.?in|consented|granted)$/i.test(String(value ?? "").trim());
 const isOtherHeader = (value: string) => /^(date|month|period|status|id|no\.?|#)$/i.test(value.trim());
 
 export default function WhatsAppBroadcastPage() {
@@ -68,6 +73,38 @@ export default function WhatsAppBroadcastPage() {
   const [statusError, setStatusError] = useState("");
   const [lastStatusCheck, setLastStatusCheck] = useState<Date | null>(null);
   const [lastBroadcastRun, setLastBroadcastRun] = useState<BroadcastRunStatus | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(REFERRAL_BROADCAST_HANDOFF_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(REFERRAL_BROADCAST_HANDOFF_KEY);
+      const payload = JSON.parse(raw) as { contacts?: unknown };
+      const contacts = Array.isArray(payload.contacts) ? payload.contacts.filter((contact): contact is Contact =>
+        Boolean(contact && typeof contact === "object" &&
+          typeof (contact as Contact).name === "string" &&
+          typeof (contact as Contact).phone === "string" &&
+          typeof (contact as Contact).language === "string" &&
+          (contact as Contact).whatsappConsent === true &&
+          typeof (contact as Contact).consentSource === "string" &&
+          (contact as Contact).consentSource.trim().length >= 5)
+      ) : [];
+      if (contacts.length === 0) return;
+      setSheet({
+        headers: ["Name", "Phone", "Preferred Language", "WhatsApp Consent", "Consent Source"],
+        rows: contacts.map((contact) => [contact.name, contact.phone, contact.language, "Yes", contact.consentSource]),
+        fileName: `Referral Leads · ${contacts.length} opted-in contacts`,
+        nameColumn: 0,
+        languageColumn: 2,
+        consentColumn: 3,
+        consentSourceColumn: 4,
+      });
+      toast.success(`${contacts.length} opted-in referral contacts are ready for review.`);
+    } catch {
+      sessionStorage.removeItem(REFERRAL_BROADCAST_HANDOFF_KEY);
+      toast.error("Could not load the referral contacts. Return to Referral Leads and prepare them again.");
+    }
+  }, []);
 
   const refreshAutomationStatus = useCallback(async () => {
     setStatusLoading(true);
@@ -117,14 +154,16 @@ export default function WhatsAppBroadcastPage() {
       const matrix = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, defval: "", raw: false });
       if (matrix.length < 2 || matrix[0].length === 0) throw new Error("Add a header row and at least one contact.");
       const firstRow = matrix[0].map((value) => String(value ?? "").trim());
-      const hasHeader = firstRow.some((value) => isPhoneHeader(value) || isNameHeader(value) || isLanguageHeader(value) || isOtherHeader(value));
+      const hasHeader = firstRow.some((value) => isPhoneHeader(value) || isNameHeader(value) || isLanguageHeader(value) || isConsentHeader(value) || isConsentSourceHeader(value) || isOtherHeader(value));
       const headers = hasHeader
         ? firstRow.map((value, index) => value || `Column ${String.fromCharCode(65 + index)}`)
         : firstRow.map((_, index) => `Column ${String.fromCharCode(65 + index)}`);
       const rows = (hasHeader ? matrix.slice(1) : matrix).filter((row) => row.some((value) => String(value).trim()));
       const nameColumn = hasHeader ? headers.findIndex(isNameHeader) : -1;
       const languageColumn = hasHeader ? headers.findIndex(isLanguageHeader) : -1;
-      setSheet({ headers, rows, fileName: file.name, nameColumn, languageColumn });
+      const consentColumn = hasHeader ? headers.findIndex(isConsentHeader) : -1;
+      const consentSourceColumn = hasHeader ? headers.findIndex(isConsentSourceHeader) : -1;
+      setSheet({ headers, rows, fileName: file.name, nameColumn, languageColumn, consentColumn, consentSourceColumn });
       toast.success("Spreadsheet ready to preview.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not read this spreadsheet.");
@@ -150,15 +189,19 @@ export default function WhatsAppBroadcastPage() {
         ? String(row[sheet.nameColumn] ?? "").trim().replace(match, "").trim()
         : nameFromCell || nameFromOtherColumn;
       const language = sheet.languageColumn >= 0 ? String(row[sheet.languageColumn] ?? "").trim().slice(0, 80) : "";
-      return [{ phone, name: name.slice(0, 120), language }];
+      const whatsappConsent = sheet.consentColumn >= 0 && isAffirmativeConsent(row[sheet.consentColumn]);
+      const consentSource = sheet.consentSourceColumn >= 0 ? String(row[sheet.consentSourceColumn] ?? "").trim().slice(0, 240) : "";
+      return [{ phone, name: name.slice(0, 120), language, whatsappConsent, consentSource }];
     });
   }, [sheet]);
 
   const invalidRows = sheet ? sheet.rows.length - contacts.length : 0;
-  const contactsMissingLanguage = contacts.filter((contact) => !contact.language).length;
+  const eligibleContacts = contacts.filter((contact) => contact.whatsappConsent && contact.consentSource.length >= 5);
+  const contactsMissingLanguage = eligibleContacts.filter((contact) => !contact.language).length;
+  const contactsMissingConsent = contacts.length - eligibleContacts.length;
 
   const submitBroadcast = async () => {
-    if (!sheet || !contacts.length || !message.trim()) return;
+    if (!sheet || !eligibleContacts.length || !message.trim()) return;
     setSending(true);
     try {
       let uploadedMedia: { mediaType: "image" | "video"; mediaUrl: string } | undefined;
@@ -177,7 +220,7 @@ export default function WhatsAppBroadcastPage() {
       const response = await fetch("/api/whatsapp-broadcast", {
         method: "POST",
         headers: { ...getAgencyAdminAuthHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ contacts, message: message.trim(), mediaType: uploadedMedia?.mediaType ?? "text", mediaUrl: uploadedMedia?.mediaUrl }),
+        body: JSON.stringify({ contacts: eligibleContacts, message: message.trim(), mediaType: uploadedMedia?.mediaType ?? "text", mediaUrl: uploadedMedia?.mediaUrl }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not queue this broadcast.");
@@ -283,12 +326,14 @@ export default function WhatsAppBroadcastPage() {
               <p className="text-base font-semibold text-black">2. Contacts detected automatically from all columns</p>
               <div className="flex flex-wrap gap-3 text-base text-black">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 font-medium text-black"><Users className="h-4 w-4" /> {contacts.length} unique valid numbers</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 font-medium text-black"><ShieldCheck className="h-4 w-4" /> {eligibleContacts.length} have documented WhatsApp opt-in</span>
                 {invalidRows > 0 && <span className="rounded-full bg-slate-100 px-3 py-1.5 text-black">{invalidRows} invalid or duplicate rows skipped</span>}
               </div>
+              {contactsMissingConsent > 0 && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-black">{contactsMissingConsent} contacts will be excluded. Include a “WhatsApp Consent” column with Yes and a “Consent Source” column with the recorded opt-in evidence to make a contact eligible.</p>}
               {contacts.length > 500 && <p className="text-base text-black">This file has more than 500 contacts. Split it into smaller broadcasts.</p>}
               {contacts.length > 0 && <div className="max-h-72 overscroll-contain overflow-y-auto rounded-lg border border-slate-200" aria-label={`Detected contacts, ${contacts.length} total`}>
-                <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_minmax(5rem,auto)_auto] gap-4 bg-slate-50 px-3 py-2 text-base font-semibold uppercase text-black"><span>Contact</span><span>Language</span><span>Phone</span></div>
-                {contacts.map((contact, index) => <div key={`${contact.phone}-${index}`} className="grid grid-cols-[minmax(0,1fr)_minmax(5rem,auto)_auto] gap-4 border-t border-slate-100 px-3 py-2 text-base text-black"><span className="truncate">{contact.name || `Contact ${index + 1}`}</span><span>{contact.language || "Missing"}</span><span className="font-mono text-black">{contact.phone}</span></div>)}
+                <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_minmax(5rem,auto)_auto_auto] gap-4 bg-slate-50 px-3 py-2 text-base font-semibold uppercase text-black"><span>Contact</span><span>Language</span><span>Phone</span><span>Consent</span></div>
+                {contacts.map((contact, index) => <div key={`${contact.phone}-${index}`} className="grid grid-cols-[minmax(0,1fr)_minmax(5rem,auto)_auto_auto] gap-4 border-t border-slate-100 px-3 py-2 text-base text-black"><span className="truncate">{contact.name || `Contact ${index + 1}`}</span><span>{contact.language || "Missing"}</span><span className="font-mono text-black">{contact.phone}</span><span className={contact.whatsappConsent && contact.consentSource.length >= 5 ? "font-semibold text-emerald-800" : "font-semibold text-amber-800"}>{contact.whatsappConsent && contact.consentSource.length >= 5 ? "Eligible" : "Excluded"}</span></div>)}
               </div>}
               {contactsMissingLanguage > 0 && <p className="text-sm font-medium text-black">Add a “Language” or “Preferred Language” column and fill it for every contact. We can’t reliably infer someone’s language from their phone number.</p>}
             </div>}
@@ -329,9 +374,9 @@ export default function WhatsAppBroadcastPage() {
               <p className="mt-2 text-sm text-black">The same media goes to everyone; AI personalizes the caption. Images up to 5 MB and videos up to 16 MB.</p>
             </div>
 
-            <Button onClick={() => setConfirmOpen(true)} disabled={!sheet || contacts.length === 0 || contacts.length > 500 || contactsMissingLanguage > 0 || !message.trim() || sending} className="w-full rounded-xl bg-emerald-300 text-base font-bold text-black shadow-[0_10px_30px_-16px_rgba(5,150,105,.8)] transition hover:-translate-y-0.5 hover:bg-emerald-400 sm:w-auto">
+            <Button onClick={() => setConfirmOpen(true)} disabled={!sheet || eligibleContacts.length === 0 || eligibleContacts.length > 500 || contactsMissingLanguage > 0 || !message.trim() || sending} className="w-full rounded-xl bg-emerald-300 text-base font-bold text-black shadow-[0_10px_30px_-16px_rgba(5,150,105,.8)] transition hover:-translate-y-0.5 hover:bg-emerald-400 sm:w-auto">
               <Send className="mr-2 h-4 w-4" />
-              Review and send{contacts.length ? ` to ${contacts.length}` : ""}
+              Review and send{eligibleContacts.length ? ` to ${eligibleContacts.length}` : ""}
             </Button>
           </CardContent>
         </Card>
@@ -340,7 +385,7 @@ export default function WhatsAppBroadcastPage() {
           <Card className="wa-enter border-white bg-white text-black shadow-md">
             <CardHeader><CardTitle className="text-lg">How it works</CardTitle></CardHeader>
             <CardContent className="space-y-4 text-base text-black">
-              {["Upload contacts with a Language or Preferred Language column.", "Review each contact and their language; missing languages block sending.", "Write your message and confirm the recipient count.", "Make’s AI Agent detects your message language, writes it in each contact’s preferred language, and sends it to that contact."].map((step, index) => <div className="flex gap-3" key={step}><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 font-semibold text-black">{index + 1}</span><p className="pt-1">{step}</p></div>)}
+              {["Upload contacts with name, phone, preferred language, and WhatsApp Consent plus Consent Source columns.", "Review the contacts; only people with recorded opt-in evidence are included, and missing languages block sending.", "Write your message and confirm the consent-eligible recipient count.", "Make’s AI Agent detects your message language, writes it in each contact’s preferred language, and sends it to that contact."].map((step, index) => <div className="flex gap-3" key={step}><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 font-semibold text-black">{index + 1}</span><p className="pt-1">{step}</p></div>)}
             </CardContent>
           </Card>
           <Card className="wa-enter border-cyan-200 bg-cyan-50/90 text-black shadow-[0_18px_60px_-36px_rgba(8,145,178,.35)]">
@@ -372,14 +417,14 @@ export default function WhatsAppBroadcastPage() {
             <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
               <Users className="h-5 w-5 shrink-0 text-emerald-700" />
               <div>
-                <p className="text-lg font-bold text-black">{contacts.length} unique recipients</p>
+                <p className="text-lg font-bold text-black">{eligibleContacts.length} consented recipients</p>
                 <p className="text-sm text-black">From {sheet?.fileName || "your uploaded spreadsheet"}</p>
               </div>
             </div>
             <div>
               <p className="mb-2 text-sm font-semibold text-black">WhatsApp message</p>
               <div className="max-h-36 overflow-y-auto whitespace-pre-wrap break-words rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-black">{message}</div>
-              <p className="mt-2 text-sm text-black">Make’s AI Agent will detect the original language and generate one message per recipient in the language listed for that contact. This uses one AI generation per recipient ({contacts.length} maximum).</p>
+              <p className="mt-2 text-sm text-black">Make’s AI Agent will detect the original language and generate one message per recipient in the language listed for that contact. This uses one AI generation per recipient ({eligibleContacts.length} maximum). Contacts without documented opt-in are excluded.</p>
               {mediaFile && <p className="mt-2 text-sm font-semibold text-black">Attached for all recipients: {mediaFile.name}</p>}
             </div>
             <div className="flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-black">
@@ -395,7 +440,7 @@ export default function WhatsAppBroadcastPage() {
               onClick={(event) => { event.preventDefault(); void submitBroadcast(); }}
               className="rounded-xl bg-emerald-300 px-5 font-bold text-black hover:bg-emerald-400"
             >
-              {sending ? <><LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Sending…</> : <><Send className="mr-2 h-4 w-4" /> Send to {contacts.length}</>}
+              {sending ? <><LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Sending…</> : <><Send className="mr-2 h-4 w-4" /> Send to {eligibleContacts.length}</>}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

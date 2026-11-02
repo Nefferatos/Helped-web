@@ -9,11 +9,14 @@ import {
   getCampaigns,
   sendCampaignEmail,
 } from '../controllers/directMarketingController'
-import { requireAgencyAuth } from '../middleware/requireAgencyAuth'
+import { requireAgencyAuth, requireAgencyRole } from '../middleware/requireAgencyAuth'
 
 const router: Router = express.Router()
 
 router.use(requireAgencyAuth)
+// Marketing contains contact details and permission controls; exclude
+// document reviewers, contractors, employers, and candidate accounts.
+router.use(requireAgencyRole('SUPER_ADMIN', 'admin', 'agency', 'RECRUITER', 'staff'))
 
 router.get('/audience', getAudienceOptions)
 router.post('/audience/consent', updateAudienceConsent)

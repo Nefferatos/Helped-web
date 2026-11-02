@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import type { ServerResponse } from "node:http";
 import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
@@ -38,6 +39,27 @@ export default defineConfig(({ mode }) => {
       // WhatsApp broadcast uploads relay through the Worker so the Make
       // webhook URL stays server-side in development and production.
       "/api/whatsapp-broadcast": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
+      // Referral intake and lead management are implemented by the Worker.
+      // Keep these more-specific routes above the generic Express `/api` proxy.
+      "/api/ats/referral-leads": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", (error, _request, response) => {
+            console.error("Referral API Worker proxy failed:", error.message);
+            const serverResponse = response as ServerResponse;
+            if (typeof serverResponse.writeHead !== "function" || serverResponse.headersSent || serverResponse.writableEnded) return;
+            serverResponse.writeHead(503, { "Content-Type": "application/json; charset=utf-8" });
+            serverResponse.end(JSON.stringify({
+              error: "Referral service is unavailable. Start the full app from the project root so its Cloudflare Worker runs on port 8787.",
+            }));
+          });
+        },
+      },
+      "/api/ats/public/referrals": {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },

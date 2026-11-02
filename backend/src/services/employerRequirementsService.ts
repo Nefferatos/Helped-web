@@ -10,6 +10,11 @@ type RequirementRow = {
   preferred_nationalities: string[] | null
   preferred_languages: string[] | null
   minimum_experience_years: number | null
+  household_size: number | null
+  children_count: number | null
+  elderly_count: number | null
+  cooking_requirements: string
+  preferred_start_date: string | null
   notes: string | null
 }
 
@@ -21,7 +26,8 @@ const asStringArray = (value: unknown) =>
 export const getEmployerRequirements = async (agencyId: number, employerId: number) => {
   const result = await query(sql`
     SELECT employer_id, service_type, location, max_monthly_salary, availability,
-           preferred_nationalities, preferred_languages, minimum_experience_years, notes
+           preferred_nationalities, preferred_languages, minimum_experience_years,
+           household_size, children_count, elderly_count, cooking_requirements, preferred_start_date, notes
     FROM employer_requirements
     WHERE agency_id = ${agencyId} AND employer_id = ${employerId} AND active = TRUE
     ORDER BY updated_at DESC
@@ -38,17 +44,22 @@ export const upsertEmployerRequirements = async (
   const result = await query(sql`
     INSERT INTO employer_requirements (
       agency_id, employer_id, service_type, location, max_monthly_salary, availability,
-      preferred_nationalities, preferred_languages, minimum_experience_years, notes, active
+      preferred_nationalities, preferred_languages, minimum_experience_years,
+      household_size, children_count, elderly_count, cooking_requirements, preferred_start_date, notes, active
     ) VALUES (
       ${agencyId}, ${employerId}, ${input.service_type ?? null}, ${input.location ?? null},
       ${input.max_monthly_salary ?? null}, ${input.availability ?? null},
       ${asStringArray(input.preferred_nationalities)}, ${asStringArray(input.preferred_languages)},
-      ${input.minimum_experience_years ?? null}, ${input.notes ?? null}, TRUE
+      ${input.minimum_experience_years ?? null}, ${input.household_size ?? null}, ${input.children_count ?? null},
+      ${input.elderly_count ?? null}, ${input.cooking_requirements ?? ''}, ${input.preferred_start_date ?? null}, ${input.notes ?? null}, TRUE
     ) ON CONFLICT (agency_id, employer_id) DO UPDATE SET
       service_type = EXCLUDED.service_type, location = EXCLUDED.location,
       max_monthly_salary = EXCLUDED.max_monthly_salary, availability = EXCLUDED.availability,
       preferred_nationalities = EXCLUDED.preferred_nationalities, preferred_languages = EXCLUDED.preferred_languages,
-      minimum_experience_years = EXCLUDED.minimum_experience_years, notes = EXCLUDED.notes,
+      minimum_experience_years = EXCLUDED.minimum_experience_years, household_size = EXCLUDED.household_size,
+      children_count = EXCLUDED.children_count, elderly_count = EXCLUDED.elderly_count,
+      cooking_requirements = EXCLUDED.cooking_requirements, preferred_start_date = EXCLUDED.preferred_start_date,
+      notes = EXCLUDED.notes,
       active = TRUE, updated_at = NOW()
     RETURNING *
   `)
@@ -73,6 +84,14 @@ export const applyEmployerRequirements = async (criteria: MatchCriteria): Promis
     preferredNationalities: asStringArray(saved.preferred_nationalities),
     preferredLanguages: asStringArray(saved.preferred_languages),
     minimumExperienceYears: saved.minimum_experience_years ?? undefined,
-    message: [criteria.message, saved.notes].filter(Boolean).join('\n'),
+    message: [
+      criteria.message,
+      saved.household_size != null && `Household size: ${saved.household_size}`,
+      saved.children_count != null && `Children in household: ${saved.children_count}`,
+      saved.elderly_count != null && `Elderly household members: ${saved.elderly_count}`,
+      saved.cooking_requirements && `Cooking requirements: ${saved.cooking_requirements}`,
+      saved.preferred_start_date && `Preferred start date: ${saved.preferred_start_date}`,
+      saved.notes,
+    ].filter(Boolean).join('\n'),
   }
 }

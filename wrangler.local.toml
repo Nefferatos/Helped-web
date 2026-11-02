@@ -18,6 +18,7 @@ preview_id = "595830971f4f4125975ddcdeb627de67"
 
 [vars]
 STORAGE_BACKEND = "supabase"
+LOCAL_AGENCY_AUTH_URL = "http://127.0.0.1:3000/api/agency-auth/me"
 MAID_PREVIEW_SAFE_MODE = "true"
 ANTHROPIC_MODEL = "claude-haiku-4-5"
 CLINE_API_URL = "https://api.cline.bot/api/v1"

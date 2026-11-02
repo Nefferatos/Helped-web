@@ -22,6 +22,8 @@ import {
   Brain,
   Megaphone,
   CheckCircle,
+  Users,
+  Settings2,
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import {
@@ -158,6 +160,16 @@ const navItems = [
     badgeKey: "unreadRequests" as const,
   },
   {
+    label: "Referral Leads",
+    path: adminPath("/referral-leads"),
+    icon: Users,
+    iconBg: "linear-gradient(145deg, #A7F3D0, #10B981)",
+    iconShadow: "0 4px 0 #059669, 0 6px 12px rgba(16,185,129,0.35)",
+    iconShadowActive: "0 2px 0 #059669, 0 3px 8px rgba(16,185,129,0.3)",
+    iconColor: "#fff",
+    badgeKey: null,
+  },
+  {
     label: "WhatsApp Broadcast",
     path: adminPath("/whatsapp-broadcast"),
     icon: FaWhatsapp,
@@ -194,6 +206,16 @@ const navItems = [
     iconBg: "linear-gradient(145deg, #86EFAC, #16A34A)",
     iconShadow: "0 4px 0 #15803D, 0 6px 12px rgba(22,163,74,0.45)",
     iconShadowActive: "0 2px 0 #15803D, 0 3px 8px rgba(22,163,74,0.4)",
+    iconColor: "#fff",
+    badgeKey: null,
+  },
+  {
+    label: "Technical",
+    path: adminPath("/technical"),
+    icon: Settings2,
+    iconBg: "linear-gradient(145deg, #CBD5E1, #475569)",
+    iconShadow: "0 4px 0 #334155, 0 6px 12px rgba(71,85,105,0.35)",
+    iconShadowActive: "0 2px 0 #334155, 0 3px 8px rgba(71,85,105,0.3)",
     iconColor: "#fff",
     badgeKey: null,
   },
@@ -762,6 +784,7 @@ const SidebarContent = ({
         display: "flex",
         flexDirection: "column",
         height: "100%",
+        minHeight: 0,
         overflow: "hidden",
       }}
     >
@@ -797,7 +820,7 @@ const SidebarContent = ({
         <div
           style={{
             overflow: "hidden",
-            maxWidth: collapsed ? 0 : 160,
+            maxWidth: collapsed ? 0 : 200,
             opacity: collapsed ? 0 : 1,
             transition: "max-width 0.3s ease, opacity 0.2s ease",
             whiteSpace: "nowrap",
@@ -861,7 +884,7 @@ const SidebarContent = ({
         <div
           style={{
             overflow: "hidden",
-            maxWidth: collapsed ? 0 : 160,
+            maxWidth: collapsed ? 0 : 200,
             opacity: collapsed ? 0 : 1,
             transition: "max-width 0.3s ease, opacity 0.2s ease",
             whiteSpace: "nowrap",
@@ -888,7 +911,8 @@ const SidebarContent = ({
       {/* Nav */}
       <nav
         style={{
-          flex: 1,
+          flex: "1 1 0%",
+          minHeight: 0,
           overflowY: "auto",
           overflowX: "hidden",
           paddingTop: 6,
@@ -949,11 +973,13 @@ const SidebarContent = ({
                     fontWeight: isActive ? 700 : 600,
                     color: isActive ? "#0D6E56" : "#000000",
                     flex: 1,
+                    minWidth: 0,
                     overflow: "hidden",
-                    maxWidth: collapsed ? 0 : 200,
+                    maxWidth: collapsed ? 0 : "100%",
                     opacity: collapsed ? 0 : 1,
                     transition: "max-width 0.3s ease, opacity 0.2s ease",
                     whiteSpace: "nowrap",
+                    textOverflow: "ellipsis",
                   }}
                 >
                   {item.label}
@@ -1234,7 +1260,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const initials = (agencyAdmin?.agencyName || "A").slice(0, 2).toUpperCase();
   const agencyDisplayName = getAgencyDisplayName(agencyAdmin);
   const agencyWelcomeName = getAgencyDisplayWelcomeName(agencyAdmin);
-  const desktopWidth = collapsed ? 64 : 230;
+  const desktopWidth = collapsed ? 64 : 280;
 
   // Total unread count for the header bell icon
   const totalUnread =
@@ -1306,7 +1332,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             top: 0,
             left: 0,
             bottom: 0,
-            width: 240,
+            width: 280,
             zIndex: 40,
             background: "#fff",
             borderRight: "1px solid #E5E7EB",
@@ -1353,6 +1379,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             flexShrink: 0,
             display: "flex",
             flexDirection: "column",
+            minHeight: 0,
             borderRight: "1px solid #E5E7EB",
             background: "#fff",
             transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",

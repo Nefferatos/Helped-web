@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   Bell,
   ChevronRight,
+  FileText,
   HelpCircle,
   Home,
   Menu,
@@ -45,6 +46,7 @@ const allTabs: NavTab[] = [
   { label: "Home",        to: "/client/home",         icon: Home },
   { label: "Search Maid", to: "/client/maids",         icon: Search },
   { label: "Messages",    to: "/client/support-chat",  icon: MessageCircle },
+  { label: "Documents",   to: "/client/placement-documents", icon: FileText },
   { label: "FAQ",         to: "/client/faq",           icon: HelpCircle },
   { label: "Enquiry",     to: "/client/enquiry",       icon: MessageSquarePlus },
 ];

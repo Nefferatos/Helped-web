@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { Activity, CheckCircle2, CircleAlert, ClipboardList, FileText, History, MessageSquareText, RefreshCw, Users, UserRoundSearch, Zap } from "lucide-react";
+import { CheckCircle2, CircleAlert, ClipboardList, FileText, History, MessageSquareText, RefreshCw, Users, UserRoundSearch } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
@@ -16,7 +16,6 @@ type Employer = { createdAt?: string; updatedAt?: string };
 type RequestCounts = { pending: number; interested: number; direct_hire: number; rejected: number };
 type MetricData = { maids: Maid[]; maidCount: number; applicants: Applicant[]; applicantCount: number; enquiries: Enquiry[]; enquiryCount: number; contracts: Employer[]; requests: RequestCounts };
 type ListPage<T> = { items: T[]; total: number };
-type MonitoredWorkflow = { id: string; name: string; configured: boolean; scenarioStatus: string; scenarioStatusEvidence?: string; mode: string; purpose?: string; trigger?: string; checkedAt?: string };
 type PortalAction = { id: string; actor: string; created_at: string; status: "completed" | "failed"; payload: { actionLabel?: string } };
 
 const links = {
@@ -80,10 +79,6 @@ const HomePage = () => {
   const [errors, setErrors] = useState<string[]>([]);
   const [failed, setFailed] = useState<Set<number>>(() => new Set());
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
-  const [automations, setAutomations] = useState<MonitoredWorkflow[]>([]);
-  const [automationUnavailable, setAutomationUnavailable] = useState(false);
-  const [automationRefreshing, setAutomationRefreshing] = useState(false);
-  const [automationFilter, setAutomationFilter] = useState<"all" | "configured" | "setup">("all");
   const [portalActions, setPortalActions] = useState<PortalAction[]>([]);
   const [portalActionsUnavailable, setPortalActionsUnavailable] = useState(false);
   const [portalActionsRefreshing, setPortalActionsRefreshing] = useState(false);
@@ -120,21 +115,6 @@ const HomePage = () => {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  const refreshAutomations = useCallback(async () => {
-    setAutomationRefreshing(true);
-    try {
-      const response = await fetch("/api/dashboard/automations", apiRequestInit());
-      const payload = await readSafeJson<{ workflows?: MonitoredWorkflow[]; error?: string }>(response);
-      if (!response.ok) throw new Error("Could not load automation status");
-      setAutomations(payload.workflows || []);
-      setAutomationUnavailable(false);
-    } catch {
-      setAutomationUnavailable(true);
-    } finally {
-      setAutomationRefreshing(false);
-    }
-  }, []);
-  useEffect(() => { void refreshAutomations(); }, [refreshAutomations]);
   const refreshPortalActions = useCallback(async () => {
     setPortalActionsRefreshing(true);
     try {
@@ -193,23 +173,11 @@ const HomePage = () => {
       return `${label} ${chartData.reduce((sum, month) => sum + month[key], 0)}`;
     })
     .join(", ");
-  const dashboardAutomations = automations.filter((workflow) => !["hr-email", "fdw-application-chat"].includes(workflow.id));
-  const configuredAutomations = dashboardAutomations.filter((workflow) => workflow.configured).length;
-  const visibleAutomations = dashboardAutomations.filter((workflow) => automationFilter === "all" || (automationFilter === "configured" ? workflow.configured : !workflow.configured));
   return <main className="admin-dashboard">
     <header className="dash-head"><div><p className="dash-kicker">Agency overview</p><h1>Good day{admin?.agencyName ? `, ${admin.agencyName}` : ""}</h1><p>Your agency at a glance. Updated {syncedAt ? syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "when data loads"}.</p></div><button className="dash-refresh" onClick={() => void refresh(true)} disabled={refreshing}><RefreshCw size={15} className={refreshing ? "animate-spin" : ""}/>{refreshing ? "Refreshing" : "Refresh data"}</button></header>
     {errors.length > 0 && <div className="dash-error" role="alert">Some figures could not be loaded. {Array.from(new Set(errors)).join(" · ")}</div>}
     <section className="dash-grid" aria-label="Agency analytics">
       {cards.map((card) => <Link key={card.title} to={card.href} className="dash-card" style={{textDecoration:"none",color:"inherit","--card-accent":card.color,"--card-surface":card.surface} as CSSProperties}><div className="dash-card-top"><span className="dash-icon" style={{background:card.surface,color:card.color}}><card.icon size={20}/></span><span className="dash-card-label">{card.title}</span></div>{loading ? <div className="dash-value-loading" aria-hidden /> : <div className="dash-value">{failed.has(card.index) ? "—" : card.value.toLocaleString()}</div>}<div className="dash-note">{card.note}</div></Link>)}
-    </section>
-    <section className="dash-automation" aria-labelledby="dash-automation-title">
-      <div className="dash-automation-head"><div><p className="dash-kicker"><Activity size={14}/> Automation health</p><h2 id="dash-automation-title">Workflow monitor</h2><p>Review website connections for every tracked automation.</p><p className="dash-monitor-note">Connection status checks the website webhook only. Make.com scenario switches and run history are not available to the website.</p></div><div className="dash-automation-tools"><Zap size={22} aria-hidden="true"/><button type="button" className="dash-automation-refresh" onClick={() => void refreshAutomations()} disabled={automationRefreshing}><RefreshCw size={15} className={automationRefreshing ? "animate-spin" : ""}/>{automationRefreshing ? "Checking" : "Check connections"}</button></div></div>
-      {dashboardAutomations.length > 0 && <div className="dash-automation-filters" role="group" aria-label="Filter automations">{([ ["all", `All ${dashboardAutomations.length}`], ["configured", `Connected ${configuredAutomations}`], ["setup", `Needs setup ${dashboardAutomations.length - configuredAutomations}`] ] as const).map(([key, label]) => <button type="button" key={key} onClick={() => setAutomationFilter(key)} aria-pressed={automationFilter === key} className={automationFilter === key ? "is-selected" : ""}>{label}</button>)}</div>}
-      {automationUnavailable ? <p className="dash-automation-empty" role="alert">Automation status is temporarily unavailable. Check connections to try again.</p> : <div className="dash-automation-list">{visibleAutomations.map((workflow) => {
-        const configured = workflow.configured;
-        return <article className="dash-automation-item" key={workflow.id}><span className={`dash-automation-indicator ${configured ? "is-ready" : "is-off"}`} aria-hidden="true"/><div className="dash-automation-name">{workflow.name}<small>{workflow.purpose || (configured ? "Website webhook is configured." : "Website webhook needs configuration.")}</small>{workflow.trigger && <small className="dash-automation-trigger"><strong>Runs when:</strong> {workflow.trigger}</small>}</div><span className={`dash-automation-status ${configured ? "is-ready" : "is-off"}`}>{configured ? <><CheckCircle2 size={13}/> Connected</> : <><CircleAlert size={13}/> Needs setup</>}</span></article>;
-      })}{!automationUnavailable && visibleAutomations.length === 0 && <p className="dash-automation-empty">No workflows match this filter.</p>}</div>}
-      <p className="dash-monitor-footnote">This monitor does not confirm that a Make.com scenario is switched on or that a recent run succeeded. Verify those in Make.com run history.</p>
     </section>
     <section className="dash-portal-actions" aria-labelledby="dash-portal-actions-title">
       <div className="dash-portal-actions-head"><div><p className="dash-kicker"><History size={14}/> Staff activity</p><h2 id="dash-portal-actions-title">Recent portal actions</h2><p>See what staff changed in applicant, maid, enquiry, and placement records.</p></div><button type="button" className="dash-automation-refresh" onClick={() => void refreshPortalActions()} disabled={portalActionsRefreshing}><RefreshCw size={15} className={portalActionsRefreshing ? "animate-spin" : ""}/>{portalActionsRefreshing ? "Refreshing" : "Refresh actions"}</button></div>

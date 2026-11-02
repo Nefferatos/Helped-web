@@ -3,8 +3,8 @@
   "metadata": {
     "instant": true,
     "version": 1,
-    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": true, "confidential": true, "dataloss": false, "dlq": true },
-    "notes": ["New acquisition agent. Accept only consented leads from approved forms, partner referrals, and supported platform integrations. Do not scrape private data or send unsolicited messages. Connect the webhook to an approved lead source; do not connect or replace existing website features."]
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": true },
+    "notes": ["Connected to the website's public referral form when MAKE_WEBHOOK_URL_AGENT_1_LEAD_HUNTER is configured. It classifies the submitted referral only; the website remains the source of truth. Share-contact consent is not WhatsApp marketing consent. This scenario never starts a marketing message, scrapes private data, or contacts people."]
   },
   "flow": [
     {
