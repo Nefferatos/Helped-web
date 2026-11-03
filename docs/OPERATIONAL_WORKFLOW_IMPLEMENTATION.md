@@ -5,7 +5,7 @@
 - React/TypeScript frontend, a Cloudflare Worker API, and a legacy Express API used by local services.
 - Supabase is the Worker-backed source for normalized operational records; the app-data blob remains for older portal data.
 - Existing records include ATS applications/profiles/documents, employers and requirements, placements, placement status history, flights, arrival/medical/MOM tasks, interviews, contractor jobs, document metadata, and workflow events.
-- Existing pages include applicant recruitment, employer matching, Operations Center, Operations Board, contractor tasks, employment contracts, WhatsApp broadcast, and Referral Leads.
+- Existing pages include applicant recruitment, employer matching, Operations Center, Operations Board, contractor tasks, employment contracts, Telegram broadcast and applicant chatbot, and Referral Leads.
 - Make workflows are configured through server-side Worker bindings. The site can report webhook configuration; it cannot query whether a Make scenario is currently enabled or inspect Make run history.
 
 ## Implemented slices

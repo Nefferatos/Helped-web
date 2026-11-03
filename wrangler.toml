@@ -18,8 +18,8 @@ binding = "ASSETS"
 binding = "APP_DATA"
 id = "62a5ada5801547b5b0895fec94ab0b12"
 
-# Optional: WhatsApp broadcast media uploads require Cloudflare R2. Add the
-# WHATSAPP_MEDIA R2 binding here after R2 is enabled on the Cloudflare account.
+# Optional: Telegram broadcast attachments require Cloudflare R2. Add the
+# TELEGRAM_MEDIA R2 binding after creating the helped-telegram-media bucket.
 [vars]
 # Storage: "kv" uses the APP_DATA KV namespace above. Remove to fall back to Supabase.
 STORAGE_BACKEND = "supabase"
@@ -132,7 +132,7 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 #   npx wrangler secret put RESEND_API_KEY
 # Then update RESEND_FROM below with your verified domain.
 # Without RESEND_API_KEY, email features (client registration confirmation) return 503 gracefully.
-RESEND_FROM = "Find Maid <no-reply@rinzinagency.com>"
+RESEND_FROM = "At The Agency <no-reply@rinzinagency.com>"
 DEV_EXPOSE_CONFIRMATION_CODE = "false"
 
 # TikTok Developer App credentials (for Login Kit OAuth).

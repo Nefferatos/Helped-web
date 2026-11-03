@@ -59,6 +59,18 @@ export interface AtsApplicationListItem {
     interviewResult: string;
     score: number;
   } | null;
+  scheduledInterview?: {
+    id: string;
+    scheduledAt: string;
+    mode: string;
+    status: string;
+    meetingUrl: string | null;
+    outcome: string;
+    remindersEnabled: boolean;
+    employerName: string;
+    employerEmail: string;
+    employerContactVerified: boolean;
+  } | null;
   clientMatchScore?: number;
   source?: string;
 }
@@ -152,7 +164,12 @@ export const fetchAtsApplications = async (params: {
   const response = await fetch(`/api/ats/applications?${query.toString()}`, {
     headers: { ...getAgencyAdminAuthHeaders() },
   });
-  return ensureOk<{ data: AtsApplicationListItem[]; pageInfo: { page: number; pageSize: number; total: number; totalPages: number }; error?: string }>(response);
+  return ensureOk<{
+    data: AtsApplicationListItem[];
+    pageInfo: { page: number; pageSize: number; total: number; totalPages: number };
+    interviewScheduleUnavailable?: boolean;
+    error?: string;
+  }>(response);
 };
 
 export const fetchAtsApplication = async (applicationId: string) => {

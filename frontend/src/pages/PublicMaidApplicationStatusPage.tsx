@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -198,6 +198,8 @@ const PublicMaidApplicationStatusPage = () => {
           </div>
         </section>
 
+        {summary && <TelegramApplicantInvite />}
+
         {summaryQuery.isError ? (
           <Card className="rounded-[2rem] border-rose-200 bg-white p-6">
             <h2 className="text-2xl font-black text-slate-950">We could not load this application.</h2>
@@ -336,6 +338,13 @@ const PublicMaidApplicationStatusPage = () => {
       </div>
     </div>
   );
+};
+
+const TelegramApplicantInvite = () => {
+  const [link, setLink] = useState("");
+  useEffect(() => { void fetch("/api/telegram/invitation").then((response) => response.json()).then((data: { invitationLink?: string }) => setLink(data.invitationLink || "")).catch(() => undefined); }, []);
+  if (!link) return null;
+  return <Card className="rounded-2xl border-sky-200 bg-sky-50 p-5"><h2 className="font-bold text-slate-950">Get application updates on Telegram</h2><p className="mt-1 text-sm text-slate-700">You can choose to start our Telegram bot for recruitment updates and applicant support. Starting the bot is voluntary.</p><Button asChild className="mt-3 bg-sky-600 text-white hover:bg-sky-700"><a href={link} target="_blank" rel="noreferrer">Open Telegram bot</a></Button></Card>;
 };
 
 export default PublicMaidApplicationStatusPage;

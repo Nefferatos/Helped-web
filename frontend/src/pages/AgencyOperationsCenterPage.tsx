@@ -14,9 +14,26 @@ type MatchResponse = { data?: { matches?: MatchCandidate[]; aiUsed?: boolean; fa
 type TranscriptResult = { fileName: string; transcript: string }
 
 const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(path, { ...init, headers: { ...getAgencyAdminAuthHeaders(), ...(init?.headers ?? {}) } })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.error || 'Request failed')
+  let response: Response
+  try {
+    response = await fetch(path, { ...init, headers: { ...getAgencyAdminAuthHeaders(), ...(init?.headers ?? {}) } })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Network connection failed'
+    throw new Error(`Unable to reach ${path}: ${detail}`)
+  }
+
+  const responseText = await response.text().catch(() => '')
+  let data: Record<string, unknown> = {}
+  try {
+    const parsed: unknown = responseText ? JSON.parse(responseText) : {}
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed as Record<string, unknown>
+  } catch {
+    // Keep the response text below so proxy and server errors aren't hidden.
+  }
+  if (!response.ok) {
+    const detail = typeof data.error === 'string' ? data.error : responseText.trim().slice(0, 240)
+    throw new Error(`${path} failed (${response.status})${detail ? `: ${detail}` : ''}`)
+  }
   return data as T
 }
 
@@ -345,8 +362,11 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
     <main className={embedded ? "bg-transparent" : "min-h-screen bg-background"}>
       <div className={embedded ? "operations-center operations-center-embedded mx-auto max-w-6xl space-y-6" : "operations-center mx-auto max-w-5xl space-y-6 p-4 py-8 md:p-8"}>
         {embedded && <style>{`
-          .operations-center-embedded{color:#000!important;font-size:16px}
-          .operations-center-embedded :is(p,span,label,li,button,a,input,textarea,select,option,strong,h1,h2,h3,h4,small){color:#000!important}
+          .operations-center-embedded{--ops-ink:#102a43;--ops-muted:#425c70;--ops-teal:#087f72;--ops-blue:#2563a8;color:var(--ops-ink);font-size:16px;perspective:1400px}
+          .operations-center-embedded :is(p,span,label,li,button,a,input,textarea,select,option,strong,h1,h2,h3,h4,small){color:inherit}
+          .operations-center-embedded .text-foreground{color:var(--ops-ink)!important}
+          .operations-center-embedded .text-black{color:var(--ops-muted)!important}
+          .operations-center-embedded .text-primary{color:var(--ops-teal)!important}
           .operations-center-embedded :is(.text-xs,.text-sm){font-size:16px!important;line-height:1.5!important}
           .operations-center-embedded .text-base{font-size:16px!important;line-height:1.5!important}
           .operations-center-embedded .text-lg{font-size:20px!important;line-height:1.35!important}
@@ -361,8 +381,22 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
           .operations-center-embedded .placement-empty-cta{background-color:#0D6E56!important;color:#fff!important;box-shadow:0 2px 6px rgba(13,110,86,.18)!important}
           .operations-center-embedded .placement-empty-cta:hover{background-color:#0b5a46!important;box-shadow:0 5px 14px rgba(13,110,86,.24)!important}
           .operations-center-embedded .placement-empty-cta:focus-visible{outline:3px solid rgba(13,110,86,.35);outline-offset:2px}
-          .operations-center-embedded section{border-color:#dbe4f0;box-shadow:0 5px 18px rgba(15,23,42,.045)}
-          .operations-center-embedded h1,.operations-center-embedded h2,.operations-center-embedded h3{color:#000!important}
+          .operations-center-embedded section{border-color:#dbe4f0;box-shadow:0 8px 22px rgba(15,42,67,.07)}
+          .operations-center-embedded h1,.operations-center-embedded h2,.operations-center-embedded h3{color:var(--ops-ink)!important}
+          .operations-center-embedded .operations-stats-grid{perspective:1200px}
+          .operations-center-embedded .operations-stat-card{position:relative;isolation:isolate;min-height:94px;overflow:hidden;border-color:#d7e5ee;background:linear-gradient(145deg,#fff 15%,#f1f8fb 100%);box-shadow:0 7px 0 #dbe7ef,0 12px 24px rgba(15,42,67,.1);transform:translateZ(0);transform-style:preserve-3d;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}
+          .operations-center-embedded .operations-stat-card:after{position:absolute;z-index:-1;right:-24px;bottom:-42px;width:112px;height:112px;border-radius:50%;background:var(--ops-glow,#c8f2e8);content:"";opacity:.55;filter:blur(1px)}
+          .operations-center-embedded .operations-stat-card:hover{border-color:var(--ops-accent,#0b8276);box-shadow:0 3px 0 #dbe7ef,0 19px 28px rgba(15,42,67,.16);transform:translateY(-5px) rotateX(2deg) rotateY(-1deg)}
+          .operations-center-embedded .operations-stat-card:nth-child(4n+1){--ops-accent:#07836f;--ops-glow:#b8efe0}
+          .operations-center-embedded .operations-stat-card:nth-child(4n+2){--ops-accent:#2875ba;--ops-glow:#c7e6ff}
+          .operations-center-embedded .operations-stat-card:nth-child(4n+3){--ops-accent:#a55b16;--ops-glow:#ffe4b8}
+          .operations-center-embedded .operations-stat-card:nth-child(4n){--ops-accent:#7653b6;--ops-glow:#e0d3ff}
+          .operations-center-embedded .operations-stat-card>span{background:color-mix(in srgb,var(--ops-accent,#087f72) 12%,white)!important;color:var(--ops-accent,#087f72)!important;box-shadow:0 4px 12px color-mix(in srgb,var(--ops-accent,#087f72) 18%,transparent)}
+          .operations-center-embedded [role=tablist]{border-color:#d5e2ed;background:linear-gradient(130deg,#eef6f5,#f1f6fc);box-shadow:inset 0 1px 0 #fff,0 8px 20px rgba(15,42,67,.07)}
+          .operations-center-embedded [role=tab]{transform-style:preserve-3d;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+          .operations-center-embedded [role=tab]:hover{transform:translateY(-3px) rotateX(2deg);box-shadow:0 7px 0 rgba(15,42,67,.08),0 12px 20px rgba(15,42,67,.11)}
+          .operations-center-embedded [role=tab][aria-selected=true]{background:linear-gradient(135deg,#087f72,#1767a2);box-shadow:0 5px 0 #0b5367,0 10px 22px rgba(8,79,103,.22)}
+          @media(prefers-reduced-motion:reduce){.operations-center-embedded *{transition-duration:.01ms!important;animation-duration:.01ms!important}}
           .operations-center :is(input,textarea,select){transition:border-color .18s,box-shadow .18s,background-color .18s}
           .operations-center :is(input,textarea,select):focus{border-color:#14b8a6;box-shadow:0 0 0 4px rgba(20,184,166,.13)}
           .operations-center [role=tablist] button[aria-selected=true]{box-shadow:0 5px 15px rgba(15,23,42,.13)}
@@ -386,45 +420,14 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
           <p aria-live="polite" className="rounded-2xl border border-primary/20 bg-primary/5 px-5 py-3 text-sm text-foreground">{notice}</p>
         )}
 
-        <section className="rounded-[28px] border border-primary/15 bg-gradient-to-br from-primary/10 via-card to-card p-5 sm:p-6">
-          <p className="text-sm font-semibold text-primary">Simple steps</p>
-          <h2 className="mt-1 text-xl font-semibold text-foreground">What do you need to do today?</h2>
-          <p className="mt-1 text-sm text-black">Follow the steps below in order. Each button takes you to the part of the page you need.</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <button type="button" onClick={() => setActiveTab('matching')} className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow">
-              <UsersRound className="h-5 w-5 text-primary" />
-              <p className="mt-3 text-base font-semibold text-foreground">Match a helper</p>
-              <p className="mt-1 text-xs leading-5 text-black">Save the employer's needs and see the best worker matches.</p>
-              <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Start here <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
-            </button>
-            <button type="button" onClick={() => setActiveTab('contractor')} className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow">
-              <ClipboardList className="h-5 w-5 text-primary" />
-              <p className="mt-3 text-base font-semibold text-foreground">Check placement steps</p>
-              <p className="mt-1 text-xs leading-5 text-black">Mark flight, medical, and handover tasks as complete.</p>
-              <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Open checklist <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
-            </button>
-            <button type="button" onClick={() => setActiveTab('knowledge')} className="group rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow">
-              <BookOpen className="h-5 w-5 text-primary" />
-              <p className="mt-3 text-base font-semibold text-foreground">Read the staff guide</p>
-              <p className="mt-1 text-xs leading-5 text-black">Use approved answers and instructions before replying to staff or clients.</p>
-              <span className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary">Open guide <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
-            </button>
-          </div>
-        </section>
 
-        <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
-          <p className="font-semibold text-primary">How to use this page</p>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-black">
-            <li>Look at the overview card to see current placement status.</li>
-            <li>Click “Match helper” when you need to find a good worker for an employer.</li>
-            <li>Use “Placement steps” to update travel, medical, and handover milestones.</li>
-          </ol>
-        </div>
+
+
 
         {/* ── KPI strip — always visible, whatever tab is open ────────── */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+        <div className="operations-stats-grid grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
           {STATS.map(({ key, label, icon: Icon }) => (
-            <div key={key} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5">
+            <div key={key} className="operations-stat-card flex items-center gap-3 rounded-2xl border border-border p-4 text-left sm:p-5">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Icon className="h-5 w-5" /></span>
               <div><p className="text-2xl font-bold leading-none text-foreground">{!operationsSummary ? '—' : operationsSummary[key] == null ? 'N/A' : operationsSummary[key]}</p><p className="mt-1 text-xs font-medium text-black">{label}</p></div>
             </div>

@@ -256,6 +256,8 @@ export const putWhatsAppTemplate = async (req: Request, res: Response) => {
 }
 
 export const postWhatsAppBroadcast = async (req: Request, res: Response) => {
+  return res.status(410).json({ error: 'WhatsApp broadcasting has been retired. Use the Telegram broadcast dashboard.' })
+  /* Legacy history only. This code path is intentionally disabled.
   try {
     const agencyId = await getRequestAgencyId(req)
     const actorName = await requireActorName(req)
@@ -283,4 +285,5 @@ export const postWhatsAppBroadcast = async (req: Request, res: Response) => {
     console.error('Error sending WhatsApp broadcast:', error)
     res.status(500).json({ error: 'Failed to send WhatsApp broadcast' })
   }
+  */
 }

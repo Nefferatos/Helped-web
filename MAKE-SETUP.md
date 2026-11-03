@@ -161,3 +161,11 @@ curl -X POST http://localhost:8787/api/ai/receptionist -H "Content-Type: applica
 - No Supabase credentials sent to Make.com
 - No API keys sent to Make.com
 - Conversation IDs are random UUIDs
+# Telegram Broadcasting and Applicant Chatbot
+
+See [docs/TELEGRAM-INTEGRATION.md](docs/TELEGRAM-INTEGRATION.md) for the
+database migration, Worker secrets, Telegram webhook registration, and Make
+scenario request/callback contracts. The previous phone-list WhatsApp
+broadcast route is disabled; broadcast recipients now come only from active
+Telegram `/start` registrations.
+

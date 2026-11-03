@@ -45,9 +45,7 @@ type ReferralLeadResponse = {
 type AutomationInventory = { workflows: Array<{ id: string; configured: boolean; scenarioStatus?: string }> };
 type AutomationState = { referral: boolean | null; agent1: boolean | null; broadcast: boolean | null };
 type Segment = "all" | "eligible" | "awaiting" | "optedOut" | "review";
-type BroadcastContact = { name: string; phone: string; language: string; whatsappConsent: true; consentSource: string };
 
-const BROADCAST_HANDOFF_KEY = "referral-leads:broadcast:v1";
 const normalizeHeader = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 const phoneHeader = (value: string) => /^(phone|phoneno|phonenumber|mobile|mobileno|mobilenumber|whatsapp|whatsappno|whatsappnumber|contact|contactno|contactnumber|contactphone|telephone|tel|maidphone|maidphoneno|maidphonenumber|maidmobile|maidmobilenumber|maidwhatsapp|maidwhatsappno|maidwhatsappnumber|referredphone|referredphonenumber)$/.test(value);
 const embeddedPhonePattern = /\+?\d[\d\s().-]*\d/g;
@@ -102,7 +100,6 @@ export default function ReferralLeadsPage() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [googleSheetRange, setGoogleSheetRange] = useState("Referrals!A1:Z501");
-  const [preparingBroadcast, setPreparingBroadcast] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [consentEvidence, setConsentEvidence] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
@@ -128,7 +125,7 @@ export default function ReferralLeadsPage() {
     try {
       const inventory = await request<AutomationInventory>("/api/dashboard/automations");
       const configured = (id: string) => inventory.workflows.find((workflow) => workflow.id === id)?.configured ?? false;
-      setAutomation({ referral: configured("maid-referral"), agent1: configured("agent-1-lead-hunter"), broadcast: configured("whatsapp-broadcast") });
+      setAutomation({ referral: configured("maid-referral"), agent1: configured("agent-1-lead-hunter"), broadcast: configured("telegram-broadcast") });
     } catch {
       setAutomation({ referral: null, agent1: null, broadcast: null });
     } finally { setAutomationLoading(false); }
@@ -265,31 +262,7 @@ export default function ReferralLeadsPage() {
     } catch (exportError) { toast.error(exportError instanceof Error ? exportError.message : "Could not export eligible contacts."); }
   };
 
-  const prepareBroadcast = async () => {
-    setPreparingBroadcast(true);
-    try {
-      const params = new URLSearchParams({ page: "1", pageSize: "200" });
-      if (search.trim()) params.set("q", search.trim());
-      if (country) params.set("country", country);
-      const first = await request<ReferralLeadResponse>(`/api/ats/referral-leads?${params}`);
-      const matched = [...first.leads];
-      for (let pageNumber = 2; pageNumber <= first.pageCount; pageNumber++) {
-        params.set("page", String(pageNumber));
-        const next = await request<ReferralLeadResponse>(`/api/ats/referral-leads?${params}`);
-        matched.push(...next.leads);
-      }
-      const eligible = matched.filter((lead) => lead.whatsappConsentActive && !lead.whatsappOptedOut && lead.phone.trim());
-      if (!eligible.length) throw new Error("No contacts in this view have an active opt-in and phone number yet.");
-      if (eligible.length > 500) throw new Error("This view has more than 500 eligible contacts. Narrow the search or country filter, then prepare the broadcast again.");
-      const contacts: BroadcastContact[] = eligible.map((lead) => ({
-        name: lead.name, phone: lead.phone, language: lead.preferredLanguage,
-        whatsappConsent: true, consentSource: lead.whatsappConsentSource,
-      }));
-      sessionStorage.setItem(BROADCAST_HANDOFF_KEY, JSON.stringify({ createdAt: Date.now(), contacts }));
-      navigate(adminPath("/whatsapp-broadcast"));
-    } catch (handoffError) { toast.error(handoffError instanceof Error ? handoffError.message : "Could not prepare the broadcast audience."); }
-    finally { setPreparingBroadcast(false); }
-  };
+  const prepareBroadcast = () => navigate(adminPath("/telegram-broadcast"));
 
   const updateLead = async (lead: ReferralLead, update: { whatsappConsent?: boolean; whatsappConsentSource?: string; interestStatus?: ReferralLead["interestStatus"] }) => {
     if (update.whatsappConsent && (consentEvidence[lead.id]?.trim().length ?? 0) < 5) {
@@ -311,7 +284,7 @@ export default function ReferralLeadsPage() {
   const workflowSteps = [
     { title: "Referral intake", detail: "Website form saves each referral to this list.", status: "Connected", ready: true, icon: Users },
     { title: "Agent 1 triage", detail: automation.agent1 === null ? "Connection status unavailable." : automation.agent1 ? "Make webhook configured; scenario run state is not checked here." : "Configure the Agent 1 Make webhook to classify website referrals.", status: automationLoading ? "Checking" : automation.agent1 === null ? "Unknown" : automation.agent1 ? "Webhook ready" : "Needs setup", ready: automation.agent1 === true, icon: Sparkles },
-    { title: "WhatsApp broadcast", detail: automation.broadcast === null ? "Connection status unavailable." : automation.broadcast ? "Consented leads can be prepared for staff review before sending." : "Configure the broadcast Make webhook before sending.", status: automationLoading ? "Checking" : automation.broadcast === null ? "Unknown" : automation.broadcast ? "Webhook ready" : "Needs setup", ready: automation.broadcast === true, icon: MessageCircle },
+    { title: "Telegram broadcast", detail: automation.broadcast === null ? "Connection status unavailable." : automation.broadcast ? "Only applicants who started the Telegram bot can receive broadcasts." : "Configure the Telegram Make webhook before sending.", status: automationLoading ? "Checking" : automation.broadcast === null ? "Unknown" : automation.broadcast ? "Webhook ready" : "Needs setup", ready: automation.broadcast === true, icon: MessageCircle },
   ];
 
   return (
@@ -334,7 +307,7 @@ export default function ReferralLeadsPage() {
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold uppercase tracking-[.18em] text-black"><Sparkles className="h-4 w-4" /> Referral operations · Agent 1</div>
             <h1 className="mt-4 text-3xl font-black tracking-tight text-black sm:text-5xl">Referral leads</h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-black">Collect referrals, review Agent 1 triage, and move opted-in contacts to WhatsApp Broadcast without uploading the same list twice.</p>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-black">Collect referrals and review Agent 1 triage. Invite interested applicants to voluntarily start Telegram before any broadcast.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <input ref={inputRef} type="file" accept=".csv,.xls,.xlsx" className="hidden" onChange={(event) => void importFile(event)} />
@@ -346,8 +319,8 @@ export default function ReferralLeadsPage() {
             <Button variant="outline" onClick={() => void importGoogleSheet()} disabled={importing || !googleSheetRange.trim()} className="h-11 border-slate-300 bg-white text-black hover:bg-emerald-50">
               {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}Import Sheet
             </Button>
-            <Button onClick={() => void prepareBroadcast()} disabled={preparingBroadcast || !summary?.eligible} className="h-11 bg-emerald-200 text-black hover:bg-emerald-300">
-              {preparingBroadcast ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}Prepare broadcast<ArrowRight className="h-4 w-4" />
+            <Button onClick={prepareBroadcast} className="h-11 bg-emerald-200 text-black hover:bg-emerald-300">
+              <MessageCircle className="h-4 w-4" />Open Telegram broadcast<ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -420,8 +393,8 @@ export default function ReferralLeadsPage() {
       </Card>
 
       <section className="referral-enter referral-delay-3 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:p-6">
-        <div className="flex items-start gap-3"><ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-black" /><div><h2 className="font-bold text-black">Permission stays attached to the contact</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-black">Sharing someone’s details as a referral does not give permission for marketing. Only active, documented WhatsApp opt-ins can move to the broadcast review screen. Staff still reviews and confirms each broadcast.</p></div></div>
-        <div className="flex flex-wrap gap-2"><Button asChild variant="outline" className="border-slate-300 bg-white text-black"><Link to={adminPath("/whatsapp-broadcast")}>Open broadcast<ArrowRight className="h-4 w-4" /></Link></Button><Button asChild variant="outline" className="border-slate-300 bg-white text-black"><Link to={adminPath("/ai-marketing")}>Campaign tools</Link></Button></div>
+        <div className="flex items-start gap-3"><ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-black" /><div><h2 className="font-bold text-black">Telegram requires a voluntary start</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-black">Referral details and historical phone marketing consent are never used for Telegram delivery. Applicants must start the bot and retain active consent before they become eligible.</p></div></div>
+        <div className="flex flex-wrap gap-2"><Button asChild variant="outline" className="border-slate-300 bg-white text-black"><Link to={adminPath("/telegram-broadcast")}>Open Telegram<ArrowRight className="h-4 w-4" /></Link></Button><Button asChild variant="outline" className="border-slate-300 bg-white text-black"><Link to={adminPath("/ai-marketing")}>Campaign tools</Link></Button></div>
       </section>
     </main>
   );

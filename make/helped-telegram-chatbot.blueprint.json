@@ -1,0 +1,137 @@
+{
+  "name": "Helped - Telegram Applicant Chatbot",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": { "parameters": { "hook": { "data": { "editable": "true" }, "label": "Helped Telegram Applicant Chat" } } },
+        "notes": "Create an instant custom webhook and set its URL as Worker secret MAKE_TELEGRAM_CHATBOT_WEBHOOK_URL."
+      }
+    },
+    {
+      "id": 2,
+      "module": "ai-local-agent:RunLocalAIAgent",
+      "version": 0,
+      "parameters": {},
+      "mapper": {
+        "files": [],
+        "defaultModel": "gpt-4o-mini",
+        "reasoningEffort": "low",
+        "systemPrompt": "You are Rinzin Agency's applicant support assistant. Use only the agency's approved recruitment knowledge base connected in Make. Never invent agency policy, salary, fees, employment terms, schedules, or legal requirements. If the knowledge base does not answer, say you are not sure and request a human administrator. Reply in the applicant's language when possible. Collect gradually and only when relevant: full name, age, nationality, current location, Singapore employment experience, previous employer information, years of helper experience, skills, preferred employment arrangement, availability, contact information, and an existing application reference. Do not request or store passport numbers, identity-document images, bank details, or medical details in Telegram. Return only valid JSON with string property 'reply', object property 'profileFields' containing only non-sensitive answers newly learned in this turn, and boolean property 'needsHuman'. Return every profileFields value as a plain string; combine skills into a comma-separated string. Use an empty object when no new facts were provided. Do not repeat old verified information as a new answer.",
+        "message": "Applicant message: {{1.message}}\nTelegram language: {{1.languageCode}}\nConversation reference: {{1.conversationId}}\n\nUse the connected approved knowledge base. Ask no more than one concise follow-up question. If a question is complex, uncertain, or asks for a human, set needsHuman=true.",
+        "threadId": "{{1.conversationId}}",
+        "outputType": "text",
+        "modelConfig": { "recursionLimit": 8, "iterationsFromHistoryCount": "20" }
+      },
+      "metadata": {
+        "designer": { "x": 300, "y": 0 },
+        "restore": {},
+        "notes": "Reconnect the existing Make AI Agent/provider and attach the approved Rinzin recruitment knowledge base after import. The scenario must not provide unapproved policy answers."
+      },
+      "tools": []
+    },
+    {
+      "id": 3,
+      "module": "json:ParseJSON",
+      "version": 1,
+      "parameters": { "type": "" },
+      "mapper": { "json": "{{2.response}}" },
+      "metadata": {
+        "designer": { "x": 600, "y": 0 },
+        "restore": {},
+        "notes": "After import, create a data structure for {\"reply\":\"text\",\"profileFields\":{},\"needsHuman\":false}."
+      }
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLIB": true },
+      "mapper": {
+        "url": "https://YOUR-DOMAIN/api/telegram/automation/chat-reply",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "x-telegram-automation-secret", "value": "REPLACE_WITH_TELEGRAM_AUTOMATION_SECRET" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "gzip": true,
+        "contentType": "application/json",
+        "data": "{\n  \"conversationId\": \"{{1.conversationId}}\",\n  \"chatId\": \"{{1.chatId}}\",\n  \"message\": \"{{escapeJSON(3.reply)}}\"\n}"
+      },
+      "metadata": { "designer": { "x": 900, "y": 0 }, "restore": {}, "notes": "The Worker sends the AI reply through the configured bot and records it in conversation history." }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLIB": true },
+      "mapper": {
+        "url": "https://YOUR-DOMAIN/api/telegram/automation/profile-draft",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "x-telegram-automation-secret", "value": "REPLACE_WITH_TELEGRAM_AUTOMATION_SECRET" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "gzip": true,
+        "contentType": "application/json",
+        "data": "{\n  \"chatId\": \"{{1.chatId}}\",\n  \"fields\": {\n    \"fullName\": \"{{escapeJSON(3.profileFields.fullName)}}\",\n    \"age\": \"{{escapeJSON(3.profileFields.age)}}\",\n    \"nationality\": \"{{escapeJSON(3.profileFields.nationality)}}\",\n    \"currentLocation\": \"{{escapeJSON(3.profileFields.currentLocation)}}\",\n    \"singaporeExperience\": \"{{escapeJSON(3.profileFields.singaporeExperience)}}\",\n    \"previousEmployer\": \"{{escapeJSON(3.profileFields.previousEmployer)}}\",\n    \"experienceYears\": \"{{escapeJSON(3.profileFields.experienceYears)}}\",\n    \"skills\": \"{{escapeJSON(3.profileFields.skills)}}\",\n    \"preferredArrangement\": \"{{escapeJSON(3.profileFields.preferredArrangement)}}\",\n    \"availability\": \"{{escapeJSON(3.profileFields.availability)}}\",\n    \"contactInformation\": \"{{escapeJSON(3.profileFields.contactInformation)}}\",\n    \"applicationReference\": \"{{escapeJSON(3.profileFields.applicationReference)}}\"\n  }\n}"
+      },
+      "metadata": { "designer": { "x": 1200, "y": 0 }, "restore": {}, "notes": "The Worker allowlists non-sensitive fields and stores these answers as an unverified draft; they do not overwrite verified ATS data." }
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLIB": true },
+      "filter": { "name": "Applicant needs a human", "conditions": [[{ "a": "{{3.needsHuman}}", "o": "boolean:equal", "b": "true" }]] },
+      "mapper": {
+        "url": "https://YOUR-DOMAIN/api/telegram/automation/handover",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "x-telegram-automation-secret", "value": "REPLACE_WITH_TELEGRAM_AUTOMATION_SECRET" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "gzip": true,
+        "contentType": "application/json",
+        "data": "{\n  \"conversationId\": \"{{1.conversationId}}\",\n  \"status\": \"needs_attention\"\n}"
+      },
+      "metadata": { "designer": { "x": 1500, "y": 0 }, "restore": {}, "notes": "Add a Make filter before this module: only run when 3.needsHuman is true. Notify the authorized recruitment team using your approved internal channel." }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 5, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": true, "confidential": true, "dataloss": false, "dlq": false },
+    "designer": { "orphans": [] },
+    "zone": "eu1.make.com",
+    "notes": [
+      "Helped - Telegram Applicant Chatbot.",
+      "Create the Custom Webhook after import, reconnect the existing Make AI Agent, attach the approved knowledge base, create the JSON Parse data structure, replace YOUR-DOMAIN and the callback secret, then activate.",
+      "Add a filter before the handover HTTP module for needsHuman=true, and connect an authorized internal notification destination.",
+      "Use one test conversation first. Do not add passport or identity-document collection to this Telegram flow."
+    ]
+  }
+}

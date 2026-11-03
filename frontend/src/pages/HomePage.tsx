@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
-import { Link } from "react-router-dom";
-import { CheckCircle2, CircleAlert, ClipboardList, FileText, History, MessageSquareText, RefreshCw, Users, UserRoundSearch } from "lucide-react";
+import { CheckCircle2, CircleAlert, History, RefreshCw } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { adminPath } from "@/lib/routes";
 import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
 import { readSafeJson } from "@/lib/safeJson";
 import AgencyOperationsCenterPage from "@/pages/AgencyOperationsCenterPage";
@@ -18,10 +15,6 @@ type MetricData = { maids: Maid[]; maidCount: number; applicants: Applicant[]; a
 type ListPage<T> = { items: T[]; total: number };
 type PortalAction = { id: string; actor: string; created_at: string; status: "completed" | "failed"; payload: { actionLabel?: string } };
 
-const links = {
-  maids: adminPath("/edit-maids"), contracts: adminPath("/employment-contracts"),
-  enquiries: adminPath("/enquiry"), applicants: adminPath("/recruitment"), requests: adminPath("/requests"),
-};
 // Built per request so a rotated/renewed admin token is always sent. A
 // module-level snapshot of the headers would go stale after re-login.
 const apiRequestInit = (): RequestInit => ({
@@ -155,13 +148,6 @@ const HomePage = () => {
   // Chart sources are indexes 0..3 (maids, applicants, enquiries, contracts).
   const chartFailed = failed.has(0) || failed.has(1) || failed.has(2) || failed.has(3);
 
-  const cards = [
-    { index: 0, title: "Maid profiles", value: data.maidCount, note: `${data.maids.filter((maid) => maid.isPublic).length} visible to clients`, icon: Users, color: "#0F766E", surface: "#CCFBF1", href: links.maids },
-    { index: 3, title: "Employment contracts", value: data.contracts.length, note: "Employer records", icon: FileText, color: "#0E7490", surface: "#CFFAFE", href: links.contracts },
-    { index: 2, title: "Enquiries", value: data.enquiryCount, note: `${data.enquiries.filter((item) => !["resolved", "replied"].includes((item.status || "new").toLowerCase())).length} need follow-up`, icon: MessageSquareText, color: "#0284C7", surface: "#E0F2FE", href: links.enquiries },
-    { index: 1, title: "Applicants", value: data.applicantCount, note: `${data.applicants.filter((item) => ["new applicant", "documents submitted"].includes((item.status || "").toLowerCase())).length} new or awaiting documents`, icon: UserRoundSearch, color: "#2563EB", surface: "#DBEAFE", href: links.applicants },
-    { index: 4, title: "Requests", value: Object.values(data.requests).reduce((total, count) => total + count, 0), note: `${data.requests.pending} awaiting review`, icon: ClipboardList, color: "#155E75", surface: "#CFFAFE", href: links.requests },
-  ];
   // The trend lines differ by stroke pattern, not colour alone, so
   // colour-blind users can still tell them apart.
   const series: Array<[string, string, string]> = [["Public Maids", "#0F766E", ""], ["Hidden Maids", "#14B8A6", "5 3"], ["Contracts", "#0891B2", "6 4"], ["Enquiries", "#2563EB", "2 3"], ["Applicants", "#4F46E5", "8 4 2 4"]];
@@ -176,8 +162,8 @@ const HomePage = () => {
   return <main className="admin-dashboard">
     <header className="dash-head"><div><p className="dash-kicker">Agency overview</p><h1>Good day{admin?.agencyName ? `, ${admin.agencyName}` : ""}</h1><p>Your agency at a glance. Updated {syncedAt ? syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "when data loads"}.</p></div><button className="dash-refresh" onClick={() => void refresh(true)} disabled={refreshing}><RefreshCw size={15} className={refreshing ? "animate-spin" : ""}/>{refreshing ? "Refreshing" : "Refresh data"}</button></header>
     {errors.length > 0 && <div className="dash-error" role="alert">Some figures could not be loaded. {Array.from(new Set(errors)).join(" · ")}</div>}
-    <section className="dash-grid" aria-label="Agency analytics">
-      {cards.map((card) => <Link key={card.title} to={card.href} className="dash-card" style={{textDecoration:"none",color:"inherit","--card-accent":card.color,"--card-surface":card.surface} as CSSProperties}><div className="dash-card-top"><span className="dash-icon" style={{background:card.surface,color:card.color}}><card.icon size={20}/></span><span className="dash-card-label">{card.title}</span></div>{loading ? <div className="dash-value-loading" aria-hidden /> : <div className="dash-value">{failed.has(card.index) ? "—" : card.value.toLocaleString()}</div>}<div className="dash-note">{card.note}</div></Link>)}
+    <section className="dash-full-operations" aria-label="Operations Center">
+      <AgencyOperationsCenterPage embedded />
     </section>
     <section className="dash-portal-actions" aria-labelledby="dash-portal-actions-title">
       <div className="dash-portal-actions-head"><div><p className="dash-kicker"><History size={14}/> Staff activity</p><h2 id="dash-portal-actions-title">Recent portal actions</h2><p>See what staff changed in applicant, maid, enquiry, and placement records.</p></div><button type="button" className="dash-automation-refresh" onClick={() => void refreshPortalActions()} disabled={portalActionsRefreshing}><RefreshCw size={15} className={portalActionsRefreshing ? "animate-spin" : ""}/>{portalActionsRefreshing ? "Refreshing" : "Refresh actions"}</button></div>
@@ -185,9 +171,6 @@ const HomePage = () => {
     </section>
     <section className="dash-content">
       <article className="dash-panel dash-activity-panel"><div className="dash-panel-head"><div><h2>Agency activity</h2><p className="dash-panel-sub">Public and hidden maid profiles, plus other records added over the last six months</p></div><div className="dash-legend">{series.map(([label,color])=><span key={label}><i className="dash-dot" style={{background:color}}/>{label}</span>)}</div></div>{!loading && !hasChartData ? <div className="dash-empty">{chartFailed ? "Activity data could not be loaded. Use Refresh data to try again." : "No records added in the last six months yet. New maids, contracts, enquiries and applicants will show up here."}</div> : <div className="dash-chart" role="img" aria-label={`Agency activity over the last six months — ${chartSummary}`}><ResponsiveContainer width="100%" height="100%"><AreaChart data={chartData} margin={{top:8,right:8,left:-22,bottom:0}}><defs>{series.map(([label,color])=>{const id=fillId[label];return <linearGradient key={id} id={`fill-${id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={.18}/><stop offset="90%" stopColor={color} stopOpacity={0}/></linearGradient>;})}</defs><CartesianGrid stroke="#cbd5e1" vertical={false}/><XAxis dataKey="month" tickLine={false} axisLine={false} tick={{fontSize:16,fill:"#000"}}/><YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{fontSize:16,fill:"#000"}}/><Tooltip contentStyle={{borderRadius:12,border:"1px solid #d1d5db",fontSize:16,color:"#000"}}/>{series.map(([label,color,dash])=><Area key={label} type="monotone" dataKey={label} stroke={color} fill={`url(#fill-${fillId[label]})`} strokeWidth={3} strokeDasharray={dash || undefined}/>)}</AreaChart></ResponsiveContainer></div>}</article>
-    </section>
-    <section className="dash-full-operations" aria-label="Full operations workspace">
-      <AgencyOperationsCenterPage embedded />
     </section>
   </main>;
 };

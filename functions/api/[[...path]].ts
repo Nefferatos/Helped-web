@@ -551,6 +551,7 @@ interface AppData {
 type Bindings = {
   APP_DATA?: KVNamespace;
   WHATSAPP_MEDIA?: R2Bucket;
+  TELEGRAM_MEDIA?: R2Bucket;
   ASSETS: AssetsBinding;
   MAID_PREVIEW_SAFE_MODE?: string;
   AI?: { run(model: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> };
@@ -589,9 +590,14 @@ type Bindings = {
   MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?: string;
   MAKE_WEBHOOK_URL_GOOGLE_DRIVE_SYNC?: string;
   MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE?: string;
-  // Dedicated Make.com scenario for user-initiated WhatsApp broadcasts.
-  // Keep this webhook URL server-side; set with wrangler secret put.
+  // Retired WhatsApp variables retained only for legacy storage cleanup.
   MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?: string;
+  MAKE_TELEGRAM_BROADCAST_WEBHOOK_URL?: string;
+  MAKE_TELEGRAM_CHATBOT_WEBHOOK_URL?: string;
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_BOT_USERNAME?: string;
+  TELEGRAM_WEBHOOK_SECRET?: string;
+  TELEGRAM_AUTOMATION_SECRET?: string;
   // Meta WhatsApp webhook used only to record STOP/START opt-outs; it never replies.
   WHATSAPP_WEBHOOK_VERIFY_TOKEN?: string;
   WHATSAPP_APP_SECRET?: string;
@@ -1536,7 +1542,7 @@ const getDashboardActionLabel = (method: string, path: string): string | null =>
   if (path.includes("/direct-sales/") && path.endsWith("/interested")) return "Marked a lead as interested";
   if (path.includes("/direct-sales/") && path.endsWith("/direct-hire")) return "Recorded a direct hire";
   if (path.includes("/direct-sales/") && path.endsWith("/reject")) return "Closed a sales lead";
-  if (method === "POST" && path === "/api/whatsapp-broadcast") return "Sent a WhatsApp broadcast";
+  if (method === "POST" && path === "/api/telegram/broadcasts") return "Queued a Telegram broadcast";
   return null;
 };
 
@@ -1603,6 +1609,10 @@ const readSupabaseError = async (response: Response) => {
   }
   return await response.text();
 };
+
+const isMissingSupabaseSchemaObject = (details: string) =>
+  /PGRST200|PGRST204|PGRST205|42P01|42703/i.test(details) &&
+  /schema cache|could not find|does not exist|not found|relationship/i.test(details);
 
 const isSupabaseStatementTimeout = (status: number, details: string) =>
   status >= 500 &&
@@ -6783,10 +6793,10 @@ const buildMakeAutomationInventory = (env: Bindings) => {
       ...makeHook(env.MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS, "MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS"),
     },
     {
-      id: "whatsapp-broadcast", name: "WhatsApp Broadcast", mode: "staff initiated",
-      purpose: "Forwards the reviewed contact list and message to the WhatsApp broadcast scenario.",
-      trigger: "Agency staff confirms a broadcast from the WhatsApp Broadcast page.",
-      ...makeHook(env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL, "MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL"),
+      id: "telegram-broadcast", name: "Telegram Broadcasting and Applicant Chatbot", mode: "staff initiated and applicant initiated",
+      purpose: "Sends messages only to registered, consented Telegram subscribers and relays applicant conversations to the Make AI Agent.",
+      trigger: "Staff queues a Telegram broadcast or an applicant sends a Telegram message.",
+      ...makeHook(env.MAKE_TELEGRAM_BROADCAST_WEBHOOK_URL, "MAKE_TELEGRAM_BROADCAST_WEBHOOK_URL"),
     },
     {
       id: "ai-command-center", name: "AI Command Center", mode: "staff initiated",
@@ -9574,7 +9584,17 @@ const loadPlacementMilestoneEvents = async (config: SupabaseAppDataConfig, place
   const response = await fetch(`${config.baseUrl}/rest/v1/workflow_events?${params.toString()}`, {
     headers: supabaseHeaders(config, { accept: "application/json" }),
   });
-  if (!response.ok) throw new Error(`Unable to load placement milestones (${response.status}): ${await readSupabaseError(response)}`);
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    // The event timeline is an enhancement to the placements list. Older
+    // production databases may not have workflow_events yet; keep the board
+    // usable and leave event-derived milestones unset until the schema lands.
+    if (/workflow_events/i.test(details) && isMissingSupabaseSchemaObject(details)) {
+      console.warn("workflow_events is not installed; loading placements without event-derived milestone flags");
+      return [] as PlacementMilestoneEventRow[];
+    }
+    throw new Error(`Unable to load placement milestones (${response.status}): ${details}`);
+  }
   const allowed = new Set(placementIds);
   return ((await response.json()) as PlacementMilestoneEventRow[]).filter((event) => allowed.has(event.entity_id));
 };
@@ -10388,7 +10408,7 @@ app.get("/api/operations-board/summary", requireAgencyAdminAuth, canReviewAgency
     })(),
     (async () => {
       const params = new URLSearchParams({ select: "id,arrival_at,status,placements!inner(agency_id)", "placements.agency_id": `eq.${admin.agencyId}`, arrival_at: `gte.${currentIso}`, status: "not.eq.CANCELLED", order: "arrival_at.asc", limit: "1000" });
-      params.set("arrival_at.lte", next72Hours);
+      params.append("arrival_at", `lte.${next72Hours}`);
       const response = await fetch(`${config.baseUrl}/rest/v1/flights?${params}`, { headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }), signal: AbortSignal.timeout(8000) });
       if (!response.ok) throw new Error(`Unable to load upcoming arrivals (${response.status}): ${await readSupabaseError(response)}`);
       return await response.json() as Array<{ id: string; arrival_at: string; status: string }>;
@@ -10478,17 +10498,35 @@ app.get("/api/operations-board/arrivals/rolling-three-day", requireAgencyAdminAu
   const params = new URLSearchParams({
     select: "id,placement_id,airline,flight_number,arrival_airport,arrival_at,status,notes,terminal,pickup_contact,transport_arrangement,accommodation_destination,special_instructions,placements!inner(agency_id,maid_reference_code,employer_id)",
     "placements.agency_id": `eq.${admin.agencyId}`,
-    "arrival_at.gte": start,
-    "arrival_at.lte": end,
     status: "in.(PENDING,SCHEDULED,IN_PROGRESS,BLOCKED)",
     order: "arrival_at.asc",
     limit: "500",
   });
+  params.append("arrival_at", `gte.${start}`);
+  params.append("arrival_at", `lte.${end}`);
   const response = await fetch(`${config.baseUrl}/rest/v1/flights?${params.toString()}`, {
     method: "GET", headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }),
   });
-  if (!response.ok) throw new Error(`Unable to load arrival report (${response.status}): ${await readSupabaseError(response)}`);
-  const flights = await response.json() as RollingArrivalFlightRow[];
+  let flightsResponse = response;
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    const optionalArrivalColumns = ["terminal", "pickup_contact", "transport_arrangement", "accommodation_destination", "special_instructions"];
+    const missingOptionalArrivalColumn = optionalArrivalColumns.some((column) => details.includes(column)) &&
+      (isMissingSupabaseSchemaObject(details) || /column .* does not exist/i.test(details));
+    if (missingOptionalArrivalColumn) {
+      // Continue to show flight arrivals if the additive dispatch-details
+      // migration has not yet been applied. The optional fields render blank.
+      const legacyParams = new URLSearchParams(params);
+      legacyParams.set("select", "id,placement_id,airline,flight_number,arrival_airport,arrival_at,status,notes,placements!inner(agency_id,maid_reference_code,employer_id)");
+      flightsResponse = await fetch(`${config.baseUrl}/rest/v1/flights?${legacyParams.toString()}`, {
+        method: "GET", headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }),
+      });
+    } else {
+      throw new Error(`Unable to load arrival report (${response.status}): ${details}`);
+    }
+  }
+  if (!flightsResponse.ok) throw new Error(`Unable to load arrival report (${flightsResponse.status}): ${await readSupabaseError(flightsResponse)}`);
+  const flights = await flightsResponse.json() as RollingArrivalFlightRow[];
   // Enrich only the authenticated staff report. The scheduled Make digest below
   // intentionally remains limited to operational references and flight facts.
   const applicantReferences = [...new Set(flights
@@ -13949,6 +13987,17 @@ const sendInterviewScheduledStaffAlert = async (
   return state === "delivered" || state === "pending_retry";
 };
 
+const interviewLifecycleColumns = [
+  "outcome", "cancellation_reason", "reschedule_reason", "candidate_name", "candidate_email",
+  "reminders_enabled", "reminder_24h_sent_at", "reminder_morning_sent_at", "reminder_2h_sent_at",
+  "employer_name", "employer_email", "employer_contact_verified_at", "employer_invitation_sent_at",
+  "employer_confirmed_at", "applicant_confirmed_at", "employer_reminder_24h_sent_at",
+  "employer_reminder_morning_sent_at", "employer_reminder_2h_sent_at",
+] as const;
+const isMissingInterviewLifecycleColumn = (details: string) =>
+  interviewLifecycleColumns.some((column) => details.includes(`interviews.${column}`)) &&
+  isMissingSupabaseSchemaObject(details);
+
 app.post(
   "/api/ai/hr-interview/schedule",
   requireAgencyAdminAuth,
@@ -13959,6 +14008,7 @@ app.post(
     const body = await parseBody<{
       applicationId?: string;
       placementId?: string;
+      interviewId?: string;
       scheduledAt?: string;
       mode?: string;
       meetingUrl?: string;
@@ -13978,6 +14028,8 @@ app.post(
     }
     const applicationId = toTrimmedString(body?.applicationId);
     const placementId = toTrimmedString(body?.placementId);
+    const interviewId = toTrimmedString(body?.interviewId);
+    if (interviewId && !applicationId) return c.json({ error: "An applicant ID is required to reschedule an applicant interview" }, 400);
     const meetingUrl = toTrimmedString(body?.meetingUrl).slice(0, 1000);
     const employerName = toTrimmedString(body?.employerName).slice(0, 120);
     const employerEmail = normalizeEmail(toTrimmedString(body?.employerEmail));
@@ -14000,7 +14052,7 @@ app.post(
       if (application && profile) {
         candidateName = toTrimmedString(profile.fullName);
         candidateEmail = toTrimmedString(profile.email).toLowerCase();
-      } else if (body?.remindersEnabled === true) {
+      } else {
         return c.json({ error: "Applicant record was not found for this agency" }, 404);
       }
     }
@@ -14009,33 +14061,90 @@ app.post(
     if (remindersEnabled && (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim())) {
       return c.json({ error: "Configure RESEND_API_KEY and RESEND_FROM before enabling automatic interview reminders" }, 503);
     }
-    const response = await fetch(`${config.baseUrl}/rest/v1/interviews?select=id,scheduled_at,application_id,placement_id,meeting_url,employer_email,employer_name,employer_contact_verified_at,employer_invitation_sent_at`, {
-      method: "POST",
+    const interviewUrl = new URL(`${config.baseUrl}/rest/v1/interviews`);
+    interviewUrl.searchParams.set("select", "id,scheduled_at,application_id,placement_id,mode,meeting_url,status");
+    const scheduledAtIso = new Date(scheduledAt).toISOString();
+    const lifecycleDataRequested = remindersEnabled || Boolean(employerName || employerEmail || body?.sendEmployerInvitation === true);
+    const fullInterviewData = {
+      agency_id: admin.agencyId,
+      application_id: applicationId || null,
+      placement_id: placementId || null,
+      scheduled_at: scheduledAtIso,
+      mode,
+      meeting_url: meetingUrl || null,
+      candidate_name: candidateName,
+      candidate_email: candidateEmail,
+      reminders_enabled: remindersEnabled,
+      employer_name: employerName,
+      employer_email: employerEmail,
+      employer_contact_verified_at: employerContactVerified ? now() : null,
+    };
+    const coreInterviewData = {
+      agency_id: admin.agencyId,
+      application_id: applicationId || null,
+      placement_id: placementId || null,
+      scheduled_at: scheduledAtIso,
+      mode,
+      meeting_url: meetingUrl || null,
+    };
+    const fullUpdateData = {
+      ...fullInterviewData,
+      status: "RESCHEDULED",
+      updated_at: now(),
+      reminder_24h_sent_at: null,
+      reminder_morning_sent_at: null,
+      reminder_2h_sent_at: null,
+      employer_reminder_24h_sent_at: null,
+      employer_reminder_morning_sent_at: null,
+      employer_reminder_2h_sent_at: null,
+      employer_invitation_sent_at: null,
+      employer_confirmation_token_hash: null,
+      employer_confirmation_expires_at: null,
+      employer_confirmed_at: null,
+      applicant_confirmed_at: null,
+    };
+    const coreUpdateData = {
+      ...coreInterviewData,
+      status: "SCHEDULED",
+      updated_at: now(),
+    };
+    if (interviewId) {
+      interviewUrl.searchParams.set("id", `eq.${interviewId}`);
+      interviewUrl.searchParams.set("agency_id", `eq.${admin.agencyId}`);
+      interviewUrl.searchParams.set("application_id", `eq.${applicationId}`);
+    }
+    let response = await fetch(interviewUrl.toString(), {
+      method: interviewId ? "PATCH" : "POST",
       headers: supabaseHeaders(config, {
         "content-type": "application/json",
         prefer: "return=representation",
       }),
-      body: JSON.stringify({
-        agency_id: admin.agencyId,
-        application_id: applicationId || null,
-        placement_id: placementId || null,
-        scheduled_at: new Date(scheduledAt).toISOString(),
-        mode,
-        meeting_url: meetingUrl || null,
-        candidate_name: candidateName,
-        candidate_email: candidateEmail,
-        reminders_enabled: remindersEnabled,
-        employer_name: employerName,
-        employer_email: employerEmail,
-        employer_contact_verified_at: employerContactVerified ? now() : null,
-      }),
+      body: JSON.stringify(interviewId ? fullUpdateData : fullInterviewData),
     });
-    if (!response.ok) throw new Error(`Could not save interview (${response.status}): ${await readSupabaseError(response)}`);
+    if (!response.ok) {
+      const details = await readSupabaseError(response);
+      if (!isMissingInterviewLifecycleColumn(details)) {
+        throw new Error(`Could not save interview (${response.status}): ${details}`);
+      }
+      if (lifecycleDataRequested) {
+        return c.json({ error: "Interview reminders and employer details require the interview lifecycle database migration" }, 503);
+      }
+      response = await fetch(interviewUrl.toString(), {
+        method: interviewId ? "PATCH" : "POST",
+        headers: supabaseHeaders(config, {
+          "content-type": "application/json",
+          prefer: "return=representation",
+        }),
+        body: JSON.stringify(interviewId ? coreUpdateData : coreInterviewData),
+      });
+      if (!response.ok) throw new Error(`Could not save interview (${response.status}): ${await readSupabaseError(response)}`);
+    }
     const rows = await response.json() as Array<Record<string, unknown>>;
     const interview = rows[0];
+    if (!interview && interviewId) return c.json({ error: "The linked interview was not found for this applicant" }, 404);
     if (!interview) throw new Error("Interview was saved but no interview record was returned");
 
-    return c.json({ interview }, 201);
+    return c.json({ interview }, interviewId ? 200 : 201);
   }),
 );
 
@@ -14098,31 +14207,44 @@ app.patch(
   }),
 );
 
-app.post("/api/operations-board/interviews/:interviewId/employer-invitation", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+const sendEmployerInterviewInvitation = safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Interview management requires Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const interviewId = toTrimmedString(c.req.param("interviewId"));
+  const maidInterview = c.req.path.startsWith("/api/operations-board/maid-interviews/");
   const params = new URLSearchParams({
-    select: "id,application_id,agency_id,scheduled_at,mode,meeting_url,status,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at",
+    select: "id,application_id,maid_reference_code,agency_id,scheduled_at,mode,meeting_url,status,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at",
     id: "eq." + interviewId, agency_id: "eq." + admin.agencyId, limit: "1",
   });
   const readResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + params, { headers: supabaseHeaders(config, { accept: "application/json" }) });
   if (!readResponse.ok) throw new Error("Unable to load interview (" + readResponse.status + "): " + await readSupabaseError(readResponse));
   const [interview] = await readResponse.json() as Array<{
-    id: string; application_id: string; agency_id: number; scheduled_at: string; mode: string; meeting_url: string | null; status: string;
+    id: string; application_id: string | null; maid_reference_code: string | null; agency_id: number; scheduled_at: string; mode: string; meeting_url: string | null; status: string;
     employer_name: string; employer_email: string; employer_contact_verified_at: string | null; employer_invitation_sent_at: string | null;
   }>;
   if (!interview) return c.json({ error: "Interview was not found" }, 404);
+  if (maidInterview
+    ? !interview.maid_reference_code || interview.application_id !== null
+    : !interview.application_id || interview.maid_reference_code !== null) {
+    return c.json({ error: "Interview was not found" }, 404);
+  }
   if (interview.employer_invitation_sent_at) return c.json({ sent: true, alreadySent: true, sentAt: interview.employer_invitation_sent_at });
   if (!interview.employer_contact_verified_at || !isEmailLike(interview.employer_email || "")) return c.json({ error: "Record and verify an employer email before sending an invitation" }, 409);
   if (["CANCELLED", "COMPLETED", "PASSED", "FAILED", "NO_SHOW"].includes(interview.status)) return c.json({ error: "An invitation cannot be sent for a closed interview" }, 409);
+  if (Date.parse(interview.scheduled_at) <= Date.now()) return c.json({ error: "An invitation cannot be sent for an interview that has already started" }, 409);
   if (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim()) return c.json({ error: "Configure RESEND_API_KEY and RESEND_FROM before sending employer invitations" }, 503);
 
   const confirmationToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
   const confirmationTokenHash = await sha256Hex(confirmationToken);
   const confirmationExpiresAt = new Date(Date.parse(interview.scheduled_at) + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const tokenSaveResponse = await fetch(config.baseUrl + "/rest/v1/interviews?id=eq." + encodeURIComponent(interview.id) + "&agency_id=eq." + admin.agencyId, {
+  const tokenSaveParams = new URLSearchParams({
+    id: "eq." + interview.id,
+    agency_id: "eq." + admin.agencyId,
+    employer_invitation_sent_at: "is.null",
+    ...(maidInterview ? { maid_reference_code: "eq." + interview.maid_reference_code } : { application_id: "eq." + interview.application_id }),
+  });
+  const tokenSaveResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + tokenSaveParams, {
     method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
     body: JSON.stringify({ employer_confirmation_token_hash: confirmationTokenHash, employer_confirmation_expires_at: confirmationExpiresAt }),
   });
@@ -14155,7 +14277,10 @@ app.post("/api/operations-board/interviews/:interviewId/employer-invitation", re
     body: JSON.stringify({ event_type: "interview.employer_invitation_sent", entity_type: "interview", entity_id: interview.id, actor: "user:" + (admin.username || admin.email || "Agency Staff"), status: "completed", payload: { agencyId: admin.agencyId, scheduled_at: interview.scheduled_at } }),
   });
   return c.json({ sent: true, sentAt: savedAt, auditLogged: eventResponse.ok });
-}));
+});
+
+app.post("/api/operations-board/interviews/:interviewId/employer-invitation", requireAgencyAdminAuth, canManageAgencyRecords, sendEmployerInterviewInvitation);
+app.post("/api/operations-board/maid-interviews/:interviewId/employer-invitation", requireAgencyAdminAuth, canManageAgencyRecords, sendEmployerInterviewInvitation);
 
 app.get("/api/ats/public/employer-interview-confirmation", safeApi(async (c) => {
   const token = toTrimmedString(new URL(c.req.url).searchParams.get("token"));
@@ -14169,7 +14294,7 @@ app.post("/api/ats/public/employer-interview-confirmation", safeApi(async (c) =>
   const token = toTrimmedString(body?.token);
   if (!/^[a-f0-9]{64}$/i.test(token)) return c.json({ error: "Invalid or expired confirmation link" }, 400);
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Interview confirmation is unavailable" }, 503);
+  if (!config) return c.json({ error: "Interview confirmation is unavailable" }, 503);
   const hash = await sha256Hex(token);
   const params = new URLSearchParams({ select: "id,application_id,agency_id,scheduled_at,status,employer_confirmed_at,applicant_confirmed_at,employer_confirmation_expires_at", employer_confirmation_token_hash: "eq." + hash, limit: "1" });
   const readResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + params, { headers: supabaseHeaders(config, { accept: "application/json" }) });
@@ -14194,14 +14319,338 @@ const interviewLifecycleStatuses = new Set([
   "CANCELLED", "NO_SHOW",
 ]);
 
+app.get("/api/operations-board/maid-interviews", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Maid interview scheduling requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  try {
+    const interviews = await fetchSupabaseTableRows<Record<string, unknown>>(config, "interviews", {
+      select: "id,maid_reference_code,scheduled_at,duration_minutes,mode,meeting_url,status,notes,candidate_name,candidate_email,candidate_invitation_sent_at,outcome,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at,employer_confirmed_at,applicant_confirmed_at,created_at,updated_at",
+      filters: { agency_id: admin.agencyId },
+      orderBy: "scheduled_at.desc",
+      limit: 500,
+    });
+    return c.json({ interviews: interviews.filter((interview) => toTrimmedString(interview.maid_reference_code)) });
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    if (isMissingSupabaseSchemaObject(details)) {
+      return c.json({ error: "Maid interview scheduling requires the maid interview database migration" }, 503);
+    }
+    throw error;
+  }
+}));
+
+app.post("/api/operations-board/maid-interviews", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Maid interview scheduling requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{
+    maidReferenceCode?: unknown; scheduledAt?: unknown; mode?: unknown; meetingUrl?: unknown; candidateEmail?: unknown; notes?: unknown;
+    employerName?: unknown; employerEmail?: unknown; employerContactVerified?: unknown;
+  }>(c.req.raw);
+  const maidReferenceCode = toTrimmedString(body?.maidReferenceCode);
+  const scheduledAt = toTrimmedString(body?.scheduledAt);
+  const mode = toTrimmedString(body?.mode) || "video";
+  const meetingUrl = toTrimmedString(body?.meetingUrl);
+  const candidateEmail = normalizeEmail(toTrimmedString(body?.candidateEmail));
+  const employerName = toTrimmedString(body?.employerName).slice(0, 120);
+  const employerEmail = normalizeEmail(toTrimmedString(body?.employerEmail));
+  const employerContactVerified = body?.employerContactVerified === true;
+  if (!maidReferenceCode) return c.json({ error: "Select a maid profile" }, 400);
+  if (!scheduledAt || Number.isNaN(Date.parse(scheduledAt))) return c.json({ error: "Enter a valid interview date and time" }, 400);
+  if (Date.parse(scheduledAt) <= Date.now()) return c.json({ error: "Choose an interview time in the future" }, 400);
+  if (!["video", "phone", "in_person"].includes(mode)) return c.json({ error: "Interview mode must be video, phone, or in_person" }, 400);
+  if (meetingUrl && !/^https:\/\/\S+$/i.test(meetingUrl)) return c.json({ error: "Meeting link must use HTTPS" }, 400);
+  if (candidateEmail && !isEmailLike(candidateEmail)) return c.json({ error: "Enter a valid maid email address" }, 400);
+  if ((employerName || employerEmail) && (!isEmailLike(employerEmail) || !employerContactVerified)) {
+    return c.json({ error: "Verify the employer participant email before saving it" }, 400);
+  }
+
+  const data = await loadData(c.env, { readOnly: true });
+  const maid = data.maids.find((item) => item.agencyId === admin.agencyId && item.referenceCode === maidReferenceCode);
+  if (!maid) return c.json({ error: "Maid profile was not found for this agency" }, 404);
+  if (maid.isPublic !== true) return c.json({ error: "Only maid profiles on the public list can be scheduled for an interview" }, 409);
+
+  const response = await fetch(`${config.baseUrl}/rest/v1/interviews?select=id,maid_reference_code,scheduled_at,duration_minutes,mode,meeting_url,status,notes,candidate_name,candidate_email,candidate_invitation_sent_at,outcome,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at,employer_confirmed_at,applicant_confirmed_at,created_at,updated_at`, {
+    method: "POST",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({
+      agency_id: admin.agencyId,
+      application_id: null,
+      placement_id: null,
+      maid_reference_code: maid.referenceCode,
+      scheduled_at: new Date(scheduledAt).toISOString(),
+      duration_minutes: 30,
+      mode,
+      meeting_url: meetingUrl || null,
+      status: "SCHEDULED",
+      notes: toTrimmedString(body?.notes).slice(0, 4000),
+      candidate_name: maid.fullName,
+      candidate_email: candidateEmail,
+      employer_name: employerName,
+      employer_email: employerEmail,
+      employer_contact_verified_at: employerContactVerified ? now() : null,
+      reminders_enabled: false,
+    }),
+  });
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    if (isMissingSupabaseSchemaObject(details)) {
+      return c.json({ error: "Maid interview scheduling requires the maid interview database migration" }, 503);
+    }
+    throw new Error(`Unable to create maid interview (${response.status}): ${details}`);
+  }
+  const [interview] = await response.json() as Array<Record<string, unknown>>;
+  if (!interview) throw new Error("Interview was created but no interview record was returned");
+  return c.json({ interview }, 201);
+}));
+
+app.patch("/api/operations-board/maid-interviews/:interviewId", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Maid interview scheduling requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const interviewId = toTrimmedString(c.req.param("interviewId"));
+  const body = await parseBody<{
+    scheduledAt?: unknown; mode?: unknown; status?: unknown; notes?: unknown; outcome?: unknown; candidateEmail?: unknown; meetingUrl?: unknown;
+    employerName?: unknown; employerEmail?: unknown; employerContactVerified?: unknown;
+  }>(c.req.raw);
+  const filters = new URLSearchParams({
+    id: `eq.${interviewId}`,
+    agency_id: `eq.${admin.agencyId}`,
+    select: "id,maid_reference_code,candidate_email,employer_name,employer_email,employer_contact_verified_at",
+    limit: "1",
+  });
+  const readResponse = await fetch(`${config.baseUrl}/rest/v1/interviews?${filters}`, {
+    headers: supabaseHeaders(config, { accept: "application/json" }),
+  });
+  if (!readResponse.ok) throw new Error(`Unable to load maid interview (${readResponse.status}): ${await readSupabaseError(readResponse)}`);
+  const [existing] = await readResponse.json() as Array<{
+    id: string; maid_reference_code: string | null; candidate_email: string | null; employer_name: string; employer_email: string;
+    employer_contact_verified_at: string | null;
+  }>;
+  if (!existing?.maid_reference_code) return c.json({ error: "Maid interview was not found" }, 404);
+
+  const data = await loadData(c.env, { readOnly: true });
+  const maid = data.maids.find((item) => item.agencyId === admin.agencyId && item.referenceCode === existing.maid_reference_code);
+  if (!maid) return c.json({ error: "Linked maid profile was not found for this agency" }, 404);
+  const patch: Record<string, unknown> = { updated_at: now(), candidate_name: maid.fullName };
+  if (body?.scheduledAt !== undefined) {
+    const scheduledAt = toTrimmedString(body.scheduledAt);
+    if (!scheduledAt || Number.isNaN(Date.parse(scheduledAt)) || Date.parse(scheduledAt) <= Date.now()) {
+      return c.json({ error: "Choose a valid interview time in the future" }, 400);
+    }
+    patch.scheduled_at = new Date(scheduledAt).toISOString();
+    patch.status = "SCHEDULED";
+    patch.candidate_invitation_sent_at = null;
+    patch.meeting_url = null;
+    patch.reminder_24h_sent_at = null;
+    patch.reminder_morning_sent_at = null;
+    patch.reminder_2h_sent_at = null;
+    patch.employer_invitation_sent_at = null;
+    patch.employer_confirmation_token_hash = null;
+    patch.employer_confirmation_expires_at = null;
+    patch.employer_confirmed_at = null;
+    patch.applicant_confirmed_at = null;
+    patch.employer_reminder_24h_sent_at = null;
+    patch.employer_reminder_morning_sent_at = null;
+    patch.employer_reminder_2h_sent_at = null;
+  }
+  if (body?.mode !== undefined) {
+    const mode = toTrimmedString(body.mode);
+    if (!["video", "phone", "in_person"].includes(mode)) return c.json({ error: "Interview mode must be video, phone, or in_person" }, 400);
+    patch.mode = mode;
+  }
+  if (body?.status !== undefined) {
+    const status = toTrimmedString(body.status).toUpperCase();
+    if (!interviewLifecycleStatuses.has(status)) return c.json({ error: "Choose a valid interview status" }, 400);
+    patch.status = status;
+  }
+  if (body?.notes !== undefined) patch.notes = toTrimmedString(body.notes).slice(0, 4000);
+  if (body?.outcome !== undefined) patch.outcome = toTrimmedString(body.outcome).slice(0, 4000);
+  if (body?.meetingUrl !== undefined) {
+    const meetingUrl = toTrimmedString(body.meetingUrl);
+    if (meetingUrl && !/^https:\/\/\S+$/i.test(meetingUrl)) return c.json({ error: "Meeting link must use HTTPS" }, 400);
+    patch.meeting_url = meetingUrl || null;
+  }
+  if (body?.candidateEmail !== undefined) {
+    const candidateEmail = normalizeEmail(toTrimmedString(body.candidateEmail));
+    if (candidateEmail && !isEmailLike(candidateEmail)) return c.json({ error: "Enter a valid maid email address" }, 400);
+    if (candidateEmail !== normalizeEmail(toTrimmedString(existing.candidate_email))) {
+      patch.candidate_invitation_sent_at = null;
+    }
+    patch.candidate_email = candidateEmail;
+  }
+  if (body?.employerName !== undefined || body?.employerEmail !== undefined || body?.employerContactVerified !== undefined) {
+    const employerName = body?.employerName === undefined ? toTrimmedString(existing.employer_name) : toTrimmedString(body.employerName).slice(0, 120);
+    const employerEmail = body?.employerEmail === undefined ? normalizeEmail(toTrimmedString(existing.employer_email)) : normalizeEmail(toTrimmedString(body.employerEmail));
+    const employerContactVerified = body?.employerContactVerified === undefined
+      ? Boolean(existing.employer_contact_verified_at)
+      : body.employerContactVerified === true;
+    if ((employerName || employerEmail) && (!isEmailLike(employerEmail) || !employerContactVerified)) {
+      return c.json({ error: "Verify the employer participant email before saving it" }, 400);
+    }
+    if (employerEmail !== normalizeEmail(toTrimmedString(existing.employer_email))) {
+      patch.employer_invitation_sent_at = null;
+      patch.employer_confirmation_token_hash = null;
+      patch.employer_confirmation_expires_at = null;
+      patch.employer_confirmed_at = null;
+    }
+    patch.employer_name = employerName;
+    patch.employer_email = employerEmail;
+    patch.employer_contact_verified_at = employerContactVerified ? existing.employer_contact_verified_at || now() : null;
+  }
+  const updateParams = new URLSearchParams({
+    id: `eq.${interviewId}`,
+    agency_id: `eq.${admin.agencyId}`,
+    maid_reference_code: `eq.${existing.maid_reference_code}`,
+    select: "id,maid_reference_code,scheduled_at,duration_minutes,mode,meeting_url,status,notes,candidate_name,candidate_email,candidate_invitation_sent_at,outcome,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at,employer_confirmed_at,applicant_confirmed_at,created_at,updated_at",
+  });
+  const response = await fetch(`${config.baseUrl}/rest/v1/interviews?${updateParams}`, {
+    method: "PATCH",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    if (isMissingSupabaseSchemaObject(details)) return c.json({ error: "Maid interview scheduling requires the maid interview database migration" }, 503);
+    throw new Error(`Unable to update maid interview (${response.status}): ${details}`);
+  }
+  const [interview] = await response.json() as Array<Record<string, unknown>>;
+  if (!interview) return c.json({ error: "Maid interview was not found" }, 404);
+  return c.json({ interview });
+}));
+
+app.post("/api/operations-board/maid-interviews/:interviewId/invitation", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Maid interview scheduling requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const interviewId = toTrimmedString(c.req.param("interviewId"));
+  const params = new URLSearchParams({
+    select: "id,maid_reference_code,scheduled_at,mode,status,meeting_url,candidate_name,candidate_email,candidate_invitation_sent_at",
+    id: `eq.${interviewId}`,
+    agency_id: `eq.${admin.agencyId}`,
+    limit: "1",
+  });
+  const readResponse = await fetch(`${config.baseUrl}/rest/v1/interviews?${params}`, { headers: supabaseHeaders(config, { accept: "application/json" }) });
+  if (!readResponse.ok) {
+    const details = await readSupabaseError(readResponse);
+    if (isMissingSupabaseSchemaObject(details)) return c.json({ error: "Maid interview scheduling requires the maid interview database migration" }, 503);
+    throw new Error(`Unable to load maid interview (${readResponse.status}): ${details}`);
+  }
+  const [interview] = await readResponse.json() as Array<{
+    id: string; maid_reference_code: string | null; scheduled_at: string; mode: string; status: string; meeting_url: string | null;
+    candidate_name: string; candidate_email: string; candidate_invitation_sent_at: string | null;
+  }>;
+  if (!interview?.maid_reference_code) return c.json({ error: "Maid interview was not found" }, 404);
+  if (interview.candidate_invitation_sent_at) return c.json({ sent: true, alreadySent: true, sentAt: interview.candidate_invitation_sent_at });
+  if (!isEmailLike(interview.candidate_email || "")) return c.json({ error: "Add a valid email address for this maid before sending the invitation" }, 409);
+  if (!["SCHEDULED", "CONFIRMED"].includes(interview.status) || Date.parse(interview.scheduled_at) <= Date.now()) {
+    return c.json({ error: "Only upcoming scheduled interviews can be invited" }, 409);
+  }
+  const webhookUrl = c.env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim() || c.env.MAKE_WEBHOOK_URL?.trim();
+  if (!webhookUrl) return c.json({ error: "The interview calendar workflow is not configured" }, 503);
+
+  const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" })
+    .formatToParts(new Date(interview.scheduled_at));
+  const datePart = (type: string) => dateParts.find((part) => part.type === type)?.value ?? "";
+  const scheduledDate = `${datePart("year")}-${datePart("month")}-${datePart("day")}`;
+  const timeParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date(interview.scheduled_at));
+  const timePart = (type: string) => timeParts.find((part) => part.type === type)?.value ?? "";
+  const scheduledTime24 = `${timePart("hour")}:${timePart("minute")}`;
+  const scheduledTime = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit", hour12: true })
+    .format(new Date(interview.scheduled_at));
+  let makeResponse: Response;
+  try {
+    makeResponse = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        scenario: "interview_pipeline",
+        to: normalizeEmail(interview.candidate_email),
+        candidateName: interview.candidate_name,
+        position: "Domestic helper recruitment",
+        type: "interview_invitation",
+        subject: "Interview invitation",
+        body: `Dear ${interview.candidate_name},\n\nWe would like to invite you to an interview on ${scheduledDate} at ${scheduledTime} Singapore time. Interview format: ${interview.mode.replace(/_/g, " ")}.${interview.meeting_url ? `\nMeeting link: ${interview.meeting_url}` : ""}\n\nBest regards,\nAt The Agency`,
+        scheduledDate,
+        scheduledTime,
+        scheduledTime24,
+        meetingUrl: interview.meeting_url || undefined,
+        interviewMode: interview.mode,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    console.error("Maid interview invitation Make request failed", errMsg(error));
+    return c.json({ error: "Could not reach the interview calendar workflow" }, 502);
+  }
+  const responseText = await makeResponse.text();
+  let makeResult: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(responseText) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) makeResult = parsed as Record<string, unknown>;
+  } catch {
+    // Make may return plain text after accepting the workflow.
+  }
+  if (!makeResponse.ok) return c.json({ error: "The interview calendar workflow could not send the invitation" }, 502);
+
+  const meetingUrl = toTrimmedString(makeResult.meetLink ?? makeResult.googleMeetLink ?? makeResult.hangoutLink) || interview.meeting_url;
+  const sentAt = now();
+  const saveParams = new URLSearchParams({ id: `eq.${interview.id}`, agency_id: `eq.${admin.agencyId}`, maid_reference_code: `eq.${interview.maid_reference_code}`, select: "id" });
+  const saveResponse = await fetch(`${config.baseUrl}/rest/v1/interviews?${saveParams}`, {
+    method: "PATCH",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ candidate_invitation_sent_at: sentAt, meeting_url: meetingUrl || null, updated_at: sentAt }),
+  });
+  if (!saveResponse.ok) {
+    console.error("Maid interview invitation sent, but record update failed", await readSupabaseError(saveResponse));
+    return c.json({ error: "The invitation was sent, but its delivery status could not be saved. Refresh before retrying." }, 502);
+  }
+  return c.json({ sent: true, sentAt, meetingUrl: meetingUrl || null });
+}));
+
 app.get("/api/operations-board/interviews", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Interview management requires Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
-  const interviews = await fetchSupabaseTableRows<Record<string, unknown>>(config, "interviews", {
-    select: "id,application_id,placement_id,scheduled_at,duration_minutes,mode,meeting_url,status,notes,outcome,cancellation_reason,reschedule_reason,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at,employer_confirmed_at,applicant_confirmed_at,reminders_enabled,reminder_24h_sent_at,reminder_morning_sent_at,reminder_2h_sent_at,employer_reminder_24h_sent_at,employer_reminder_morning_sent_at,employer_reminder_2h_sent_at,created_at,updated_at",
-    filters: { agency_id: admin.agencyId }, orderBy: "scheduled_at.desc", limit: 200,
-  });
+  const query = {
+    filters: { agency_id: admin.agencyId },
+    orderBy: "scheduled_at.desc",
+    limit: 200,
+  };
+  let interviews: Record<string, unknown>[];
+  try {
+    interviews = await fetchSupabaseTableRows<Record<string, unknown>>(config, "interviews", {
+      ...query,
+      select: "id,application_id,placement_id,scheduled_at,duration_minutes,mode,meeting_url,status,notes,candidate_name,outcome,cancellation_reason,reschedule_reason,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at,employer_confirmed_at,applicant_confirmed_at,reminders_enabled,reminder_24h_sent_at,reminder_morning_sent_at,reminder_2h_sent_at,employer_reminder_24h_sent_at,employer_reminder_morning_sent_at,employer_reminder_2h_sent_at,created_at,updated_at",
+    });
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error);
+    if (!isMissingInterviewLifecycleColumn(details)) throw error;
+    console.warn("Interview lifecycle columns are not installed; returning core interview fields");
+    const rows = await fetchSupabaseTableRows<Record<string, unknown>>(config, "interviews", {
+      ...query,
+      select: "id,application_id,placement_id,scheduled_at,duration_minutes,mode,meeting_url,status,notes,created_at,updated_at",
+    });
+    const lifecycleDefaults: Record<string, unknown> = {
+      outcome: "", cancellation_reason: "", reschedule_reason: "", employer_name: "", employer_email: "",
+      employer_contact_verified_at: null, employer_invitation_sent_at: null, employer_confirmed_at: null,
+      applicant_confirmed_at: null, reminders_enabled: false, reminder_24h_sent_at: null,
+      reminder_morning_sent_at: null, reminder_2h_sent_at: null, employer_reminder_24h_sent_at: null,
+      employer_reminder_morning_sent_at: null, employer_reminder_2h_sent_at: null,
+    };
+    interviews = rows.map((interview) => ({ ...lifecycleDefaults, ...interview }));
+  }
+  if (interviews.some((interview) => interview.application_id && !toTrimmedString(interview.candidate_name))) {
+    const data = await loadData(c.env, { readOnly: true });
+    const profilesByApplicationId = new Map(data.ats.profiles.map((profile) => [profile.applicationId, profile] as const));
+    interviews = interviews.map((interview) => ({
+      ...interview,
+      candidate_name: toTrimmedString(interview.candidate_name) ||
+        toTrimmedString(profilesByApplicationId.get(toTrimmedString(interview.application_id))?.fullName),
+    }));
+  }
   return c.json({ interviews });
 }));
 
@@ -14214,6 +14663,7 @@ app.patch("/api/operations-board/interviews/:interviewId", requireAgencyAdminAut
     status?: unknown; scheduledAt?: unknown; mode?: unknown; notes?: unknown; outcome?: unknown;
     cancellationReason?: unknown; rescheduleReason?: unknown;
     employerConfirmed?: unknown; applicantConfirmed?: unknown;
+    candidateName?: unknown;
     employerName?: unknown; employerEmail?: unknown; employerContactVerified?: unknown;
   }>(c.req.raw);
   const patch: Record<string, unknown> = { updated_at: now(), updated_by: admin.username || admin.email || "Agency Staff" };
@@ -14256,6 +14706,11 @@ app.patch("/api/operations-board/interviews/:interviewId", requireAgencyAdminAut
     patch.mode = mode;
   }
   if (body?.notes !== undefined) patch.notes = toTrimmedString(body.notes).slice(0, 4000);
+  if (body?.candidateName !== undefined) {
+    const candidateName = toTrimmedString(body.candidateName).slice(0, 120);
+    if (!candidateName) return c.json({ error: "Enter the maid's name" }, 400);
+    patch.candidate_name = candidateName;
+  }
   if (body?.employerName !== undefined) patch.employer_name = toTrimmedString(body.employerName).slice(0, 120);
   if (body?.employerEmail !== undefined) {
     const email = normalizeEmail(toTrimmedString(body.employerEmail));
@@ -20004,15 +20459,72 @@ app.get("/api/ats/applications", requireAgencyAdminAuth, canReviewAgencyRecords,
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const start = (page - 1) * pageSize;
   const paged = sorted.slice(start, start + pageSize);
+  const interviewSummariesByApplication = new Map<string, Record<string, unknown>>();
+  let interviewScheduleUnavailable = false;
+  const supabaseConfig = getSupabaseAppDataConfig(c.env);
+  if (paged.length && supabaseConfig) {
+    const interviewQuery = {
+      select: "id,application_id,scheduled_at,mode,status,meeting_url,outcome,reminders_enabled,employer_name,employer_email,employer_contact_verified_at",
+      filters: { agency_id: admin.agencyId },
+      orderBy: "scheduled_at.desc",
+      limit: 500,
+    };
+    let interviews: Record<string, unknown>[] = [];
+    try {
+      interviews = await fetchSupabaseTableRows<Record<string, unknown>>(supabaseConfig, "interviews", interviewQuery);
+    } catch (error) {
+      const details = error instanceof Error ? error.message : String(error);
+      if (isMissingInterviewLifecycleColumn(details)) {
+        interviews = await fetchSupabaseTableRows<Record<string, unknown>>(supabaseConfig, "interviews", {
+          ...interviewQuery,
+          select: "id,application_id,scheduled_at,mode,status,meeting_url",
+        });
+      } else if (isMissingSupabaseSchemaObject(details)) {
+        interviewScheduleUnavailable = true;
+        console.error("ATS interview summaries unavailable because the interviews schema is incomplete:", details);
+      } else {
+        throw error;
+      }
+    }
+    const pageApplicationIds = new Set(paged.map((application) => application.id));
+    for (const interview of interviews) {
+      const applicationId = toTrimmedString(interview.application_id);
+      if (applicationId && pageApplicationIds.has(applicationId) && !interviewSummariesByApplication.has(applicationId)) {
+        interviewSummariesByApplication.set(applicationId, interview);
+      }
+    }
+  } else if (paged.length) {
+    interviewScheduleUnavailable = true;
+  }
 
   return c.json({
-    data: paged,
+    data: paged.map((application) => {
+      const interview = interviewSummariesByApplication.get(application.id);
+      return {
+        ...application,
+        scheduledInterview: interview
+          ? {
+              id: interview.id,
+              scheduledAt: interview.scheduled_at,
+              mode: interview.mode,
+              status: interview.status,
+              meetingUrl: interview.meeting_url ?? null,
+              outcome: interview.outcome ?? "",
+              remindersEnabled: interview.reminders_enabled === true,
+              employerName: interview.employer_name ?? "",
+              employerEmail: interview.employer_email ?? "",
+              employerContactVerified: Boolean(interview.employer_contact_verified_at),
+            }
+          : null,
+      };
+    }),
     pageInfo: {
       page,
       pageSize,
       total,
       totalPages,
     },
+    interviewScheduleUnavailable,
   });
 });
 
@@ -21086,6 +21598,290 @@ app.post("/api/whatsapp/webhook", async (c) => {
   return c.text("EVENT_RECEIVED", 200);
 });
 
+const telegramDbRequest = async (env: Bindings, path: string, init?: RequestInit) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) throw new Error("Telegram storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+  return fetch(`${config.baseUrl}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      apikey: config.serviceRoleKey,
+      Authorization: `Bearer ${config.serviceRoleKey}`,
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+};
+
+const telegramBotInfo = async (env: Bindings) => {
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) return null;
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: AbortSignal.timeout(8000) });
+    const body = await response.json() as { ok?: boolean; result?: { username?: string }; description?: string };
+    return response.ok && body.ok ? body.result : null;
+  } catch (error) {
+    // Keep subscriber counts and the rest of the dashboard available when the
+    // local machine cannot reach Telegram; botConnected will remain false.
+    console.warn("Telegram bot connection check failed:", errMsg(error));
+    return null;
+  }
+};
+
+const telegramBotUsername = (env: Bindings) => (env.TELEGRAM_BOT_USERNAME || "").trim().replace(/^@+/, "");
+
+app.get("/api/telegram/invitation", (c) => {
+  const username = telegramBotUsername(c.env);
+  return c.json({ invitationLink: username ? `https://t.me/${username}` : "" });
+});
+
+app.post("/api/telegram/media", requireAgencyAdminAuth, async (c) => {
+  const bucket = c.env.TELEGRAM_MEDIA;
+  if (!bucket) return c.json({ error: "Telegram media storage is not configured. Create the Telegram media R2 bucket and binding." }, 503);
+  let form: FormData;
+  try { form = await c.req.formData(); } catch { return c.json({ error: "Upload an image or document." }, 400); }
+  const file = form.get("file");
+  if (!(file instanceof File)) return c.json({ error: "Choose an image or document." }, 400);
+  const allowed = file.type.startsWith("image/") || ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(file.type);
+  if (!allowed) return c.json({ error: "Supported media: images, PDF, and Word documents." }, 415);
+  if (!file.size || file.size > 10 * 1024 * 1024) return c.json({ error: "The file must be smaller than 10 MB." }, 413);
+  const key = crypto.randomUUID();
+  try {
+    await bucket.put(`broadcast/${key}`, file.stream(), { httpMetadata: { contentType: file.type, cacheControl: "public, max-age=86400" }, customMetadata: { originalName: file.name.slice(0, 160) } });
+    return c.json({ mediaUrl: `${new URL(c.req.url).origin}/api/telegram/media/${key}`, fileName: file.name.slice(0, 160), mimeType: file.type, size: file.size });
+  } catch (error) { console.error("Telegram media upload failed:", errMsg(error)); return c.json({ error: "Could not store Telegram media." }, 502); }
+});
+
+app.get("/api/telegram/media/:key", async (c) => {
+  const key = c.req.param("key");
+  if (!/^[0-9a-f-]{36}$/i.test(key)) return c.notFound();
+  const object = await c.env.TELEGRAM_MEDIA?.get(`broadcast/${key}`);
+  if (!object?.body) return c.notFound();
+  const headers = new Headers(); object.writeHttpMetadata(headers);
+  headers.set("Cache-Control", "public, max-age=86400"); headers.set("X-Content-Type-Options", "nosniff");
+  return new Response(object.body, { headers });
+});
+
+app.get("/api/telegram/status", requireAgencyAdminAuth, async (c) => {
+  try {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const count = async (params: string) => {
+      const response = await telegramDbRequest(c.env, `telegram_subscribers?agency_id=eq.${admin.agencyId}&select=id${params}`, { headers: { Prefer: "count=exact", Range: "0-0" } });
+      if (!response.ok) throw new Error("Could not count Telegram subscriber records.");
+      const total = response.headers.get("content-range")?.split("/")[1];
+      return total && total !== "*" ? Number(total) : 0;
+    };
+    const [bot, totalSubscribers, activeSubscribers, blockedSubscribers, unsubscribedSubscribers] = await Promise.all([
+      telegramBotInfo(c.env),
+      count(""),
+      count("&subscription_status=eq.active&consent_status=eq.active"),
+      count("&subscription_status=eq.blocked"),
+      count("&or=(consent_status.eq.revoked,subscription_status.eq.unsubscribed)"),
+    ]);
+    const username = bot?.username || telegramBotUsername(c.env);
+    return c.json({ configured: Boolean(c.env.MAKE_TELEGRAM_BROADCAST_WEBHOOK_URL?.trim()), chatbotConfigured: Boolean(c.env.MAKE_TELEGRAM_CHATBOT_WEBHOOK_URL?.trim()), botConnected: Boolean(bot), botUsername: username, invitationLink: username ? `https://t.me/${username}` : "", totalSubscribers, activeSubscribers, blockedSubscribers, unsubscribedSubscribers });
+  } catch (error) {
+    console.error("Telegram status failed:", errMsg(error));
+    return c.json({ error: "Could not load Telegram status." }, 503);
+  }
+});
+
+app.get("/api/telegram/subscribers", requireAgencyAdminAuth, async (c) => {
+  try {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const response = await telegramDbRequest(c.env, `telegram_subscribers?agency_id=eq.${admin.agencyId}&select=id,applicant_id,telegram_username,first_name,language_code,nationality,applicant_status,experience_years,subscription_status,consent_status,last_interaction_at&order=last_interaction_at.desc&limit=500`);
+    if (!response.ok) throw new Error("Subscriber query failed");
+    return c.json({ subscribers: await response.json() });
+  } catch (error) { console.error("Telegram subscribers failed:", errMsg(error)); return c.json({ error: "Could not load subscribers." }, 503); }
+});
+
+app.get("/api/telegram/conversations", requireAgencyAdminAuth, async (c) => {
+  try {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const response = await telegramDbRequest(c.env, `telegram_conversations?agency_id=eq.${admin.agencyId}&select=*,telegram_messages(*)&order=last_message_at.desc.nullslast&limit=100`);
+    if (!response.ok) throw new Error("Conversation query failed");
+    return c.json({ conversations: await response.json() });
+  } catch (error) { console.error("Telegram conversations failed:", errMsg(error)); return c.json({ error: "Could not load conversations." }, 503); }
+});
+
+app.post("/api/telegram/broadcasts", requireAgencyAdminAuth, async (c) => {
+  const webhookUrl = c.env.MAKE_TELEGRAM_BROADCAST_WEBHOOK_URL?.trim();
+  if (!webhookUrl || !/^https:\/\/[^/]*\.make\.com\//i.test(webhookUrl)) return c.json({ error: "Configure a valid Make.com Telegram broadcast webhook first." }, 503);
+  const body = await parseBody<{ title?: string; message?: string; mediaUrl?: string; mediaType?: string; filters?: Record<string, unknown>; idempotencyKey?: string }>(c.req.raw);
+  const message = body?.message?.trim() || "";
+  if (!message || message.length > 4096) return c.json({ error: "Enter a message between 1 and 4,096 characters." }, 400);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  let mediaUrl: string | null = null;
+  let mediaType: "image" | "document" | null = null;
+  if (body?.mediaUrl) {
+    try {
+      const parsed = new URL(body.mediaUrl);
+      const key = parsed.pathname.match(/^\/api\/telegram\/media\/([0-9a-f-]{36})$/i)?.[1];
+      if (parsed.origin !== new URL(c.req.url).origin || !key || !c.env.TELEGRAM_MEDIA) return c.json({ error: "Upload the media in this broadcast before sending." }, 400);
+      const stored = await c.env.TELEGRAM_MEDIA.head(`broadcast/${key}`);
+      if (!stored) return c.json({ error: "The uploaded media is missing. Upload it again." }, 400);
+      mediaType = stored.httpMetadata?.contentType?.startsWith("image/") ? "image" : "document";
+      mediaUrl = parsed.toString();
+    } catch { return c.json({ error: "The media URL is invalid." }, 400); }
+  }
+  if (mediaType && message.length > 1024) return c.json({ error: "Telegram image and document captions must be no longer than 1,024 characters." }, 400);
+  const filter = body?.filters ?? {};
+  const query = new URLSearchParams({ agency_id: `eq.${admin.agencyId}`, subscription_status: "eq.active", consent_status: "eq.active", select: "id,applicant_id,telegram_chat_id,telegram_user_id,telegram_username,first_name,language_code,nationality,applicant_status,experience_years", limit: "10000" });
+  if (typeof filter.nationality === "string" && filter.nationality.trim()) query.set("nationality", `eq.${filter.nationality.trim()}`);
+  if (typeof filter.applicantStatus === "string" && filter.applicantStatus.trim()) query.set("applicant_status", `eq.${filter.applicantStatus.trim()}`);
+  if (typeof filter.minExperience === "number" && Number.isFinite(filter.minExperience)) query.set("experience_years", `gte.${Math.max(0, filter.minExperience)}`);
+  const recipientsResponse = await telegramDbRequest(c.env, `telegram_subscribers?${query.toString()}`);
+  if (!recipientsResponse.ok) return c.json({ error: "Could not retrieve active Telegram subscribers." }, 503);
+  const recipients = await recipientsResponse.json() as Array<{ id: string; applicant_id: string | null; telegram_chat_id: string; telegram_user_id: string; telegram_username: string | null; first_name: string; language_code: string | null }>;
+  if (!recipients.length) return c.json({ error: "No active, consented Telegram subscribers match this audience." }, 409);
+  const idempotencyKey = String(body?.idempotencyKey || crypto.randomUUID()).slice(0, 120);
+  const created = await telegramDbRequest(c.env, "telegram_broadcasts?on_conflict=agency_id,idempotency_key", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify({ agency_id: admin.agencyId, idempotency_key: idempotencyKey, title: String(body?.title || "").slice(0, 160), message, media_url: mediaUrl, recipient_filter: filter, total_recipients: recipients.length, status: "sending", created_by: admin.username || admin.email || "admin" }) });
+  if (!created.ok) return c.json({ error: "Could not record this broadcast." }, 503);
+  const records = await created.json() as Array<{ id: string }>;
+  if (!records.length) return c.json({ error: "This broadcast request was already submitted." }, 409);
+  const broadcast = records[0];
+  const logs = recipients.map((recipient) => ({ broadcast_id: broadcast.id, applicant_id: recipient.applicant_id, telegram_chat_id: recipient.telegram_chat_id, delivery_status: "queued" }));
+  const logResponse = await telegramDbRequest(c.env, "telegram_broadcast_logs?on_conflict=broadcast_id,telegram_chat_id", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify(logs) });
+  if (!logResponse.ok) return c.json({ error: "Could not queue recipient delivery records." }, 503);
+  try {
+    const response = await fetch(webhookUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "telegram_broadcast", broadcastId: broadcast.id, agencyId: admin.agencyId, message, mediaUrl, mediaType, recipients, filters: filter, requestedAt: now() }), signal: AbortSignal.timeout(20000) });
+    if (!response.ok) throw new Error(`Make responded ${response.status}`);
+    return c.json({ accepted: true, broadcastId: broadcast.id, recipientCount: recipients.length }, 202);
+  } catch (error) {
+    await telegramDbRequest(c.env, `telegram_broadcasts?id=eq.${broadcast.id}`, { method: "PATCH", body: JSON.stringify({ status: "failed" }) });
+    console.error("Telegram broadcast Make dispatch failed:", errMsg(error));
+    return c.json({ error: "Make.com did not accept this broadcast." }, 502);
+  }
+});
+
+app.post("/api/telegram/webhook", async (c) => {
+  const secret = c.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  if (!secret || c.req.header("x-telegram-bot-api-secret-token") !== secret) return c.json({ error: "Unauthorized" }, 401);
+  const update = await parseBody<{ message?: { message_id?: number; text?: string; chat?: { id?: number; type?: string }; from?: { id?: number; username?: string; first_name?: string; language_code?: string } } }>(c.req.raw);
+  const message = update?.message;
+  const chat = message?.chat;
+  const sender = message?.from;
+  if (!chat?.id || chat.type !== "private" || !sender?.id) return c.json({ ok: true });
+  const text = message?.text?.trim() || "";
+    const agencyId = 1;
+  const identity = { agency_id: agencyId, telegram_chat_id: String(chat.id), telegram_user_id: String(sender.id), telegram_username: sender.username || null, first_name: (sender.first_name || "").slice(0, 120), language_code: sender.language_code || null, last_interaction_at: now(), updated_at: now() };
+  try {
+    if (/^\/start(?:\s|$)/i.test(text)) {
+      await telegramDbRequest(c.env, "telegram_subscribers?on_conflict=agency_id,telegram_chat_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ ...identity, subscription_status: "active", consent_status: "active", subscribed_at: now(), unsubscribed_at: null }) });
+      const token = c.env.TELEGRAM_BOT_TOKEN?.trim();
+      if (token) await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: String(chat.id), text: "Welcome to Rinzin Agency applicant support. You can ask recruitment questions here. Send /stop at any time to unsubscribe from Telegram messages." }), signal: AbortSignal.timeout(8000) });
+    } else if (/^\/stop(?:\s|$)/i.test(text)) {
+      await telegramDbRequest(c.env, `telegram_subscribers?agency_id=eq.${agencyId}&telegram_chat_id=eq.${chat.id}`, { method: "PATCH", body: JSON.stringify({ ...identity, subscription_status: "unsubscribed", consent_status: "revoked", unsubscribed_at: now() }) });
+      const token = c.env.TELEGRAM_BOT_TOKEN?.trim();
+      if (token) await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: String(chat.id), text: "You are unsubscribed. We will not send further automated Telegram messages. Message /start if you choose to subscribe again." }), signal: AbortSignal.timeout(8000) });
+    } else {
+      await telegramDbRequest(c.env, "telegram_subscribers?on_conflict=agency_id,telegram_chat_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(identity) });
+    }
+    const convResponse = await telegramDbRequest(c.env, "telegram_conversations?on_conflict=agency_id,telegram_chat_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ agency_id: agencyId, telegram_chat_id: String(chat.id), last_message_at: now(), updated_at: now() }) });
+    const conversations = convResponse.ok ? await convResponse.json() as Array<{ id: string; conversation_status: string }> : [];
+    const subscriptionResponse = await telegramDbRequest(c.env, `telegram_subscribers?agency_id=eq.${agencyId}&telegram_chat_id=eq.${chat.id}&select=consent_status&limit=1`);
+    const subscriptionRows = subscriptionResponse.ok ? await subscriptionResponse.json() as Array<{ consent_status: string }> : [];
+    const consentActive = subscriptionRows[0]?.consent_status === "active";
+    const conversation = conversations[0];
+    if (conversation && text && !/^\/(start|stop)(?:\s|$)/i.test(text)) {
+      await telegramDbRequest(c.env, "telegram_messages", { method: "POST", body: JSON.stringify({ conversation_id: conversation.id, sender_type: "applicant", message_text: text, telegram_message_id: message?.message_id ? String(message.message_id) : null }) });
+      if (consentActive && conversation.conversation_status !== "human" && c.env.MAKE_TELEGRAM_CHATBOT_WEBHOOK_URL?.trim()) {
+        const aiResponse = await fetch(c.env.MAKE_TELEGRAM_CHATBOT_WEBHOOK_URL.trim(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "telegram_chatbot", agencyId, conversationId: conversation.id, chatId: String(chat.id), telegramUserId: String(sender.id), message: text, languageCode: sender.language_code || null }), signal: AbortSignal.timeout(15000) });
+        if (!aiResponse.ok) throw new Error(`Make chatbot webhook responded ${aiResponse.status}`);
+      }
+    }
+    return c.json({ ok: true });
+  } catch (error) { console.error("Telegram update failed:", errMsg(error)); return c.json({ error: "Could not process Telegram update." }, 503); }
+});
+
+app.get("/api/telegram/broadcasts", requireAgencyAdminAuth, async (c) => {
+  try {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const response = await telegramDbRequest(c.env, `telegram_broadcasts?agency_id=eq.${admin.agencyId}&select=*&order=created_at.desc&limit=100`);
+    if (!response.ok) throw new Error("Broadcast history query failed");
+    return c.json({ broadcasts: await response.json() });
+  } catch (error) { console.error("Telegram history failed:", errMsg(error)); return c.json({ error: "Could not load broadcast history." }, 503); }
+});
+
+app.patch("/api/telegram/conversations/:id", requireAgencyAdminAuth, async (c) => {
+  const status = (await parseBody<{ conversationStatus?: string }>(c.req.raw))?.conversationStatus;
+  if (!status || !["active", "needs_attention", "human", "closed"].includes(status)) return c.json({ error: "Invalid conversation status." }, 400);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const response = await telegramDbRequest(c.env, `telegram_conversations?id=eq.${encodeURIComponent(c.req.param("id"))}&agency_id=eq.${admin.agencyId}`, { method: "PATCH", body: JSON.stringify({ conversation_status: status, updated_at: now() }) });
+  return response.ok ? c.json({ updated: true }) : c.json({ error: "Could not update conversation." }, 503);
+});
+
+app.post("/api/telegram/automation/chat-reply", async (c) => {
+  if (!c.env.TELEGRAM_AUTOMATION_SECRET || c.req.header("x-telegram-automation-secret") !== c.env.TELEGRAM_AUTOMATION_SECRET) return c.json({ error: "Unauthorized" }, 401);
+  const body = await parseBody<{ conversationId?: string; chatId?: string; message?: string }>(c.req.raw);
+  const reply = body?.message?.trim() || "";
+  if (!body?.conversationId || !body.chatId || !reply || reply.length > 4096) return c.json({ error: "conversationId, chatId, and a message up to 4,096 characters are required." }, 400);
+  const token = c.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) return c.json({ error: "Telegram bot is not configured." }, 503);
+  try {
+    const send = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: body.chatId, text: reply }), signal: AbortSignal.timeout(10000) });
+    const result = await send.json() as { ok?: boolean; result?: { message_id?: number }; description?: string };
+    if (!send.ok || !result.ok) return c.json({ error: "Telegram could not send the reply." }, 502);
+    await telegramDbRequest(c.env, "telegram_messages", { method: "POST", body: JSON.stringify({ conversation_id: body.conversationId, sender_type: "ai", message_text: reply, telegram_message_id: result.result?.message_id ? String(result.result.message_id) : null }) });
+    return c.json({ sent: true });
+  } catch (error) { console.error("Telegram AI reply failed:", errMsg(error)); return c.json({ error: "Could not send Telegram reply." }, 502); }
+});
+
+app.post("/api/telegram/automation/profile-draft", async (c) => {
+  if (!c.env.TELEGRAM_AUTOMATION_SECRET || c.req.header("x-telegram-automation-secret") !== c.env.TELEGRAM_AUTOMATION_SECRET) return c.json({ error: "Unauthorized" }, 401);
+  const body = await parseBody<{ chatId?: string; fields?: Record<string, unknown> }>(c.req.raw);
+  if (!body?.chatId || !body.fields || typeof body.fields !== "object" || Array.isArray(body.fields)) return c.json({ error: "chatId and profile fields are required." }, 400);
+  const allowed = new Set(["fullName", "age", "nationality", "currentLocation", "singaporeExperience", "previousEmployer", "experienceYears", "skills", "preferredArrangement", "availability", "contactInformation", "applicationReference"]);
+  const updates: Record<string, string | number | boolean | string[]> = {};
+  for (const [key, raw] of Object.entries(body.fields)) {
+    if (!allowed.has(key) || raw === null || raw === undefined) continue;
+    if (Array.isArray(raw)) {
+      const values = raw.filter((value): value is string => typeof value === "string").slice(0, 20).map((value) => value.slice(0, 300));
+      if (values.length) updates[key] = values;
+    }
+    else if (["age", "experienceYears"].includes(key) && typeof raw === "number" && Number.isFinite(raw)) updates[key] = Math.max(0, Math.min(100, raw));
+    else if (typeof raw === "string" && raw.trim()) updates[key] = raw.trim().slice(0, 1000);
+  }
+  if (!Object.keys(updates).length) return c.json({ saved: false, reason: "No supported applicant fields were provided." });
+  const existingResponse = await telegramDbRequest(c.env, `telegram_subscribers?telegram_chat_id=eq.${encodeURIComponent(body.chatId)}&select=telegram_profile_draft&limit=1`);
+  if (!existingResponse.ok) return c.json({ error: "Could not load the subscriber profile draft." }, 503);
+  const existingRows = await existingResponse.json() as Array<{ telegram_profile_draft?: Record<string, unknown> }>;
+  if (!existingRows.length) return c.json({ error: "Telegram subscriber not found." }, 404);
+  const merged = { ...(existingRows[0].telegram_profile_draft || {}), ...updates, updatedAt: now() };
+  const saved = await telegramDbRequest(c.env, `telegram_subscribers?telegram_chat_id=eq.${encodeURIComponent(body.chatId)}`, { method: "PATCH", body: JSON.stringify({ telegram_profile_draft: merged, updated_at: now() }) });
+  return saved.ok ? c.json({ saved: true, fieldsSaved: Object.keys(updates) }) : c.json({ error: "Could not save profile answers." }, 503);
+});
+
+app.post("/api/telegram/automation/handover", async (c) => {
+  if (!c.env.TELEGRAM_AUTOMATION_SECRET || c.req.header("x-telegram-automation-secret") !== c.env.TELEGRAM_AUTOMATION_SECRET) return c.json({ error: "Unauthorized" }, 401);
+  const body = await parseBody<{ conversationId?: string; status?: string }>(c.req.raw);
+  if (!body?.conversationId || !["needs_attention", "human", "active", "closed"].includes(body.status || "")) return c.json({ error: "Invalid handover request." }, 400);
+  const response = await telegramDbRequest(c.env, `telegram_conversations?id=eq.${encodeURIComponent(body.conversationId)}`, { method: "PATCH", body: JSON.stringify({ conversation_status: body.status, updated_at: now() }) });
+  return response.ok ? c.json({ updated: true }) : c.json({ error: "Could not update handover status." }, 503);
+});
+
+app.post("/api/telegram/automation/delivery-result", async (c) => {
+  if (!c.env.TELEGRAM_AUTOMATION_SECRET || c.req.header("x-telegram-automation-secret") !== c.env.TELEGRAM_AUTOMATION_SECRET) return c.json({ error: "Unauthorized" }, 401);
+  const body = await parseBody<{ broadcastId?: string; chatId?: string; status?: string; messageId?: string; error?: string }>(c.req.raw);
+  if (!body?.broadcastId || !body.chatId || !["sent", "failed", "skipped"].includes(body.status || "")) return c.json({ error: "Invalid delivery result." }, 400);
+  const patch = await telegramDbRequest(c.env, `telegram_broadcast_logs?broadcast_id=eq.${encodeURIComponent(body.broadcastId)}&telegram_chat_id=eq.${encodeURIComponent(body.chatId)}`, { method: "PATCH", body: JSON.stringify({ delivery_status: body.status, telegram_message_id: body.messageId || null, error_message: (body.error || "").slice(0, 1000) || null, sent_at: body.status === "sent" ? now() : null }) });
+  if (!patch.ok) return c.json({ error: "Could not update delivery result." }, 503);
+  const broadcastResponse = await telegramDbRequest(c.env, `telegram_broadcasts?id=eq.${encodeURIComponent(body.broadcastId)}&select=agency_id`);
+  const broadcastRows = broadcastResponse.ok ? await broadcastResponse.json() as Array<{ agency_id: number }> : [];
+  if (broadcastRows[0] && body.status === "failed" && /blocked|chat not found|deactivated/i.test(body.error || "")) {
+    await telegramDbRequest(c.env, `telegram_subscribers?agency_id=eq.${broadcastRows[0].agency_id}&telegram_chat_id=eq.${encodeURIComponent(body.chatId)}`, { method: "PATCH", body: JSON.stringify({ subscription_status: "blocked", updated_at: now() }) });
+  }
+  const allLogs = await telegramDbRequest(c.env, `telegram_broadcast_logs?broadcast_id=eq.${encodeURIComponent(body.broadcastId)}&select=delivery_status`);
+  if (allLogs.ok && broadcastRows[0]) {
+    const logs = await allLogs.json() as Array<{ delivery_status: string }>;
+    const successfulCount = logs.filter((log) => log.delivery_status === "sent").length;
+    const failedCount = logs.filter((log) => log.delivery_status === "failed").length;
+    const skippedCount = logs.filter((log) => log.delivery_status === "skipped").length;
+    const completed = logs.length > 0 && logs.every((log) => ["sent", "failed", "skipped"].includes(log.delivery_status));
+    await telegramDbRequest(c.env, `telegram_broadcasts?id=eq.${encodeURIComponent(body.broadcastId)}`, { method: "PATCH", body: JSON.stringify({ successful_count: successfulCount, failed_count: failedCount, skipped_count: skippedCount, status: completed ? "completed" : "sending", completed_at: completed ? now() : null }) });
+  }
+  return c.json({ updated: true });
+});
+
 app.post("/api/whatsapp-broadcast/media", requireAgencyAdminAuth, async (c) => {
   const bucket = c.env.WHATSAPP_MEDIA;
   if (!bucket) return c.json({ error: "WhatsApp media storage is not configured. Add the WHATSAPP_MEDIA R2 binding and deploy." }, 503);
@@ -21140,7 +21936,7 @@ app.get("/api/whatsapp-broadcast/media/:key", async (c) => {
   return new Response(object.body, { headers });
 });
 
-app.get("/api/whatsapp-broadcast/status", requireAgencyAdminAuth, (c) =>
+app.get("/api/whatsapp-broadcast/status-legacy", requireAgencyAdminAuth, (c) =>
   c.json({
     configured: Boolean(c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim()),
     optOutCaptureConfigured: Boolean(
@@ -21150,7 +21946,9 @@ app.get("/api/whatsapp-broadcast/status", requireAgencyAdminAuth, (c) =>
   }),
 );
 
-app.post("/api/whatsapp-broadcast", requireAgencyAdminAuth, async (c) => {
+app.post("/api/whatsapp-broadcast/legacy", requireAgencyAdminAuth, async (c) => {
+  if (c.req.method === "POST") return c.json({ error: "WhatsApp broadcasting has been retired. Use the Telegram broadcast dashboard." }, 410);
+  // Retained below only as migration history; legacy phone-list delivery is unreachable.
   const webhookUrl = c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim();
   if (!webhookUrl) {
     return c.json({ error: "WhatsApp broadcast is not connected yet. Configure the dedicated Make.com webhook first." }, 503);

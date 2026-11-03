@@ -1,0 +1,69 @@
+{
+  "name": "Helped - Telegram Broadcast",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": { "parameters": { "hook": { "data": { "editable": "true" }, "label": "Helped Telegram Broadcast" } } },
+        "notes": "Create an instant custom webhook and set its URL as Worker secret MAKE_TELEGRAM_BROADCAST_WEBHOOK_URL. The Worker supplies only active, consented Telegram subscribers."
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicFeeder",
+      "version": 1,
+      "parameters": {},
+      "mapper": { "array": "{{1.recipients}}" },
+      "metadata": {
+        "designer": { "x": 300, "y": 0 },
+        "restore": {},
+        "expect": [{ "name": "array", "type": "array", "label": "Registered Telegram recipients", "spec": [
+          { "name": "telegram_chat_id", "type": "text", "label": "Telegram chat ID" },
+          { "name": "applicant_id", "type": "text", "label": "Verified applicant reference (optional)" },
+          { "name": "first_name", "type": "text", "label": "First name" },
+          { "name": "language_code", "type": "text", "label": "Telegram language code" }
+        ] }],
+        "notes": "Never add phone-number imports or other recipients here."
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": { "designer": { "x": 600, "y": 0, "name": "Send text or attachment" } },
+      "routes": [
+        { "flow": [
+          { "id": 4, "module": "http:ActionSendData", "version": 3, "filter": { "name": "Text only", "conditions": [[{ "a": "{{ifempty(1.mediaType; \"text\")}}", "o": "text:equal", "b": "text" }]] }, "parameters": { "handleErrors": true, "useNewZLIB": true }, "mapper": { "url": "https://api.telegram.org/botREPLACE_WITH_BOT_TOKEN/sendMessage", "serializeUrl": false, "method": "post", "headers": [], "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json", "data": "{\n  \"chat_id\": \"{{2.telegram_chat_id}}\",\n  \"text\": \"{{escapeJSON(1.message)}}\",\n  \"disable_web_page_preview\": false\n}" }, "metadata": { "designer": { "x": 900, "y": -180 }, "restore": {}, "notes": "Replace the token placeholder with a protected Make secret or connection." } },
+          { "id": 5, "module": "http:ActionSendData", "version": 3, "parameters": { "handleErrors": true, "useNewZLIB": true }, "mapper": { "url": "https://YOUR-DOMAIN/api/telegram/automation/delivery-result", "serializeUrl": false, "method": "post", "headers": [{ "name": "Content-Type", "value": "application/json" }, { "name": "x-telegram-automation-secret", "value": "REPLACE_WITH_TELEGRAM_AUTOMATION_SECRET" }], "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json", "data": "{\n  \"broadcastId\": \"{{1.broadcastId}}\",\n  \"chatId\": \"{{2.telegram_chat_id}}\",\n  \"status\": \"sent\",\n  \"messageId\": \"{{4.data.result.message_id}}\"\n}" }, "metadata": { "designer": { "x": 1200, "y": -180 }, "restore": {}, "notes": "Write success to the website after Telegram accepts the message." } }
+        ] },
+        { "flow": [
+          { "id": 6, "module": "http:ActionSendData", "version": 3, "filter": { "name": "Image", "conditions": [[{ "a": "{{1.mediaType}}", "o": "text:equal", "b": "image" }]] }, "parameters": { "handleErrors": true, "useNewZLIB": true }, "mapper": { "url": "https://api.telegram.org/botREPLACE_WITH_BOT_TOKEN/sendPhoto", "serializeUrl": false, "method": "post", "headers": [], "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json", "data": "{\n  \"chat_id\": \"{{2.telegram_chat_id}}\",\n  \"photo\": \"{{1.mediaUrl}}\",\n  \"caption\": \"{{escapeJSON(1.message)}}\"\n}" }, "metadata": { "designer": { "x": 900, "y": 0 }, "restore": {}, "notes": "Telegram fetches the public, unguessable R2 media URL." } },
+          { "id": 7, "module": "http:ActionSendData", "version": 3, "parameters": { "handleErrors": true, "useNewZLIB": true }, "mapper": { "url": "https://YOUR-DOMAIN/api/telegram/automation/delivery-result", "serializeUrl": false, "method": "post", "headers": [{ "name": "Content-Type", "value": "application/json" }, { "name": "x-telegram-automation-secret", "value": "REPLACE_WITH_TELEGRAM_AUTOMATION_SECRET" }], "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json", "data": "{\n  \"broadcastId\": \"{{1.broadcastId}}\",\n  \"chatId\": \"{{2.telegram_chat_id}}\",\n  \"status\": \"sent\",\n  \"messageId\": \"{{6.data.result.message_id}}\"\n}" }, "metadata": { "designer": { "x": 1200, "y": 0 }, "restore": {}, "notes": "Write success to the website after Telegram accepts the image." } }
+        ] },
+        { "flow": [
+          { "id": 8, "module": "http:ActionSendData", "version": 3, "filter": { "name": "Document", "conditions": [[{ "a": "{{1.mediaType}}", "o": "text:equal", "b": "document" }]] }, "parameters": { "handleErrors": true, "useNewZLIB": true }, "mapper": { "url": "https://api.telegram.org/botREPLACE_WITH_BOT_TOKEN/sendDocument", "serializeUrl": false, "method": "post", "headers": [], "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json", "data": "{\n  \"chat_id\": \"{{2.telegram_chat_id}}\",\n  \"document\": \"{{1.mediaUrl}}\",\n  \"caption\": \"{{escapeJSON(1.message)}}\"\n}" }, "metadata": { "designer": { "x": 900, "y": 180 }, "restore": {}, "notes": "Telegram fetches the public, unguessable R2 media URL." } },
+          { "id": 9, "module": "http:ActionSendData", "version": 3, "parameters": { "handleErrors": true, "useNewZLIB": true }, "mapper": { "url": "https://YOUR-DOMAIN/api/telegram/automation/delivery-result", "serializeUrl": false, "method": "post", "headers": [{ "name": "Content-Type", "value": "application/json" }, { "name": "x-telegram-automation-secret", "value": "REPLACE_WITH_TELEGRAM_AUTOMATION_SECRET" }], "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json", "data": "{\n  \"broadcastId\": \"{{1.broadcastId}}\",\n  \"chatId\": \"{{2.telegram_chat_id}}\",\n  \"status\": \"sent\",\n  \"messageId\": \"{{8.data.result.message_id}}\"\n}" }, "metadata": { "designer": { "x": 1200, "y": 180 }, "restore": {}, "notes": "Write success to the website after Telegram accepts the document." } }
+        ] }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 10, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": true, "confidential": true, "dataloss": false, "dlq": false },
+    "designer": { "orphans": [] },
+    "zone": "eu1.make.com",
+    "notes": [
+      "Helped - Telegram Broadcast.",
+      "Create the Custom Webhook after import, replace YOUR-DOMAIN and secret placeholders, protect the Bot API token in Make, then activate the scenario.",
+      "The router includes text, image, and document branches. Start with one test subscriber and verify each route before using attachments.",
+      "Configure bounded backoff for Telegram 429 responses and an error-handler callback that reports definitive failures to /api/telegram/automation/delivery-result before sending to a large audience. Do not automatically resend an ambiguous timeout because Telegram may already have accepted it."
+    ]
+  }
+}

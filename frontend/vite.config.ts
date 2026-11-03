@@ -36,15 +36,22 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
-      // WhatsApp broadcast uploads relay through the Worker so the Make
-      // webhook URL stays server-side in development and production.
-      "/api/whatsapp-broadcast": {
+      // Telegram communications relay through the Worker, keeping bot and
+      // Make credentials on the server in development and production.
+      "/api/telegram": {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
       // Employer contract records and private document uploads use the
       // Cloudflare Worker storage path, not the legacy PostgreSQL API.
       "/api/employers": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
+      // Operations Center summary counts are served by the Worker (the
+      // Express API only exposes the placement board itself). Keep this
+      // specific route ahead of the generic "/api" proxy in local dev.
+      "/api/operations-board/summary": {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },

@@ -83,6 +83,7 @@ type ApplicantWorkflowTarget = {
   name: string;
   email: string;
   status: string;
+  scheduledInterview?: AtsApplicationListItem["scheduledInterview"];
 };
 
 type WorkflowActivity = {
@@ -261,6 +262,12 @@ const formatDate = (value?: string) => {
     month: "short",
     year: "numeric",
   });
+};
+
+const toDateTimeLocalInput = (value: string | Date) => {
+  const date = value instanceof Date ? value : new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 };
 
 const makeWhatsAppHref = (value?: string) => {
@@ -606,6 +613,7 @@ const AtsRecruitmentPage = () => {
     name: getApplicantDisplayName(applicant),
     email: applicant.profile.email?.trim() || "",
     status: applicant.status,
+    scheduledInterview: applicant.scheduledInterview,
   });
 
   const refreshApplicantData = () => {
@@ -642,15 +650,17 @@ const AtsRecruitmentPage = () => {
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(10, 0, 0, 0);
     setInterviewTarget(workflowTargetFromApplicant(applicant));
-    setInterviewDateTime(tomorrow.toISOString().slice(0, 16));
-    setInterviewMode("video");
-    setInterviewMeetingLink("");
-    setEmployerParticipantName("");
-    setEmployerParticipantEmail("");
-    setEmployerContactVerified(false);
+    setInterviewDateTime(applicant.scheduledInterview?.scheduledAt
+      ? toDateTimeLocalInput(applicant.scheduledInterview.scheduledAt)
+      : toDateTimeLocalInput(tomorrow));
+    setInterviewMode(applicant.scheduledInterview?.mode ?? "video");
+    setInterviewMeetingLink(applicant.scheduledInterview?.meetingUrl ?? "");
+    setEmployerParticipantName(applicant.scheduledInterview?.employerName ?? "");
+    setEmployerParticipantEmail(applicant.scheduledInterview?.employerEmail ?? "");
+    setEmployerContactVerified(applicant.scheduledInterview?.employerContactVerified ?? false);
     setSendEmployerInvitation(false);
     setSendApplicantEmail(Boolean(applicant.profile.email?.trim()));
-    setSendInterviewReminders(false);
+    setSendInterviewReminders(applicant.scheduledInterview?.remindersEnabled ?? false);
   };
 
   const openDecisionDialog = (applicant: AtsApplicationListItem, decision: "approve" | "reject") => {
@@ -666,6 +676,7 @@ const AtsRecruitmentPage = () => {
     }
     setWorkflowSaving(true);
     let interviewSaved = false;
+    let applicantStageUpdated = false;
     let generatedMeetLink: string | undefined;
     let meetingLinkToSave = interviewMeetingLink.trim();
     try {
@@ -681,6 +692,7 @@ const AtsRecruitmentPage = () => {
         headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify({
           applicationId: interviewTarget.id,
+          interviewId: interviewTarget.scheduledInterview?.id,
           scheduledAt: new Date(interviewDateTime).toISOString(),
           mode: interviewMode,
           meetingUrl: interviewMeetingLink.trim() || undefined,
@@ -693,10 +705,11 @@ const AtsRecruitmentPage = () => {
       });
       const scheduleData = await scheduleResponse.json().catch(() => ({})) as { error?: string; interview?: { id?: number | string } };
       if (!scheduleResponse.ok) throw new Error(scheduleData.error || "Could not save the interview schedule");
+      interviewSaved = true;
       await updateAtsStage(interviewTarget.id, "Screening Interview", `Interview scheduled for ${interviewDateTime.replace("T", " ")}`);
+      applicantStageUpdated = true;
       setActiveStageTab((current) => current === interviewTarget.status ? "Screening Interview" : current);
       setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: interviewMeetingLink.trim() || undefined });
-      interviewSaved = true;
       if (sendApplicantEmail && interviewTarget.email) {
         const makeResult = await deliverApplicantEmail({
           to: interviewTarget.email,
@@ -762,18 +775,24 @@ const AtsRecruitmentPage = () => {
             : `The interview for ${interviewTarget.name} is saved. You can send the invitation later when the email workflow is ready.`,
         meetingLink: meetingLinkToSave || undefined,
       });
-      toast.success(sendApplicantEmail && interviewTarget.email ? "Interview scheduled and invitation sent" : "Interview scheduled");
+      toast.success(interviewTarget.scheduledInterview
+        ? "Interview rescheduled"
+        : sendApplicantEmail && interviewTarget.email ? "Interview scheduled and invitation sent" : "Interview scheduled");
       setInterviewTarget(null);
       refreshApplicantData();
     } catch (error) {
       if (interviewSaved) {
         setWorkflowActivity({
           tone: "warning",
-          title: "Interview saved — invitation needs attention",
-          detail: error instanceof Error ? error.message : "The Make workflow could not create the calendar invitation. Fix the workflow, then send the invitation again.",
+          title: applicantStageUpdated ? "Interview saved — invitation needs attention" : "Interview saved — applicant stage needs attention",
+          detail: applicantStageUpdated
+            ? error instanceof Error ? error.message : "The Make workflow could not create the calendar invitation. Fix the workflow, then send the invitation again."
+            : "The interview was saved, but the applicant stage was not updated. Refresh the applicant list and check the stage before retrying.",
         });
-        toast.warning("Interview was scheduled, but the invitation was not sent.", {
-          description: error instanceof Error ? error.message : "Configure the HR interview email Make webhook and try sending again.",
+        toast.warning(applicantStageUpdated ? "Interview was saved, but the invitation needs attention." : "Interview was saved, but the applicant stage needs attention.", {
+          description: applicantStageUpdated
+            ? error instanceof Error ? error.message : "Configure the HR interview email Make webhook and try sending again."
+            : "The interview remains saved. Check the applicant stage before retrying.",
         });
         setInterviewTarget(null);
         refreshApplicantData();
@@ -1716,6 +1735,11 @@ const AtsRecruitmentPage = () => {
 
           {/* Table */}
           <div className="p-4">
+            {applicationsQuery.data?.interviewScheduleUnavailable && (
+              <p role="status" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Interview schedule details are unavailable. Check the interview database schema and try refreshing.
+              </p>
+            )}
             {applicationsQuery.isLoading ? (
               /* Loading skeleton */
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1829,6 +1853,20 @@ const AtsRecruitmentPage = () => {
                             <span key={tag} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{tag}</span>
                           ))}
                         </div>
+
+                        {item.scheduledInterview && (
+                          <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50 p-3 text-xs text-violet-950">
+                            <p className="font-semibold">
+                              Interview {item.scheduledInterview.status.replace(/_/g, " ")} · {new Date(item.scheduledInterview.scheduledAt).toLocaleString()}
+                            </p>
+                            {item.scheduledInterview.outcome && (
+                              <p className="mt-1">Staff outcome: {item.scheduledInterview.outcome}</p>
+                            )}
+                            <Link to="/agencyadmin/operations" className="mt-1 inline-block font-semibold underline underline-offset-2">
+                              View interview details
+                            </Link>
+                          </div>
+                        )}
 
                         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-y border-slate-100 py-3 text-xs">
                           <div className="min-w-0"><dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Contact</dt><dd className="mt-0.5 truncate font-medium text-slate-700">{item.profile.contactNumber || "Not provided"}</dd></div>
@@ -2269,7 +2307,7 @@ const AtsRecruitmentPage = () => {
           <div className="space-y-4 px-6 py-5">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Applicant</p><p className="mt-0.5 text-sm font-bold text-slate-900">{interviewTarget?.name}</p></div>
             <div className="grid gap-2 sm:grid-cols-2"><div className="rounded-xl border border-violet-100 bg-violet-50 p-3"><p className="text-xs font-bold text-violet-900">1. Save interview</p><p className="mt-0.5 text-xs leading-5 text-violet-700">The selected date, time, and format are saved to this applicant.</p></div><div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3"><p className="text-xs font-bold text-emerald-900">2. Send to Make</p><p className="mt-0.5 text-xs leading-5 text-emerald-700">Make creates the calendar event, Google Meet link, and invitation email.</p></div></div>
-            <label className="block text-sm font-semibold text-slate-800">Interview date and time<Input type="datetime-local" className="mt-1.5" value={interviewDateTime} min={new Date().toISOString().slice(0, 16)} onChange={(event) => setInterviewDateTime(event.target.value)} /></label>
+            <label className="block text-sm font-semibold text-slate-800">Interview date and time<Input type="datetime-local" className="mt-1.5" value={interviewDateTime} min={toDateTimeLocalInput(new Date())} onChange={(event) => setInterviewDateTime(event.target.value)} /></label>
             <label className="block text-sm font-semibold text-slate-800">Interview format<select className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={interviewMode} onChange={(event) => setInterviewMode(event.target.value)}><option value="video">Video call</option><option value="phone">Phone call</option><option value="in_person">In-person</option></select></label>
             <label className="block text-sm font-semibold text-slate-800">Use an existing meeting link <span className="font-normal text-slate-400">(optional)</span><Input className="mt-1.5" type="url" placeholder="Leave blank to let Make create a Google Meet link" value={interviewMeetingLink} onChange={(event) => setInterviewMeetingLink(event.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Leave this blank for a new Google Meet link from the Make calendar workflow.</span></label>
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">

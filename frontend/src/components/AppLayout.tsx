@@ -24,8 +24,9 @@ import {
   CheckCircle,
   Users,
   Settings2,
+  CalendarDays,
+  Send,
 } from "lucide-react";
-import { FaWhatsapp } from "react-icons/fa";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -100,6 +101,16 @@ const navItems = [
     badgeKey: null,
   },
   {
+    label: "Maid Interviews",
+    path: adminPath("/maid-interviews"),
+    icon: CalendarDays,
+    iconBg: "linear-gradient(145deg, #C4B5FD, #7C3AED)",
+    iconShadow: "0 4px 0 #6D28D9, 0 6px 12px rgba(124,58,237,0.35)",
+    iconShadowActive: "0 2px 0 #6D28D9, 0 3px 8px rgba(124,58,237,0.3)",
+    iconColor: "#fff",
+    badgeKey: null,
+  },
+  {
     label: "Applicants List",
     path: adminPath("/recruitment"),
     icon: Brain,
@@ -170,12 +181,12 @@ const navItems = [
     badgeKey: null,
   },
   {
-    label: "WhatsApp Broadcast",
-    path: adminPath("/whatsapp-broadcast"),
-    icon: FaWhatsapp,
-    iconBg: "linear-gradient(145deg, #6EE7B7, #059669)",
-    iconShadow: "0 4px 0 #047857, 0 6px 12px rgba(5,150,105,0.35)",
-    iconShadowActive: "0 2px 0 #047857, 0 3px 8px rgba(5,150,105,0.3)",
+    label: "Telegram Broadcast",
+    path: adminPath("/telegram-broadcast"),
+    icon: Send,
+    iconBg: "linear-gradient(145deg, #7DD3FC, #0284C7)",
+    iconShadow: "0 4px 0 #0369A1, 0 6px 12px rgba(2,132,199,0.35)",
+    iconShadowActive: "0 2px 0 #0369A1, 0 3px 8px rgba(2,132,199,0.3)",
     iconColor: "#fff",
     badgeKey: null,
   },
