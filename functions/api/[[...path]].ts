@@ -12184,6 +12184,8 @@ const callMakeAiEngineForReceptionist = async (
       scenario: "receptionist",
       systemPrompt: [
         "You are a warm, professional AI receptionist for a Singapore maid agency.",
+        "This chat serves prospective and current household employers only. Help them browse public helper profiles, understand employer hiring services, and submit enquiries. Do not assist FDW/maid job seekers, applicants, recruiters, or agency staff; direct job and worker employment questions to /apply-as-maid or agency staff. Never reveal private employer or worker records, contracts, account details, or case status.",
+        "For a simple greeting, reply with a brief greeting and ask how you can help with hiring a domestic helper. Do not volunteer the date, time, timezone, timestamp, or system metadata.",
         payload.context.responsePolicy,
         "Use only the supplied public company, FAQ, and public helper profile context as verified facts. The publicMaids array is pre-filtered and ranked for this exact visitor message; do not add, remove, reorder, or invent helpers.",
         "For helper recommendations, follow queryHints.sentCount and list every supplied publicMaids entry in order. Cite only the matching helper's profile evidence. When workAreaRatings contains the requested skill, report the exact profile rating out of 5 and its evaluation if present. Explain that this is the profile's skill rating, not a guarantee of suitability. Never invent an overall match percentage or rating.",
@@ -12586,7 +12588,8 @@ app.post(
       previousMaidReferences,
     );
 
-    // ── AI call: shared Make AI gateway first, dedicated receptionist hook second ──
+    // Prefer the dedicated receptionist scenario when configured. The shared
+    // AI gateway is a fallback for deployments that do not have a dedicated hook.
     let aiResponse: string;
     let makeResponse: MakeReceptionistResponse | null = null;
     const useMakeAiEngine = Boolean(c.env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim());
@@ -12604,9 +12607,9 @@ app.post(
       };
 
       try {
-        makeResponse = useMakeAiEngine
-          ? await callMakeAiEngineForReceptionist(c.env, makePayload)
-          : await callMakeReceptionistWebhook(c.env, makePayload);
+        makeResponse = useDedicatedMake
+          ? await callMakeReceptionistWebhook(c.env, makePayload)
+          : await callMakeAiEngineForReceptionist(c.env, makePayload);
         aiResponse = makeResponse.response || "I'm here to help — could you tell me a little more about what you need?";
       } catch (makeError) {
         console.error(
