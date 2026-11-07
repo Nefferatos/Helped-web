@@ -119,8 +119,6 @@ export const loginAgencyAdmin = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'username/email and password are required' })
     }
 
-    console.log('[agency-auth] login identifier:', username.trim().toLowerCase())
-
     const admin = await authenticateAgencyAdminRecord(username.trim(), password.trim())
     if (!admin) {
       return res.status(401).json({ error: 'Invalid credentials' })
@@ -128,11 +126,6 @@ export const loginAgencyAdmin = async (req: Request, res: Response) => {
 
     const session = await createAgencyAdminSessionRecord(admin.id)
     rememberAgencyAdminSession(session.token, admin)
-    console.log('[agency-auth] login success:', {
-      adminId: admin.id,
-      agencyId: admin.agencyId,
-      token: session.token,
-    })
     res.status(200).json({
       token: session.token,
       admin: toSafeAgencyAdmin(admin),

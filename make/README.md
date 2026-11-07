@@ -16,6 +16,7 @@ Importable blueprints that wire the marketing → application → recruiter → 
 | `agent-1-lead-referral-hunter.blueprint.json` | Consented acquisition lead → classify and route | New custom webhook |
 | `agent-2-applicant-profile-collector.blueprint.json` | Applicant message + saved profile state → next question / extraction | New custom webhook |
 | `agent-3-profile-draft-builder.blueprint.json` | Confirmed, consented public fields → profile draft | New custom webhook |
+| `helped-deployment-task-events.blueprint.json` | Placement, interview, document, and checklist event → advisory AI monitor → internal email | Durable Worker outbox |
 
 Both use HTTP + Gmail/Sheets modules (the module family the existing `Helped Maids – Full Agentic Dispatcher` blueprint already imports), so they target the real REST surface instead of relying on per-network Make apps.
 
@@ -47,6 +48,10 @@ This scenario receives the consented referral payload sent by the FDW-page refer
 5. Click **Run once** in Make, submit a test referral through the chatbot with permission to share, and verify the appended row. Turn the scenario on after the test.
 
 The mapped payload fields are `referralId`, `submittedAt`, `referrerName`, `referrerPhone`, `maidName`, `maidPhone`, `maidNationality`, `relationship`, `notes`, `consentToShareContact`, and `source`. The Make webhook URL is not part of the browser payload; the Worker forwards this data only after validating required details and consent.
+
+## Placement lifecycle monitor
+
+`helped-deployment-task-events.blueprint.json` now adds an AI summary step before the internal staff email. It accepts placement lifecycle, interview schedule/outcome, document upload/review, and deployment task events from the Worker's durable outbox. The monitor receives event metadata only. It cannot open documents, change website records, verify legal documents, or decide MOM/IPA outcomes. Create the webhook, select a Make AI Provider connection, connect Gmail, and set the operations inbox before enabling it. Configure `MAKE_WEBHOOK_URL_DEPLOYMENT_TASK` in the Worker to the scenario webhook.
 
 ---
 

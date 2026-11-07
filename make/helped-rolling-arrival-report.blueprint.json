@@ -1,0 +1,113 @@
+﻿{
+    "name":  "Helped - Daily Three-Day Operations Report",
+    "metadata":  {
+                     "instant":  true,
+                     "version":  1,
+                     "scenario":  {
+                                      "roundtrips":  1,
+                                      "maxErrors":  3,
+                                      "autoCommit":  true,
+                                      "autoCommitTriggerLast":  true,
+                                      "sequential":  false,
+                                      "confidential":  true,
+                                      "dataloss":  false,
+                                      "dlq":  true
+                                  },
+                     "notes":  [
+                                   "Triggered by the Worker once per day (08:00-09:00 Singapore time). Create the custom webhook, connect Gmail, replace the recipient with an authorized internal operations address, then set MAKE_WEBHOOK_URL_ROLLING_ARRIVAL_REPORT in the Worker. Configure ROLLING_ARRIVAL_REPORT_AGENCY_ID in the Worker to the agency\u0027s numeric agency_id. The payload contains placement and arrival dispatch details; restrict the recipient accordingly. Before activation, add Make Data Store idempotency using event_id so Worker retries do not send duplicate emails."
+                               ]
+                 },
+    "flow":  [
+                 {
+                     "id":  1,
+                     "module":  "gateway:CustomWebHook",
+                     "version":  1,
+                     "parameters":  {
+                                        "hook":  0,
+                                        "maxResults":  1
+                                    },
+                     "mapper":  {
+
+                                },
+                     "metadata":  {
+                                      "designer":  {
+                                                       "x":  -300,
+                                                       "y":  0
+                                                   },
+                                      "restore":  {
+                                                      "parameters":  {
+                                                                         "hook":  {
+                                                                                      "data":  {
+                                                                                                   "editable":  "true"
+                                                                                               }
+                                                                                  }
+                                                                     }
+                                                  },
+                                      "notes":  "Create a custom webhook named Daily Three-Day Operations Report. The Worker sends event_id, report_date, timezone, generated_at, and days[]. Each day contains actions[] and arrivals[]."
+                                  }
+                 },
+                 {
+                     "id":  2,
+                     "module":  "google-email:ActionSendEmail",
+                     "version":  2,
+                     "parameters":  {
+                                        "account":  ""
+                                    },
+                     "mapper":  {
+                                    "cc":  [
+
+                                           ],
+                                    "bcc":  [
+
+                                            ],
+                                    "from":  "",
+                                    "to":  [
+                                               "replace-with-authorized-operations-email@example.com"
+                                           ],
+                                    "subject":  "Daily operations report â€” {{1.report_date}} ({{1.timezone}}) â€” {{1.event_id}}",
+                                    "html":  "\u003ch2\u003eDaily operations report\u003c/h2\u003e\u003cp\u003e\u003cstrong\u003eReport date:\u003c/strong\u003e {{1.report_date}}\u003cbr\u003e\u003cstrong\u003eTimezone:\u003c/strong\u003e {{1.timezone}}\u003cbr\u003e\u003cstrong\u003eGenerated:\u003c/strong\u003e {{1.generated_at}}\u003cbr\u003e\u003cstrong\u003eEvent ID:\u003c/strong\u003e {{1.event_id}}\u003c/p\u003e\u003chr\u003e\u003ch3\u003eToday — {{1.days.1.date}}\u003c/h3\u003e\u003cp\u003e\u003cstrong\u003eActions:\u003c/strong\u003e\u003cbr\u003e{{join(map(1.days.1.actions; title); \"\u003cbr\u003e\")}}\u003cbr\u003e\u003cstrong\u003eScheduled:\u003c/strong\u003e {{join(map(1.days.1.actions; scheduled_at); \", \")}}\u003cbr\u003e\u003cstrong\u003eDue:\u003c/strong\u003e {{join(map(1.days.1.actions; due_at); \", \")}}\u003cbr\u003e\u003cstrong\u003eStatus:\u003c/strong\u003e {{join(map(1.days.1.actions; status); \", \")}}\u003cbr\u003e\u003cstrong\u003eApplicant refs:\u003c/strong\u003e {{join(map(1.days.1.actions; applicant_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eEmployer refs:\u003c/strong\u003e {{join(map(1.days.1.actions; employer_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eAssigned to:\u003c/strong\u003e {{join(map(1.days.1.actions; assigned_to); \", \")}}\u003cbr\u003e\u003cstrong\u003eNeeds attention:\u003c/strong\u003e {{join(map(1.days.1.actions; needs_attention); \", \")}}\u003c/p\u003e\u003cp\u003e\u003cstrong\u003eArrivals — applicant refs:\u003c/strong\u003e {{join(map(1.days.1.arrivals; applicant_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eEmployer refs:\u003c/strong\u003e {{join(map(1.days.1.arrivals; employer_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eFlights:\u003c/strong\u003e {{join(map(1.days.1.arrivals; airline); \", \")}} {{join(map(1.days.1.arrivals; flight_number); \", \")}}\u003cbr\u003e\u003cstrong\u003eTimes:\u003c/strong\u003e {{join(map(1.days.1.arrivals; arrival_at); \", \")}}\u003cbr\u003e\u003cstrong\u003eAirports:\u003c/strong\u003e {{join(map(1.days.1.arrivals; arrival_airport); \", \")}}\u003cbr\u003e\u003cstrong\u003eTerminals:\u003c/strong\u003e {{join(map(1.days.1.arrivals; terminal); \", \")}}\u003cbr\u003e\u003cstrong\u003ePickup contacts:\u003c/strong\u003e {{join(map(1.days.1.arrivals; pickup_contact); \", \")}}\u003cbr\u003e\u003cstrong\u003eTransport:\u003c/strong\u003e {{join(map(1.days.1.arrivals; transport_arrangement); \", \")}}\u003cbr\u003e\u003cstrong\u003eAccommodation:\u003c/strong\u003e {{join(map(1.days.1.arrivals; accommodation_destination); \", \")}}\u003cbr\u003e\u003cstrong\u003eNotes:\u003c/strong\u003e {{join(map(1.days.1.arrivals; notes); \", \")}}\u003cbr\u003e\u003cstrong\u003eSpecial instructions:\u003c/strong\u003e {{join(map(1.days.1.arrivals; special_instructions); \", \")}}\u003c/p\u003e\u003chr\u003e\u003ch3\u003eTomorrow — {{1.days.2.date}}\u003c/h3\u003e\u003cp\u003e\u003cstrong\u003eActions:\u003c/strong\u003e\u003cbr\u003e{{join(map(1.days.2.actions; title); \"\u003cbr\u003e\")}}\u003cbr\u003e\u003cstrong\u003eScheduled:\u003c/strong\u003e {{join(map(1.days.2.actions; scheduled_at); \", \")}}\u003cbr\u003e\u003cstrong\u003eDue:\u003c/strong\u003e {{join(map(1.days.2.actions; due_at); \", \")}}\u003cbr\u003e\u003cstrong\u003eStatus:\u003c/strong\u003e {{join(map(1.days.2.actions; status); \", \")}}\u003cbr\u003e\u003cstrong\u003eApplicant refs:\u003c/strong\u003e {{join(map(1.days.2.actions; applicant_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eEmployer refs:\u003c/strong\u003e {{join(map(1.days.2.actions; employer_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eAssigned to:\u003c/strong\u003e {{join(map(1.days.2.actions; assigned_to); \", \")}}\u003cbr\u003e\u003cstrong\u003eNeeds attention:\u003c/strong\u003e {{join(map(1.days.2.actions; needs_attention); \", \")}}\u003c/p\u003e\u003cp\u003e\u003cstrong\u003eArrivals — applicant refs:\u003c/strong\u003e {{join(map(1.days.2.arrivals; applicant_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eEmployer refs:\u003c/strong\u003e {{join(map(1.days.2.arrivals; employer_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eFlights:\u003c/strong\u003e {{join(map(1.days.2.arrivals; airline); \", \")}} {{join(map(1.days.2.arrivals; flight_number); \", \")}}\u003cbr\u003e\u003cstrong\u003eTimes:\u003c/strong\u003e {{join(map(1.days.2.arrivals; arrival_at); \", \")}}\u003cbr\u003e\u003cstrong\u003eAirports:\u003c/strong\u003e {{join(map(1.days.2.arrivals; arrival_airport); \", \")}}\u003cbr\u003e\u003cstrong\u003eTerminals:\u003c/strong\u003e {{join(map(1.days.2.arrivals; terminal); \", \")}}\u003cbr\u003e\u003cstrong\u003ePickup contacts:\u003c/strong\u003e {{join(map(1.days.2.arrivals; pickup_contact); \", \")}}\u003cbr\u003e\u003cstrong\u003eTransport:\u003c/strong\u003e {{join(map(1.days.2.arrivals; transport_arrangement); \", \")}}\u003cbr\u003e\u003cstrong\u003eAccommodation:\u003c/strong\u003e {{join(map(1.days.2.arrivals; accommodation_destination); \", \")}}\u003cbr\u003e\u003cstrong\u003eNotes:\u003c/strong\u003e {{join(map(1.days.2.arrivals; notes); \", \")}}\u003cbr\u003e\u003cstrong\u003eSpecial instructions:\u003c/strong\u003e {{join(map(1.days.2.arrivals; special_instructions); \", \")}}\u003c/p\u003e\u003chr\u003e\u003ch3\u003eFollowing day — {{1.days.3.date}}\u003c/h3\u003e\u003cp\u003e\u003cstrong\u003eActions:\u003c/strong\u003e\u003cbr\u003e{{join(map(1.days.3.actions; title); \"\u003cbr\u003e\")}}\u003cbr\u003e\u003cstrong\u003eScheduled:\u003c/strong\u003e {{join(map(1.days.3.actions; scheduled_at); \", \")}}\u003cbr\u003e\u003cstrong\u003eDue:\u003c/strong\u003e {{join(map(1.days.3.actions; due_at); \", \")}}\u003cbr\u003e\u003cstrong\u003eStatus:\u003c/strong\u003e {{join(map(1.days.3.actions; status); \", \")}}\u003cbr\u003e\u003cstrong\u003eApplicant refs:\u003c/strong\u003e {{join(map(1.days.3.actions; applicant_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eEmployer refs:\u003c/strong\u003e {{join(map(1.days.3.actions; employer_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eAssigned to:\u003c/strong\u003e {{join(map(1.days.3.actions; assigned_to); \", \")}}\u003cbr\u003e\u003cstrong\u003eNeeds attention:\u003c/strong\u003e {{join(map(1.days.3.actions; needs_attention); \", \")}}\u003c/p\u003e\u003cp\u003e\u003cstrong\u003eArrivals — applicant refs:\u003c/strong\u003e {{join(map(1.days.3.arrivals; applicant_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eEmployer refs:\u003c/strong\u003e {{join(map(1.days.3.arrivals; employer_reference); \", \")}}\u003cbr\u003e\u003cstrong\u003eFlights:\u003c/strong\u003e {{join(map(1.days.3.arrivals; airline); \", \")}} {{join(map(1.days.3.arrivals; flight_number); \", \")}}\u003cbr\u003e\u003cstrong\u003eTimes:\u003c/strong\u003e {{join(map(1.days.3.arrivals; arrival_at); \", \")}}\u003cbr\u003e\u003cstrong\u003eAirports:\u003c/strong\u003e {{join(map(1.days.3.arrivals; arrival_airport); \", \")}}\u003cbr\u003e\u003cstrong\u003eTerminals:\u003c/strong\u003e {{join(map(1.days.3.arrivals; terminal); \", \")}}\u003cbr\u003e\u003cstrong\u003ePickup contacts:\u003c/strong\u003e {{join(map(1.days.3.arrivals; pickup_contact); \", \")}}\u003cbr\u003e\u003cstrong\u003eTransport:\u003c/strong\u003e {{join(map(1.days.3.arrivals; transport_arrangement); \", \")}}\u003cbr\u003e\u003cstrong\u003eAccommodation:\u003c/strong\u003e {{join(map(1.days.3.arrivals; accommodation_destination); \", \")}}\u003cbr\u003e\u003cstrong\u003eNotes:\u003c/strong\u003e {{join(map(1.days.3.arrivals; notes); \", \")}}\u003cbr\u003e\u003cstrong\u003eSpecial instructions:\u003c/strong\u003e {{join(map(1.days.3.arrivals; special_instructions); \", \")}}\u003c/p\u003e\u003cp\u003eOpen the agency Operations Board for current details and to update task status.\u003c/p\u003e",
+                                    "attachments":  [
+
+                                                    ]
+                                },
+                     "metadata":  {
+                                      "designer":  {
+                                                       "x":  0,
+                                                       "y":  0
+                                                   },
+                                      "restore":  {
+                                                      "parameters":  {
+                                                                         "account":  {
+                                                                                         "data":  {
+                                                                                                      "scoped":  "true",
+                                                                                                      "connection":  "google-restricted"
+                                                                                                  }
+                                                                                     }
+                                                                     }
+                                                  },
+                                      "notes":  "After import, select a Gmail connection and replace the placeholder recipient with an authorized internal operations recipient. The event ID is included to support deduplication."
+                                  }
+                 },
+                 {
+                     "id":  3,
+                     "module":  "gateway:WebhookRespond",
+                     "version":  1,
+                     "parameters":  {
+
+                                    },
+                     "mapper":  {
+                                    "body":  "{\"ok\":true,\"event_id\":\"{{1.event_id}}\"}",
+                                    "status":  "200"
+                                },
+                     "metadata":  {
+                                      "designer":  {
+                                                       "x":  300,
+                                                       "y":  0
+                                                   },
+                                      "restore":  {
+
+                                                  }
+                                  }
+                 }
+             ]
+}

@@ -21,6 +21,11 @@ binding = "TELEGRAM_MEDIA"
 bucket_name = "helped-telegram-media-local"
 
 [vars]
+# Match the deployed app_data storage mode until the normalized Supabase tables
+# are fully migrated. Using the normalized path before migration can lock admin
+# logins out during local and deployed runs.
+SUPABASE_USE_NORMALIZED = "false"
+ROLLING_ARRIVAL_REPORT_AGENCY_ID = "1"
 STORAGE_BACKEND = "supabase"
 LOCAL_AGENCY_AUTH_URL = "http://127.0.0.1:3000/api/agency-auth/me"
 MAID_PREVIEW_SAFE_MODE = "true"

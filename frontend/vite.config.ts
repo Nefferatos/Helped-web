@@ -65,6 +65,13 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
+      // Employer placement listing, private uploads, and signed downloads are
+      // implemented by the Worker and must use the same auth/storage path in
+      // local development as they do in production.
+      "/api/client/placements": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       // Referral intake and lead management are implemented by the Worker.
       // Keep these more-specific routes above the generic Express `/api` proxy.
       "/api/ats/referral-leads": {

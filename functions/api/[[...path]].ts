@@ -3584,6 +3584,9 @@ const safeApi =
       if (/deployment_tasks/i.test(message) && /PGRST205|schema cache|could not find the table/i.test(message)) {
         return jsonError("The deployment checklist database is not installed yet. Apply supabase/20261031_deployment_tasks.sql, then retry.", 503);
       }
+      if (/placement_mom_applications/i.test(message) && /PGRST205|PGRST204|schema cache|could not find the table|column .* does not exist/i.test(message)) {
+        return jsonError("MOM/IPA tracking storage is not installed or is out of date. Apply supabase/20261101_placement_mom_application_tracking.sql to the Supabase project used by this Worker, then deploy the updated Worker.", 503);
+      }
       if (/helped_ats_applicant_workflows/i.test(message) && /PGRST205|schema cache|could not find the table/i.test(message)) {
         return jsonError("Applicant profile workflow storage is not installed yet. Apply supabase/20261031_ats_agent_workflows.sql, then retry.", 503);
       }
@@ -4937,6 +4940,12 @@ const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const isEmailLike = (value: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
+const isValidResendFrom = (value?: string) => {
+  const sender = value?.trim() ?? "";
+  const displayNameAddress = sender.match(/<([^<>]+)>\s*$/);
+  return isEmailLike(displayNameAddress?.[1]?.trim() ?? sender);
+};
+
 const generateSixDigitCode = () => {
   const buf = new Uint32Array(1);
   crypto.getRandomValues(buf);
@@ -5013,7 +5022,7 @@ const sendEmailViaResend = async (
 ) => {
   const apiKey = env.RESEND_API_KEY?.trim();
   const from = env.RESEND_FROM?.trim();
-  if (!apiKey || !from) {
+  if (!apiKey || !isValidResendFrom(from)) {
     return { ok: false as const, error: "RESEND_NOT_CONFIGURED" as const };
   }
 
@@ -9611,6 +9620,32 @@ const loadPlacementMilestoneEvents = async (config: SupabaseAppDataConfig, place
   return ((await response.json()) as PlacementMilestoneEventRow[]).filter((event) => allowed.has(event.entity_id));
 };
 
+type VerifiedPlacementMilestoneTask = { placement_id: string; task_key: string; verified_at: string | null; verified_by: string | null; updated_at: string };
+const loadVerifiedPlacementMilestoneTasks = async (config: SupabaseAppDataConfig, agencyId: number, placementIds: string[]) => {
+  if (placementIds.length === 0) return [] as VerifiedPlacementMilestoneTask[];
+  const params = new URLSearchParams({
+    select: "placement_id,task_key,verified_at,verified_by,updated_at",
+    agency_id: `eq.${agencyId}`,
+    placement_id: `in.(${placementIds.map((id) => `"${id}"`).join(",")})`,
+    task_key: 'in.("flight_booking","medical_exam","sip","employer_handover")',
+    status: "eq.VERIFIED",
+    order: "verified_at.desc.nullslast,updated_at.desc",
+    limit: "1000",
+  });
+  const response = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?${params.toString()}`, {
+    headers: supabaseHeaders(config, { accept: "application/json" }),
+  });
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    if (/deployment_tasks/i.test(details) && isMissingSupabaseSchemaObject(details)) {
+      console.warn("deployment_tasks is not installed; overview milestones will use recorded milestone events only");
+      return [] as VerifiedPlacementMilestoneTask[];
+    }
+    throw new Error(`Unable to load verified placement milestones (${response.status}): ${details}`);
+  }
+  return await response.json() as VerifiedPlacementMilestoneTask[];
+};
+
 const deploymentTaskTemplates = [
   { task_key: "employer_documents", task_group: "Employer documents", title: "Collect employer documents", description: "Request and verify the documents required for this placement." },
   { task_key: "employer_documents_received", task_group: "Employer documents", title: "Record employer document receipt", description: "Record which employer documents were received and link the files to this placement." },
@@ -9662,15 +9697,15 @@ const fetchDeploymentTasks = async (config: SupabaseAppDataConfig, placementId: 
     id: string; agency_id: number; placement_id: string; task_key: string; task_group: string; title: string;
     description: string; status: string; assigned_to: string | null; planned_at: string | null; due_at: string | null;
     completed_at: string | null; evidence_document_id: string | null; verification_note: string; verified_at: string | null;
-    verified_by: string | null; notes: string; created_at: string; updated_at: string;
+    verified_by: string | null; notes: string; employer_visible_note: string; created_at: string; updated_at: string;
   }>(config, "deployment_tasks", {
-    select: "id,agency_id,placement_id,task_key,task_group,title,description,status,assigned_to,planned_at,due_at,completed_at,evidence_document_id,verification_note,verified_at,verified_by,notes,created_at,updated_at",
+    select: "id,agency_id,placement_id,task_key,task_group,title,description,status,assigned_to,planned_at,due_at,completed_at,evidence_document_id,verification_note,verified_at,verified_by,notes,employer_visible_note,created_at,updated_at",
     filters: { placement_id: placementId, agency_id: agencyId }, orderBy: "created_at.asc", limit: 100,
   });
 
 type PlacementDocumentRow = {
   id: string; agency_id: number; entity_type: string; entity_id: string; category: string;
-  original_name: string; mime_type: string; size_bytes: number; storage_ref: string; uploaded_by: string; created_at: string;
+  original_name: string; mime_type: string; size_bytes: number; storage_ref: string; uploaded_by: string; created_at: string; employer_visible?: boolean;
 };
 
 type PlacementFlightRow = {
@@ -9680,12 +9715,43 @@ type PlacementFlightRow = {
   created_at: string; updated_at: string;
 };
 
-const fetchPlacementDocuments = async (config: SupabaseAppDataConfig, placementId: string, agencyId: number) =>
+const fetchPlacementDocuments = async (config: SupabaseAppDataConfig, placementId: string, agencyId: number, employerVisibleOnly = false) =>
   fetchSupabaseTableRows<PlacementDocumentRow>(config, "document_metadata", {
-    select: "id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,storage_ref,uploaded_by,created_at",
-    filters: { agency_id: agencyId, entity_type: "placement", entity_id: placementId },
+    select: "id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,storage_ref,uploaded_by,created_at,employer_visible",
+    filters: { agency_id: agencyId, entity_type: "placement", entity_id: placementId, ...(employerVisibleOnly ? { employer_visible: true } : {}) },
     orderBy: "created_at.desc", limit: 100,
   });
+
+const notifyEmployerOfSharedPlacementDocument = async (
+  env: Bindings,
+  requestUrl: string,
+  placement: PlacementBoardRow & { agency_id?: number; employer_id?: string | null },
+  documentName: string,
+) => {
+  const employerId = Number(placement.employer_id);
+  if (!Number.isSafeInteger(employerId) || employerId <= 0) return { sent: false, reason: "No employer is linked to this placement" };
+  if (!env.RESEND_API_KEY?.trim() || !isValidResendFrom(env.RESEND_FROM)) return { sent: false, reason: "Email notification is not configured" };
+  try {
+    const data = await loadData(env, { readOnly: true });
+    const employerRecord = data.employers.find((record) => record.id === employerId && (record.agencyId ?? 1) === (placement.agency_id ?? 1));
+    const email = normalizeEmail(toTrimmedString(employerRecord?.employer?.email));
+    if (!email || !EMAIL_PATTERN.test(email)) return { sent: false, reason: "The linked employer has no valid email address" };
+    const name = toTrimmedString(employerRecord?.employer?.name || employerRecord?.employer?.fullName) || "Employer";
+    const reference = toTrimmedString(placement.maid_reference_code) || "your placement";
+    const portalUrl = new URL("/client/placement-documents", requestUrl).toString();
+    const result = await sendEmailViaResend(
+      env,
+      email,
+      `A document is available for ${reference}`,
+      `Dear ${name},\n\nThe agency shared “${documentName}” for ${reference}. Sign in to the secure employer portal to view it:\n${portalUrl}\n\nFor your protection, the document is not attached to this email.\n\nAt The Agency`,
+      `placement-document-shared:${crypto.randomUUID()}`,
+    );
+    return result.ok ? { sent: true, recipient: email } : { sent: false, reason: "The employer notification email could not be sent" };
+  } catch (error) {
+    console.error("Shared placement document notification failed", errMsg(error));
+    return { sent: false, reason: "The employer notification email could not be sent" };
+  }
+};
 
 const getClientPlacementForEmployer = async (
   env: Bindings,
@@ -9732,8 +9798,26 @@ app.get("/api/client/placements", requireClientAuth, safeApi(async (c) => {
   ))).flat();
   const unique = [...new Map(placements.map((placement) => [placement.id, placement])).values()];
   const results = await Promise.all(unique.map(async (placement) => {
-    const documents = await fetchPlacementDocuments(config, placement.id, placement.agency_id);
-    return { ...placement, documents: documents.map(({ storage_ref: _storageRef, ...document }) => document) };
+    const [documents, tasks] = await Promise.all([
+      fetchPlacementDocuments(config, placement.id, placement.agency_id, true),
+      fetchDeploymentTasks(config, placement.id, placement.agency_id).catch(() => []),
+    ]);
+    return {
+      ...placement,
+      documents: documents.map(({ storage_ref: _storageRef, ...document }) => document),
+      documentReview: (() => {
+        const employerTask = tasks.find((task) => task.task_key === "employer_documents_received");
+        const signedTask = tasks.find((task) => task.task_key === "signed_contract_saved");
+        const actionNeeded = employerTask && ["REJECTED", "RESUBMISSION_REQUIRED"].includes(employerTask.status);
+        const signedActionNeeded = signedTask && ["REJECTED", "RESUBMISSION_REQUIRED"].includes(signedTask.status);
+        return {
+          employerDocuments: employerTask?.status ?? "NOT_STARTED",
+          signedContract: signedTask?.status ?? "NOT_STARTED",
+          employerNote: actionNeeded ? toTrimmedString(employerTask?.employer_visible_note).slice(0, 1000) : "",
+          signedContractNote: signedActionNeeded ? toTrimmedString(signedTask?.employer_visible_note).slice(0, 1000) : "",
+        };
+      })(),
+    };
   }));
   return c.json({ placements: results, accountLinked: employers.length > 0 });
 }));
@@ -9749,7 +9833,7 @@ app.get("/api/client/placements/:placementId/documents/:documentId/url", require
   if (!placement || !/^[0-9a-f-]{36}$/i.test(documentId)) return c.json({ error: "Document not found" }, 404);
   const [document] = await fetchSupabaseTableRows<PlacementDocumentRow>(config, "document_metadata", {
     select: "id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,storage_ref,uploaded_by,created_at",
-    filters: { id: documentId, agency_id: placement.agency_id, entity_type: "placement", entity_id: placementId }, limit: 1,
+    filters: { id: documentId, agency_id: placement.agency_id, entity_type: "placement", entity_id: placementId, employer_visible: true }, limit: 1,
   });
   if (!document) return c.json({ error: "Document not found" }, 404);
   const prefix = `storage://${storage.bucket}/`;
@@ -9767,6 +9851,9 @@ app.post("/api/client/placements/:placementId/documents", requireClientAuth, saf
   const formData = await c.req.raw.formData().catch(() => null);
   if (!formData) return c.json({ error: "Multipart form data is required" }, 400);
   const file = formData.get("file");
+  const category = toTrimmedString(formData.get("category") || "employer").toLowerCase();
+  const allowedCategories = new Set(["employer", "contract", "signed_contract", "insurance", "security_bond", "flight", "arrival", "medical", "sip", "work_permit", "handover", "other"]);
+  if (!allowedCategories.has(category)) return c.json({ error: "Choose a valid document category" }, 400);
   if (!(file instanceof File) || !file.name.trim()) return c.json({ error: "Choose a document to upload" }, 400);
   if (file.size < 1 || file.size > MAX_EXTERNAL_SYNC_UPLOAD_BYTES) return c.json({ error: "Document must be between 1 byte and 25 MB" }, 400);
   const extension = file.name.match(/\.[^.]+$/)?.[0]?.toLowerCase() ?? "";
@@ -9780,8 +9867,8 @@ app.post("/api/client/placements/:placementId/documents", requireClientAuth, saf
   const response = await fetch(`${config.baseUrl}/rest/v1/document_metadata?select=id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,uploaded_by,created_at`, {
     method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
     body: JSON.stringify([{ agency_id: placement.agency_id, entity_type: "placement", entity_id: placementId,
-      category: "employer", original_name: sanitizeStoragePathSegment(file.name, "document"),
-      mime_type: file.type || "application/octet-stream", size_bytes: file.size, storage_ref: storageRef, uploaded_by: "Employer portal" }]),
+      category, original_name: sanitizeStoragePathSegment(file.name, "document"),
+      mime_type: file.type || "application/octet-stream", size_bytes: file.size, storage_ref: storageRef, uploaded_by: "Employer portal", employer_visible: true }]),
   });
   if (!response.ok) {
     const encodedObjectPath = objectPath.split("/").map(encodeURIComponent).join("/");
@@ -9791,21 +9878,64 @@ app.post("/api/client/placements/:placementId/documents", requireClientAuth, saf
   const [document] = await response.json() as PlacementDocumentRow[];
   if (!document) return c.json({ error: "Document uploaded but its record could not be read back" }, 502);
   const tasks = await fetchDeploymentTasks(config, placementId, placement.agency_id).catch(() => []);
-  const receiptTask = tasks.find((task) => task.task_key === "employer_documents_received");
-  if (receiptTask && receiptTask.status !== "NOT_APPLICABLE") {
+  const taskKeys = category === "signed_contract"
+    ? new Set(["employer_documents_received", "contract_signature", "signed_contract_saved"])
+    : new Set(["employer_documents_received"]);
+  for (const receiptTask of tasks.filter((task) => taskKeys.has(task.task_key) && task.status !== "NOT_APPLICABLE")) {
     const nextStatus = "VERIFICATION_PENDING";
     const saveTask = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(receiptTask.id)}&agency_id=eq.${placement.agency_id}&placement_id=eq.${encodeURIComponent(placementId)}`, {
       method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
-      body: JSON.stringify({ status: nextStatus, evidence_document_id: document.id, completed_at: null, verified_at: null, verified_by: null, updated_by: "Employer portal", updated_at: now() }),
+      body: JSON.stringify({ status: nextStatus, evidence_document_id: document.id, employer_visible_note: "", completed_at: null, verified_at: null, verified_by: null, updated_by: "Employer portal", updated_at: now() }),
     });
     if (!saveTask.ok) console.error("Employer document uploaded but the review task did not update", await readSupabaseError(saveTask));
     else await recordDeploymentTaskEvent(config, { agencyId: placement.agency_id, placementId, taskId: receiptTask.id, taskKey: receiptTask.task_key, actor: "Employer portal", fromStatus: receiptTask.status, toStatus: nextStatus }).catch((error) => console.error("Employer document task audit failed", errMsg(error)));
   }
   const hook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
   if (hook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `document:${document.id}:uploaded`, placement.agency_id, {
-    event_type: "document.uploaded", agency_id: placement.agency_id, placement_id: placementId, document_id: document.id, category: "employer",
+    event_type: "document.uploaded", agency_id: placement.agency_id, placement_id: placementId, document_id: document.id, category,
   }).catch((error) => console.error("Employer document Make event could not be queued", errMsg(error))));
   return c.json({ document: { ...document, storage_ref: undefined }, reviewStatus: "VERIFICATION_PENDING", makeEventConfigured: Boolean(hook) }, 201);
+}));
+
+app.post("/api/operations-board/placements/:placementId/documents/request", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Placement document requests require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
+  const placement = await fetchAgencyPlacement(config, placementId, admin.agencyId);
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
+  if (!c.env.RESEND_API_KEY?.trim() || !isValidResendFrom(c.env.RESEND_FROM)) return c.json({ error: "Configure RESEND_API_KEY and a valid, verified RESEND_FROM address before sending employer document requests" }, 503);
+  const data = await loadData(c.env, { readOnly: true });
+  const employer = data.employers.find((record) => record.id === Number(placement.employer_id) && (record.agencyId ?? 1) === admin.agencyId);
+  const email = normalizeEmail(toTrimmedString(employer?.employer?.email));
+  const recipientName = toTrimmedString(employer?.employer?.name || employer?.employer?.fullName) || "Employer";
+  if (!email || !EMAIL_PATTERN.test(email)) return c.json({ error: "The placement does not have a valid employer email address on the agency record" }, 409);
+  const portalUrl = new URL("/client/placement-documents", c.req.url).toString();
+  const reference = toTrimmedString(placement.maid_reference_code) || "your placement";
+  const subject = `Documents requested for ${reference}`;
+  const body = `Dear ${recipientName},\n\nPlease upload the outstanding documents for ${reference} through the secure employer portal. Agency staff will review each upload and contact you if anything needs to be corrected.\n\nOpen the placement documents page: ${portalUrl}\n\nPlease sign in using the email address that received this message. Do not reply with identity documents; upload them through the secure portal.\n\nAt The Agency`;
+  const eventId = crypto.randomUUID();
+  const result = await sendEmailViaResend(c.env, email, subject, body, `placement-doc-request:${placementId}:${eventId}`);
+  if (!result.ok) return c.json({ error: result.error === "RESEND_NOT_CONFIGURED" ? "Email delivery is not configured" : "The document request email could not be sent" }, result.error === "RESEND_NOT_CONFIGURED" ? 503 : 502);
+  const workflowEventResponse = await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify([{ event_type: "placement.documents_requested", entity_type: "placement", entity_id: placementId,
+      actor: toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff", status: "completed",
+      payload: { agencyId: admin.agencyId, placementReference: reference, eventId } }]),
+  });
+  if (!workflowEventResponse.ok) console.error("Employer document request was sent but its audit event failed", await readSupabaseError(workflowEventResponse));
+  const tasks = await fetchDeploymentTasks(config, placementId, admin.agencyId).catch(() => []);
+  const requestTask = tasks.find((task) => task.task_key === "employer_documents" && task.status !== "NOT_APPLICABLE");
+  if (requestTask && requestTask.status !== "PLANNED" && requestTask.status !== "NOT_APPLICABLE") {
+    const response = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(requestTask.id)}&agency_id=eq.${admin.agencyId}&placement_id=eq.${encodeURIComponent(placementId)}`, {
+      method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+      body: JSON.stringify({ status: "PLANNED", completed_at: null, verified_at: null, verified_by: null, updated_by: toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff", updated_at: now() }),
+    });
+    if (!response.ok) console.error("Employer document request was sent but its checklist status did not update", await readSupabaseError(response));
+    else await recordDeploymentTaskEvent(config, { agencyId: admin.agencyId, placementId, taskId: requestTask.id, taskKey: requestTask.task_key, actor: "Agency staff", fromStatus: requestTask.status, toStatus: "PLANNED" }).catch((error) => console.error("Employer document request audit failed", errMsg(error)));
+  }
+  return c.json({ sent: true, recipient: email, portalUrl });
 }));
 
 app.get("/api/operations-board/placements/:placementId/flights", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
@@ -10133,7 +10263,8 @@ app.get("/api/operations-board/placements/:placementId/documents", requireAgency
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const placementId = toTrimmedString(c.req.param("placementId"));
   if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
-  if (!await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  const placement = await fetchAgencyPlacement(config, placementId, admin.agencyId);
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
   const documents = await fetchPlacementDocuments(config, placementId, admin.agencyId);
   return c.json({ documents: documents.map(({ storage_ref: _storageRef, ...document }) => document) });
 }));
@@ -10145,7 +10276,8 @@ app.post("/api/operations-board/placements/:placementId/documents", requireAgenc
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const placementId = toTrimmedString(c.req.param("placementId"));
   if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
-  if (!await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
+  const placement = await fetchAgencyPlacement(config, placementId, admin.agencyId);
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
   const formData = await c.req.raw.formData().catch(() => null);
   if (!formData) return c.json({ error: "A document upload is required" }, 400);
   const file = formData.get("file");
@@ -10155,17 +10287,19 @@ app.post("/api/operations-board/placements/:placementId/documents", requireAgenc
   const extension = file.name.match(/\.[^.]+$/)?.[0]?.toLowerCase() ?? "";
   if (!allowedExtensions.has(extension)) return c.json({ error: "Choose a supported document format" }, 400);
   const category = toTrimmedString(formData.get("category")) || "other";
+  const employerVisible = formData.get("share_with_employer") === "true";
+  if (employerVisible && !placement.employer_id) return c.json({ error: "Link this placement to an employer before sharing documents" }, 409);
   const allowedCategories = new Set(["employer", "contract", "insurance", "security_bond", "flight", "arrival", "medical", "sip", "work_permit", "handover", "other"]);
   if (!allowedCategories.has(category)) return c.json({ error: "Choose a valid document category" }, 400);
   const uploadedBy = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
   const { objectPath, storageRef } = await uploadOperationFileToPrivateStorage(storage, file, admin.agencyId, "placement-documents");
-  const response = await fetch(`${config.baseUrl}/rest/v1/document_metadata?select=id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,uploaded_by,created_at`, {
+  const response = await fetch(`${config.baseUrl}/rest/v1/document_metadata?select=id,agency_id,entity_type,entity_id,category,original_name,mime_type,size_bytes,uploaded_by,created_at,employer_visible`, {
     method: "POST",
     headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
     body: JSON.stringify([{
       agency_id: admin.agencyId, entity_type: "placement", entity_id: placementId, category,
       original_name: sanitizeStoragePathSegment(file.name, "document"), mime_type: file.type || "application/octet-stream",
-      size_bytes: file.size, storage_ref: storageRef, uploaded_by: uploadedBy,
+      size_bytes: file.size, storage_ref: storageRef, uploaded_by: uploadedBy, employer_visible: employerVisible,
     }]),
   });
   if (!response.ok) {
@@ -10178,11 +10312,14 @@ app.post("/api/operations-board/placements/:placementId/documents", requireAgenc
   const saved = await response.json() as Array<Record<string, unknown>>;
   if (!saved[0]) return c.json({ error: "Document uploaded but its metadata could not be read back" }, 502);
   const documentId = toTrimmedString(saved[0].id);
+  const notification = employerVisible
+    ? await notifyEmployerOfSharedPlacementDocument(c.env, c.req.url, placement, toTrimmedString(saved[0].original_name) || file.name)
+    : null;
   const deploymentEventsUrl = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
   if (deploymentEventsUrl && documentId) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `document:${documentId}:uploaded`, admin.agencyId, {
     event_type: "document.uploaded", agency_id: admin.agencyId, placement_id: placementId, document_id: documentId, category,
   }).catch((error) => console.error("Document upload Make event could not be queued", errMsg(error))));
-  return c.json({ document: saved[0], deliveryEventQueued: Boolean(deploymentEventsUrl) }, 201);
+  return c.json({ document: saved[0], deliveryEventQueued: Boolean(deploymentEventsUrl), notification }, 201);
 }));
 
 app.get("/api/operations-board/placements/:placementId/documents/:documentId/url", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
@@ -10204,6 +10341,36 @@ app.get("/api/operations-board/placements/:placementId/documents/:documentId/url
   if (!document.storage_ref.startsWith(prefix)) return c.json({ error: "Document storage reference is invalid" }, 409);
   const signedUrl = await createExternalSyncSignedUrl(storage, document.storage_ref.slice(prefix.length));
   return c.json({ signedUrl, expiresIn: 900 });
+}));
+
+app.patch("/api/operations-board/placements/:placementId/documents/:documentId/sharing", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Placement documents require Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  const documentId = toTrimmedString(c.req.param("documentId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId) || !/^[0-9a-f-]{36}$/i.test(documentId)) return c.json({ error: "Valid placement and document ids are required" }, 400);
+  const placement = await fetchAgencyPlacement(config, placementId, admin.agencyId);
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
+  const body = await parseBody<{ employerVisible?: unknown }>(c.req.raw);
+  if (typeof body?.employerVisible !== "boolean") return c.json({ error: "Choose whether to share this document with the employer" }, 400);
+  if (body.employerVisible && !placement.employer_id) return c.json({ error: "Link this placement to an employer before sharing documents" }, 409);
+  const [currentDocument] = await fetchSupabaseTableRows<{ id: string; original_name: string; employer_visible: boolean }>(config, "document_metadata", {
+    select: "id,original_name,employer_visible",
+    filters: { id: documentId, agency_id: admin.agencyId, entity_type: "placement", entity_id: placementId }, limit: 1,
+  });
+  if (!currentDocument) return c.json({ error: "Placement document not found" }, 404);
+  const response = await fetch(`${config.baseUrl}/rest/v1/document_metadata?id=eq.${encodeURIComponent(documentId)}&agency_id=eq.${admin.agencyId}&entity_type=eq.placement&entity_id=eq.${encodeURIComponent(placementId)}&select=id,employer_visible`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ employer_visible: body.employerVisible }),
+  });
+  if (!response.ok) throw new Error(`Unable to update employer document sharing (${response.status}): ${await readSupabaseError(response)}`);
+  const [document] = await response.json() as Array<{ id: string; employer_visible: boolean }>;
+  if (!document) return c.json({ error: "Placement document not found" }, 404);
+  const notification = body.employerVisible && !currentDocument.employer_visible
+    ? await notifyEmployerOfSharedPlacementDocument(c.env, c.req.url, placement, currentDocument.original_name)
+    : null;
+  return c.json({ document, notification });
 }));
 
 app.get("/api/operations-board/placements/:placementId/tasks", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
@@ -10239,9 +10406,9 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
   const tasks = await fetchSupabaseTableRows<{
     id: string; placement_id: string; task_key: string; task_group: string; title: string; status: string; assigned_to: string | null;
     planned_at: string | null; due_at: string | null; completed_at: string | null;
-    evidence_document_id: string | null; verification_note: string; notes: string; verified_at: string | null;
+    evidence_document_id: string | null; verification_note: string; notes: string; employer_visible_note: string; verified_at: string | null;
   }>(config, "deployment_tasks", {
-    select: "id,placement_id,task_key,task_group,title,status,assigned_to,planned_at,due_at,completed_at,evidence_document_id,verification_note,notes,verified_at",
+    select: "id,placement_id,task_key,task_group,title,status,assigned_to,planned_at,due_at,completed_at,evidence_document_id,verification_note,notes,employer_visible_note,verified_at",
     filters: { id: taskId, agency_id: admin.agencyId }, limit: 1,
   });
   const existing = tasks[0];
@@ -10274,6 +10441,14 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
   if (Object.hasOwn(body, "notes")) {
     if (typeof body.notes !== "string" || body.notes.length > 1000) return c.json({ error: "Task notes must be 1,000 characters or fewer" }, 400);
     update.notes = body.notes.trim();
+  }
+  if (Object.hasOwn(body, "employerVisibleNote")) {
+    const employerVisibleNote = body.employerVisibleNote;
+    if (typeof employerVisibleNote !== "string" || employerVisibleNote.length > 1000) return c.json({ error: "Employer correction note must be 1,000 characters or fewer" }, 400);
+    if (!["employer_documents_received", "contract_signature", "signed_contract_saved"].includes(existing.task_key)) {
+      return c.json({ error: "Employer-facing correction notes are only supported for employer document tasks" }, 400);
+    }
+    update.employer_visible_note = employerVisibleNote.trim();
   }
   if (Object.hasOwn(body, "verificationNote")) {
     if (typeof body.verificationNote !== "string" || body.verificationNote.length > 1000) return c.json({ error: "Verification notes must be 1,000 characters or fewer" }, 400);
@@ -10326,6 +10501,11 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
   if (["REJECTED", "RESUBMISSION_REQUIRED"].includes(nextStatus) && toTrimmedString(update.notes ?? existing.notes).length < 5) {
     return c.json({ error: "Add a clear staff note explaining the rejection or required resubmission" }, 400);
   }
+  if (["REJECTED", "RESUBMISSION_REQUIRED"].includes(nextStatus) &&
+      ["employer_documents_received", "contract_signature", "signed_contract_saved"].includes(existing.task_key) &&
+      toTrimmedString(update.employer_visible_note ?? existing.employer_visible_note).length < 5) {
+    return c.json({ error: "Add a separate employer-facing correction note so the customer knows what to update" }, 400);
+  }
   const savedResponse = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(taskId)}&agency_id=eq.${encodeURIComponent(String(admin.agencyId))}&placement_id=eq.${encodeURIComponent(existing.placement_id)}&select=*`, {
     method: "PATCH",
     headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
@@ -10353,6 +10533,24 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
     if (eventBase.evidence_document_id) events.push({ event_type: "document.verified", event_id: `document:${eventBase.evidence_document_id}:verified:${verifiedAt}`, ...eventBase });
     for (const event of events) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", event.event_id, admin.agencyId, event).catch((error) => console.error("Deployment workflow Make event could not be queued", event.event_type, errMsg(error))));
   }
+  const monitorStateChanged = nextStatus !== existing.status ||
+    (plannedAt.present && plannedAt.value !== existing.planned_at) ||
+    (dueAt.present && dueAt.value !== existing.due_at) ||
+    (Object.hasOwn(update, "assigned_to") && update.assigned_to !== null);
+  if (deploymentEventsUrl && monitorStateChanged) {
+    const updatedAt = toTrimmedString(saved[0].updated_at) || now();
+    const monitorEvent = {
+      event_type: "deployment.task.updated", event_id: `deployment-task:${existing.id}:state:${updatedAt}`,
+      agency_id: admin.agencyId, placement_id: existing.placement_id, task_id: existing.id,
+      task_key: existing.task_key, task_group: existing.task_group, title: existing.title,
+      from_status: existing.status, status: nextStatus,
+      due_at: toTrimmedString(saved[0].due_at) || null,
+      planned_at: toTrimmedString(saved[0].planned_at) || null,
+      assignee_set: Object.hasOwn(update, "assigned_to") ? Boolean(update.assigned_to) : Boolean(existing.assigned_to),
+    };
+    runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", monitorEvent.event_id, admin.agencyId, monitorEvent)
+      .catch((error) => console.error("Deployment monitor event could not be queued", errMsg(error))));
+  }
   const auditLogged = await recordDeploymentTaskEvent(config, {
     agencyId: admin.agencyId, placementId: existing.placement_id, taskId, taskKey: existing.task_key,
     actor, fromStatus: existing.status, toStatus: nextStatus,
@@ -10374,7 +10572,11 @@ app.get(
       select: "id,maid_reference_code,employer_id,notes,status,updated_at",
       filters: { agency_id: admin.agencyId }, orderBy: "updated_at.desc", limit: 200,
     });
-    const events = await loadPlacementMilestoneEvents(config, placements.map((placement) => placement.id));
+    const placementIds = placements.map((placement) => placement.id);
+    const [events, verifiedTasks] = await Promise.all([
+      loadPlacementMilestoneEvents(config, placementIds),
+      loadVerifiedPlacementMilestoneTasks(config, admin.agencyId, placementIds),
+    ]);
     const byPlacement = new Map<string, Partial<Record<"flight" | "medical" | "sip" | "handover", PlacementMilestoneEventRow>>>();
     for (const event of events) {
       const key = placementMilestoneMap[event.event_type];
@@ -10382,6 +10584,23 @@ app.get(
       const current = byPlacement.get(event.entity_id) ?? {};
       if (!current[key]) current[key] = event;
       byPlacement.set(event.entity_id, current);
+    }
+    const taskMilestones: Record<string, { key: "flight" | "medical" | "sip" | "handover"; eventType: string }> = {
+      flight_booking: { key: "flight", eventType: "flight.booked" },
+      medical_exam: { key: "medical", eventType: "medical.completed" },
+      sip: { key: "sip", eventType: "sip.completed" },
+      employer_handover: { key: "handover", eventType: "handover.completed" },
+    };
+    for (const task of verifiedTasks) {
+      const milestone = taskMilestones[task.task_key];
+      if (!milestone) continue;
+      const current = byPlacement.get(task.placement_id) ?? {};
+      if (!current[milestone.key]) current[milestone.key] = {
+        entity_id: task.placement_id, event_type: milestone.eventType,
+        actor: task.verified_by || "Agency staff", payload: { notes: "Verified deployment checklist task" },
+        created_at: task.verified_at || task.updated_at,
+      };
+      byPlacement.set(task.placement_id, current);
     }
     const board = placements.map((placement) => {
       const milestoneEvents = byPlacement.get(placement.id) ?? {};
@@ -10398,6 +10617,22 @@ app.get(
     return c.json({ placements: board, count: board.length });
   }),
 );
+
+app.get("/api/operations-board/employers", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const data = await loadData(c.env, { readOnly: true });
+  const employers = data.employers
+    .filter((record) => (record.agencyId ?? 1) === admin.agencyId)
+    .map((record) => {
+      const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
+      return {
+        id: String(record.id), refCode: toTrimmedString(record.refCode),
+        name: toTrimmedString(employer.name) || toTrimmedString(record.refCode),
+        company: toTrimmedString(employer.company), email: normalizeEmail(toTrimmedString(employer.email)),
+      };
+    });
+  return c.json({ employers });
+}));
 
 app.get("/api/operations-board/summary", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
@@ -10486,10 +10721,24 @@ app.get("/api/operations-board/make-deliveries", requireAgencyAdminAuth, canMana
   return c.json({ deliveries, recentCount: deliveries.length, generatedAt: now() });
 }));
 
-// The rolling contractor report uses confirmed flight records as its source.
-// Keep it read-only here: staff must enter/update flight facts in the approved
-// flight workflow before they are included, and cancelled flights are excluded.
-app.get("/api/operations-board/arrivals/rolling-three-day", requireAgencyAdminAuth, safeApi(async (c) => {
+// The daily operations report combines scheduled flights with open checklist
+// work and interviews, grouped by Singapore calendar day. It is read-only:
+// staff remain responsible for recording and verifying operational facts.
+type RollingReportTaskSchedule = { due_at: string | null; planned_at: string | null };
+const rollingReportTaskTimeForDay = (
+  task: RollingReportTaskSchedule,
+  date: string,
+  dateForTime: (value: string) => string,
+  isToday: boolean,
+  nowMs: number,
+) => {
+  if (task.planned_at && dateForTime(task.planned_at) === date) return task.planned_at;
+  if (task.due_at && dateForTime(task.due_at) === date) return task.due_at;
+  if (isToday && task.due_at && Date.parse(task.due_at) < nowMs) return task.due_at;
+  return null;
+};
+
+app.get("/api/operations-board/arrivals/rolling-three-day", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Arrival reports require Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -10507,6 +10756,43 @@ app.get("/api/operations-board/arrivals/rolling-three-day", requireAgencyAdminAu
   const dates = [0, 1, 2].map(localDay);
   const start = `${dates[0]}T00:00:00+08:00`;
   const end = `${dates[2]}T23:59:59.999+08:00`;
+  const reportNowMs = Date.now();
+  const taskParams = new URLSearchParams({
+    select: "id,placement_id,task_key,title,status,due_at,planned_at,assigned_to,placements!inner(agency_id,maid_reference_code,employer_id)",
+    "placements.agency_id": `eq.${admin.agencyId}`,
+    status: "not.in.(VERIFIED,NOT_APPLICABLE)",
+    order: "due_at.asc.nullslast,planned_at.asc.nullslast",
+    limit: "2000",
+  });
+  taskParams.set("or", `(and(due_at.gte.${start},due_at.lte.${end}),and(planned_at.gte.${start},planned_at.lte.${end}),due_at.lt.${start})`);
+  const tasksResponse = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?${taskParams.toString()}`, {
+    headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!tasksResponse.ok) throw new Error(`Unable to load three-day checklist report (${tasksResponse.status}): ${await readSupabaseError(tasksResponse)}`);
+  const taskRows = await tasksResponse.json() as Array<{
+    id: string; placement_id: string; task_key: string; title: string; status: string;
+    due_at: string | null; planned_at: string | null; assigned_to: string | null;
+    placements?: { maid_reference_code?: string | null; employer_id?: string | number | null };
+  }>;
+  const interviewParams = new URLSearchParams({
+    select: "id,scheduled_at,status,mode,placement_id,candidate_name",
+    agency_id: `eq.${admin.agencyId}`,
+    scheduled_at: `gte.${start}`,
+    order: "scheduled_at.asc",
+    limit: "500",
+  });
+  interviewParams.append("scheduled_at", `lte.${end}`);
+  interviewParams.set("status", "in.(REQUESTED,AWAITING_EMPLOYER_CONFIRMATION,AWAITING_APPLICANT_CONFIRMATION,SCHEDULED,CONFIRMED,RESCHEDULED)");
+  const interviewsResponse = await fetch(`${config.baseUrl}/rest/v1/interviews?${interviewParams.toString()}`, {
+    headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=5000" }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!interviewsResponse.ok) throw new Error(`Unable to load three-day interview report (${interviewsResponse.status}): ${await readSupabaseError(interviewsResponse)}`);
+  const interviewRows = await interviewsResponse.json() as Array<{
+    id: string; scheduled_at: string; status: string; mode: string;
+    placement_id: string | null; candidate_name: string;
+  }>;
   const params = new URLSearchParams({
     select: "id,placement_id,airline,flight_number,arrival_airport,arrival_at,status,notes,terminal,pickup_contact,transport_arrangement,accommodation_destination,special_instructions,placements!inner(agency_id,maid_reference_code,employer_id)",
     "placements.agency_id": `eq.${admin.agencyId}`,
@@ -10572,6 +10858,26 @@ app.get("/api/operations-board/arrivals/rolling-three-day", requireAgencyAdminAu
   const report = dates.map((date, index) => ({
     date,
     label: ["Today", "Tomorrow", "Following day"][index],
+    actions: [
+      ...taskRows.flatMap((task) => {
+        const scheduledAt = rollingReportTaskTimeForDay(task, date, singaporeDate, index === 0, reportNowMs);
+        if (!scheduledAt) return [];
+        return [{
+        id: task.id, type: "checklist_task", title: task.title, status: task.status,
+        scheduled_at: scheduledAt, due_at: task.due_at, planned_at: task.planned_at,
+        overdue: Boolean(task.due_at && Date.parse(task.due_at) < reportNowMs),
+        needs_attention: ["BLOCKED", "REJECTED", "RESUBMISSION_REQUIRED", "VERIFICATION_PENDING"].includes(task.status),
+        placement_id: task.placement_id, applicant_reference: task.placements?.maid_reference_code ?? "Unassigned",
+        employer_reference: task.placements?.employer_id ?? "Unassigned", assigned_to: task.assigned_to,
+        }];
+      }),
+      ...interviewRows.filter((interview) => singaporeDate(interview.scheduled_at) === date).map((interview) => ({
+        id: interview.id, type: "interview", title: `Interview · ${interview.candidate_name || "Applicant"}`,
+        status: interview.status, scheduled_at: interview.scheduled_at, overdue: false, needs_attention: false,
+        placement_id: interview.placement_id, applicant_reference: interview.candidate_name || "Applicant",
+        employer_reference: "", assigned_to: "",
+      })),
+    ].sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? "")),
     arrivals: flights.filter((flight) => singaporeDate(flight.arrival_at) === date && flight.status !== "CANCELLED").map((flight) => ({
       flight_id: flight.id, placement_id: flight.placement_id, applicant_reference: flight.placements?.maid_reference_code ?? "Unassigned",
       applicant_name: applicantByReference.get(flight.placements?.maid_reference_code ?? "")?.name ?? "Name unavailable",
@@ -10595,8 +10901,10 @@ const runScheduledRollingArrivalReport = async (env: Bindings) => {
   const config = getSupabaseAppDataConfig(env);
   if (!config) { console.error("Arrival digest requires Supabase service credentials"); return; }
 
-  const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-  const clockParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+  const reportNowMs = Date.now();
+  const reportNow = new Date(reportNowMs);
+  const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(reportNow);
+  const clockParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(reportNow);
   const singaporeMinute = Number(clockParts.find((part) => part.type === "hour")?.value ?? 0) * 60 + Number(clockParts.find((part) => part.type === "minute")?.value ?? 0);
   if (singaporeMinute < 8 * 60 || singaporeMinute > 9 * 60) return;
   const reportDate = `${dateParts.find((part) => part.type === "year")?.value}-${dateParts.find((part) => part.type === "month")?.value}-${dateParts.find((part) => part.type === "day")?.value}`;
@@ -10612,7 +10920,54 @@ const runScheduledRollingArrivalReport = async (env: Bindings) => {
   const flightsResponse = await fetch(`${config.baseUrl}/rest/v1/flights?${params.toString()}`, { headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=8000" }) });
   if (!flightsResponse.ok) { console.error("Arrival digest flight query failed", flightsResponse.status, await readSupabaseError(flightsResponse)); return; }
   const flights = await flightsResponse.json() as RollingArrivalFlightRow[];
-  const dayReports = dates.map((date, index) => ({ date, label: ["Today", "Tomorrow", "Following day"][index], arrivals: flights.filter((flight) => {
+  const reportStart = `${dates[0]}T00:00:00+08:00`;
+  const reportEnd = `${dates[2]}T23:59:59.999+08:00`;
+  const taskParams = new URLSearchParams({
+    select: "id,placement_id,title,status,due_at,planned_at,assigned_to,placements!inner(agency_id,maid_reference_code,employer_id)",
+    "placements.agency_id": `eq.${agencyId}`, status: "not.in.(VERIFIED,NOT_APPLICABLE)",
+    order: "due_at.asc.nullslast,planned_at.asc.nullslast", limit: "2000",
+  });
+  taskParams.set("or", `(and(due_at.gte.${reportStart},due_at.lte.${reportEnd}),and(planned_at.gte.${reportStart},planned_at.lte.${reportEnd}),due_at.lt.${reportStart})`);
+  const [tasksResponse, interviewsResponse] = await Promise.all([
+    fetch(`${config.baseUrl}/rest/v1/deployment_tasks?${taskParams}`, { headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=8000" }) }),
+    fetch(`${config.baseUrl}/rest/v1/interviews?${new URLSearchParams({
+      select: "id,scheduled_at,status,application_id,placement_id",
+      agency_id: `eq.${agencyId}`, "scheduled_at.gte": reportStart, "scheduled_at.lte": reportEnd,
+      status: "in.(REQUESTED,AWAITING_EMPLOYER_CONFIRMATION,AWAITING_APPLICANT_CONFIRMATION,SCHEDULED,CONFIRMED,RESCHEDULED)",
+      order: "scheduled_at.asc", limit: "500",
+    })}`, { headers: supabaseHeaders(config, { accept: "application/json", prefer: "statement_timeout=8000" }) }),
+  ]);
+  if (!tasksResponse.ok) { console.error("Daily operations report checklist query failed", tasksResponse.status, await readSupabaseError(tasksResponse)); return; }
+  if (!interviewsResponse.ok) { console.error("Daily operations report interview query failed", interviewsResponse.status, await readSupabaseError(interviewsResponse)); return; }
+  const taskRows = await tasksResponse.json() as Array<{
+    id: string; placement_id: string; title: string; status: string; due_at: string | null; planned_at: string | null; assigned_to: string | null;
+    placements?: { maid_reference_code?: string | null; employer_id?: string | number | null };
+  }>;
+  const interviewRows = await interviewsResponse.json() as Array<{ id: string; scheduled_at: string; status: string; application_id: string | null; placement_id: string | null }>;
+  const reportLocalDate = (value: string) => {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(value));
+    return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
+  };
+  const dayReports = dates.map((date, index) => ({ date, label: ["Today", "Tomorrow", "Following day"][index], actions: [
+    ...taskRows.flatMap((task) => {
+      const scheduledAt = rollingReportTaskTimeForDay(task, date, reportLocalDate, index === 0, reportNowMs);
+      if (!scheduledAt) return [];
+      return [{
+      id: task.id, type: "checklist_task", title: task.title, status: task.status,
+      scheduled_at: scheduledAt, due_at: task.due_at, planned_at: task.planned_at,
+      overdue: Boolean(task.due_at && Date.parse(task.due_at) < reportNowMs),
+      needs_attention: ["BLOCKED", "REJECTED", "RESUBMISSION_REQUIRED", "VERIFICATION_PENDING"].includes(task.status),
+      placement_id: task.placement_id, applicant_reference: task.placements?.maid_reference_code ?? "Unassigned",
+      employer_reference: task.placements?.employer_id ?? "Unassigned", assigned_to: task.assigned_to ?? "",
+      }];
+    }),
+    ...interviewRows.filter((interview) => reportLocalDate(interview.scheduled_at) === date).map((interview) => ({
+      id: interview.id, type: "interview", title: "Interview",
+      status: interview.status, scheduled_at: interview.scheduled_at, overdue: false, needs_attention: false,
+      placement_id: interview.placement_id, applicant_reference: interview.application_id ?? "Applicant",
+      employer_reference: "", assigned_to: "",
+    })),
+  ].sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? "")), arrivals: flights.filter((flight) => {
     const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(flight.arrival_at));
     const flightDate = `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
     return flightDate === date && flight.status !== "CANCELLED";
@@ -10643,7 +10998,7 @@ type InterviewReminderDelivery = {
 const runScheduledInterviewReminders = async (env: Bindings) => {
   // These messages are sent by the site's configured transactional email
   // provider. Missing provider config pauses reminders without consuming retries.
-  if (!env.RESEND_API_KEY?.trim() || !env.RESEND_FROM?.trim()) return;
+  if (!env.RESEND_API_KEY?.trim() || !isValidResendFrom(env.RESEND_FROM)) return;
   const config = getSupabaseAppDataConfig(env);
   if (!config) return;
   const current = new Date();
@@ -10828,6 +11183,8 @@ app.post("/api/operations-board/placements", requireAgencyAdminAuth, canManageAg
   if (!Number.isInteger(employerId) || employerId <= 0) return c.json({ error: "Enter a valid employer number" }, 400);
 
   const data = await loadData(c.env);
+  const employer = data.employers.find((item) => item.id === employerId && (item.agencyId ?? 1) === admin.agencyId);
+  if (!employer) return c.json({ error: "The selected employer is not available in this agency" }, 404);
   const maid = data.maids.find((item) =>
     item.id === maidId
     && item.agencyId === admin.agencyId
@@ -10922,9 +11279,121 @@ app.put("/api/operations-board/placements/:placementId/notes", requireAgencyAdmi
   return c.json({ placement: placements[0] });
 }));
 
-// Sample data can be removed from the portal without exposing a destructive
-// control for real placements. The reference check is deliberately enforced
-// on the server as well as in the UI.
+app.patch("/api/operations-board/placements/:placementId/employer", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
+  const body = await parseBody<{ employerId?: unknown }>(c.req.raw);
+  if (!body || !Object.hasOwn(body, "employerId")) return c.json({ error: "Choose an employer or select Unassigned" }, 400);
+  const rawEmployerId = body.employerId == null ? "" : toTrimmedString(body.employerId);
+  let employerId: number | null = null;
+  if (rawEmployerId) {
+    employerId = Number(rawEmployerId);
+    if (!Number.isSafeInteger(employerId) || employerId <= 0) return c.json({ error: "Choose a valid employer" }, 400);
+    const data = await loadData(c.env, { readOnly: true });
+    if (!data.employers.some((record) => record.id === employerId && (record.agencyId ?? 1) === admin.agencyId)) {
+      return c.json({ error: "That employer is not available to this agency" }, 404);
+    }
+  }
+  const placement = await fetchAgencyPlacement(config, placementId, admin.agencyId);
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
+  if (employerId && placement.maid_reference_code) {
+    const duplicates = await fetchSupabaseTableRows<PlacementBoardRow>(config, "placements", {
+      select: "id,maid_reference_code,employer_id,status,updated_at",
+      filters: { agency_id: admin.agencyId, employer_id: String(employerId), maid_reference_code: placement.maid_reference_code }, limit: 50,
+    });
+    if (duplicates.some((other) => other.id !== placementId && !["COMPLETED", "CANCELLED", "WITHDRAWN"].includes((other.status ?? "").toUpperCase()))) {
+      return c.json({ error: "An active placement for this employer and helper already exists" }, 409);
+    }
+  }
+  const nextEmployerId = employerId == null ? null : String(employerId);
+  if (placement.employer_id !== nextEmployerId) {
+    const hidePreviouslyShared = await fetch(`${config.baseUrl}/rest/v1/document_metadata?agency_id=eq.${admin.agencyId}&entity_type=eq.placement&entity_id=eq.${encodeURIComponent(placementId)}&employer_visible=eq.true`, {
+      method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+      body: JSON.stringify({ employer_visible: false }),
+    });
+    if (!hidePreviouslyShared.ok) throw new Error(`Unable to make previously shared documents private before changing the employer (${hidePreviouslyShared.status}): ${await readSupabaseError(hidePreviouslyShared)}`);
+  }
+  const response = await fetch(`${config.baseUrl}/rest/v1/placements?id=eq.${encodeURIComponent(placementId)}&agency_id=eq.${encodeURIComponent(String(admin.agencyId))}&select=id,employer_id`, {
+    method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ employer_id: nextEmployerId, updated_at: now() }),
+  });
+  if (!response.ok) throw new Error(`Unable to link the employer to this placement (${response.status}): ${await readSupabaseError(response)}`);
+  const [updated] = await response.json() as Array<{ id: string; employer_id: string | null }>;
+  if (!updated) return c.json({ error: "Placement not found" }, 404);
+  const actor = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
+  await fetch(`${config.baseUrl}/rest/v1/workflow_events`, {
+    method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+    body: JSON.stringify([{ event_type: "placement.employer_linked", entity_type: "placement", entity_id: placementId, actor, status: "completed", payload: { agencyId: admin.agencyId, employerId: updated.employer_id } }]),
+  }).then((result) => { if (!result.ok) console.error("Employer placement link audit failed", result.status); }).catch((error) => console.error("Employer placement link audit failed", errMsg(error)));
+  return c.json({ placement: updated });
+}));
+
+// Agency staff can remove an accidentally created placement. Ownership is
+// checked before deleting, and placement-linked checklist rows cascade.
+app.delete("/api/operations-board/placements/:placementId", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const placementId = toTrimmedString(c.req.param("placementId"));
+  if (!/^[0-9a-f-]{36}$/i.test(placementId)) return c.json({ error: "Valid placement id is required" }, 400);
+  const placements = await fetchSupabaseTableRows<PlacementBoardRow>(config, "placements", {
+    select: "id,maid_reference_code,status,updated_at", filters: { id: placementId, agency_id: admin.agencyId }, limit: 1,
+  });
+  const placement = placements[0];
+  if (!placement) return c.json({ error: "Placement not found" }, 404);
+
+  const placementDocuments: Array<{ id: string; storage_ref: string }> = [];
+  const documentPageSize = 500;
+  for (let offset = 0; ; offset += documentPageSize) {
+    const params = new URLSearchParams({
+      select: "id,storage_ref", agency_id: `eq.${admin.agencyId}`, entity_type: "eq.placement",
+      entity_id: `eq.${placementId}`, order: "created_at.asc", limit: String(documentPageSize), offset: String(offset),
+    });
+    const response = await fetch(`${config.baseUrl}/rest/v1/document_metadata?${params.toString()}`, {
+      headers: supabaseHeaders(config, { accept: "application/json" }),
+    });
+    if (!response.ok) throw new Error(`Unable to inspect placement documents before deletion (${response.status}): ${await readSupabaseError(response)}`);
+    const page = await response.json() as Array<{ id: string; storage_ref: string }>;
+    placementDocuments.push(...page);
+    if (page.length < documentPageSize) break;
+    if (offset + page.length >= 10_000) return c.json({ error: "This placement has too many documents for one delete operation; contact an administrator" }, 409);
+  }
+  const storage = placementDocuments.length ? getExternalSyncStorageConfig(c.env) : null;
+  if (placementDocuments.length && !storage) return c.json({ error: "Private storage must be configured before deleting this placement's documents" }, 503);
+  const storagePrefix = storage ? `storage://${storage.bucket}/` : "";
+  for (const document of placementDocuments) {
+    if (!storage || !document.storage_ref.startsWith(storagePrefix)) {
+      return c.json({ error: "A placement document points to an unexpected storage location; no placement data was deleted" }, 409);
+    }
+  }
+  if (storage) {
+    for (const document of placementDocuments) {
+      const objectPath = document.storage_ref.slice(storagePrefix.length);
+      const encodedObjectPath = objectPath.split("/").map(encodeURIComponent).join("/");
+      const response = await fetch(`${storage.baseUrl}/storage/v1/object/${encodeURIComponent(storage.bucket)}/${encodedObjectPath}`, {
+        method: "DELETE", headers: supabaseStorageHeaders(storage),
+      });
+      if (!response.ok && response.status !== 404) throw new Error(`Unable to remove placement document from private storage (${response.status}): ${await readSupabaseError(response)}`);
+    }
+  }
+
+  const remove = async (table: string, query: string) => {
+    const response = await fetch(`${config.baseUrl}/rest/v1/${table}?${query}`, {
+      method: "DELETE", headers: supabaseHeaders(config, { prefer: "return=minimal" }),
+    });
+    if (!response.ok) throw new Error(`Unable to delete placement data from ${table} (${response.status}): ${await readSupabaseError(response)}`);
+  };
+  // Documents and workflow events use polymorphic IDs rather than placement
+  // foreign keys, so remove their metadata and timeline explicitly. Task tables cascade.
+  if (placementDocuments.length) await remove("document_metadata", `agency_id=eq.${admin.agencyId}&entity_type=eq.placement&entity_id=eq.${encodeURIComponent(placementId)}`);
+  await remove("workflow_events", `entity_type=eq.placement&entity_id=eq.${encodeURIComponent(placementId)}`);
+  await remove("placements", `id=eq.${encodeURIComponent(placementId)}&agency_id=eq.${encodeURIComponent(String(admin.agencyId))}`);
+  return c.json({ ok: true, removedReference: placement.maid_reference_code ?? placementId });
+}));
+
 app.delete("/api/operations-board/placements/:placementId/sample", requireAgencyAdminAuth, canAdministerAgencyRecords, safeApi(async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
   if (!config) return c.json({ error: "Operations Center requires Supabase storage" }, 503);
@@ -14020,13 +14489,25 @@ const sendInterviewScheduledStaffAlert = async (
   agencyId: number,
 ): Promise<boolean> => {
   const webhookUrl = makeWebhookUrlForOutbox(env, "interview_scheduled");
-  if (!webhookUrl) return false;
   const interviewId = toTrimmedString(payload.interview_id);
   const scheduledAt = toTrimmedString(payload.scheduled_at);
   if (!interviewId || !scheduledAt) throw new Error("Interview staff alert requires an interview ID and schedule time");
   const eventId = `interview:${interviewId}:scheduled:${scheduledAt}`;
-  const state = await enqueueMakeWebhookEvent(env, "interview_scheduled", eventId, agencyId, { ...payload, agency_id: agencyId });
-  return state === "delivered" || state === "pending_retry";
+  let staffAlertState: "delivered" | "pending_retry" | "failed" | null = null;
+  if (webhookUrl) {
+    const state = await enqueueMakeWebhookEvent(env, "interview_scheduled", eventId, agencyId, { ...payload, agency_id: agencyId });
+    if (state === "delivered" || state === "pending_retry" || state === "failed") staffAlertState = state;
+  }
+  if (makeWebhookUrlForOutbox(env, "deployment_task_event")) {
+    const monitorEvent = {
+      event_type: "interview.scheduled", event_id: eventId, agency_id: agencyId,
+      interview_id: interviewId, application_id: toTrimmedString(payload.application_id) || null,
+      placement_id: toTrimmedString(payload.placement_id) || null, scheduled_at: scheduledAt,
+      mode: toTrimmedString(payload.interview_mode) || "unspecified",
+    };
+    await enqueueMakeWebhookEvent(env, "deployment_task_event", `monitor:${eventId}`, agencyId, monitorEvent);
+  }
+  return staffAlertState === "delivered" || staffAlertState === "pending_retry";
 };
 
 const interviewLifecycleColumns = [
@@ -14082,8 +14563,8 @@ app.post(
     if (body?.sendEmployerInvitation === true && (!employerEmail || !employerContactVerified)) {
       return c.json({ error: "A verified employer email is required before sending an invitation" }, 400);
     }
-    if (body?.sendEmployerInvitation === true && (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim())) {
-      return c.json({ error: "Configure the agency email service before sending an employer invitation" }, 503);
+    if (body?.sendEmployerInvitation === true && (!c.env.RESEND_API_KEY?.trim() || !isValidResendFrom(c.env.RESEND_FROM))) {
+      return c.json({ error: "Configure the agency email service with a valid, verified sender before sending an employer invitation" }, 503);
     }
     let candidateName = "";
     let candidateEmail = "";
@@ -14100,8 +14581,8 @@ app.post(
     }
     const remindersEnabled = body?.remindersEnabled === true;
     if (remindersEnabled && !candidateEmail) return c.json({ error: "An applicant email is required to schedule interview reminders" }, 409);
-    if (remindersEnabled && (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim())) {
-      return c.json({ error: "Configure RESEND_API_KEY and RESEND_FROM before enabling automatic interview reminders" }, 503);
+    if (remindersEnabled && (!c.env.RESEND_API_KEY?.trim() || !isValidResendFrom(c.env.RESEND_FROM))) {
+      return c.json({ error: "Configure RESEND_API_KEY and a valid, verified RESEND_FROM address before enabling automatic interview reminders" }, 503);
     }
     const interviewUrl = new URL(`${config.baseUrl}/rest/v1/interviews`);
     interviewUrl.searchParams.set("select", "id,scheduled_at,application_id,placement_id,mode,meeting_url,status");
@@ -14275,7 +14756,7 @@ const sendEmployerInterviewInvitation = safeApi(async (c) => {
   if (!interview.employer_contact_verified_at || !isEmailLike(interview.employer_email || "")) return c.json({ error: "Record and verify an employer email before sending an invitation" }, 409);
   if (["CANCELLED", "COMPLETED", "PASSED", "FAILED", "NO_SHOW"].includes(interview.status)) return c.json({ error: "An invitation cannot be sent for a closed interview" }, 409);
   if (Date.parse(interview.scheduled_at) <= Date.now()) return c.json({ error: "An invitation cannot be sent for an interview that has already started" }, 409);
-  if (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim()) return c.json({ error: "Configure RESEND_API_KEY and RESEND_FROM before sending employer invitations" }, 503);
+  if (!c.env.RESEND_API_KEY?.trim() || !isValidResendFrom(c.env.RESEND_FROM)) return c.json({ error: "Configure RESEND_API_KEY and a valid, verified RESEND_FROM address before sending employer invitations" }, 503);
 
   const confirmationToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
   const confirmationTokenHash = await sha256Hex(confirmationToken);
@@ -14559,6 +15040,20 @@ app.patch("/api/operations-board/maid-interviews/:interviewId", requireAgencyAdm
   }
   const [interview] = await response.json() as Array<Record<string, unknown>>;
   if (!interview) return c.json({ error: "Maid interview was not found" }, 404);
+  const monitoringHook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  if (monitoringHook) {
+    const updatedAt = toTrimmedString(interview.updated_at) || now();
+    const eventId = `maid-interview:${interviewId}:updated:${updatedAt}`;
+    const monitorEvent = {
+      event_type: "interview.updated", event_id: eventId, agency_id: admin.agencyId,
+      interview_id: interviewId, applicant_reference: toTrimmedString(interview.maid_reference_code),
+      status: toTrimmedString(interview.status), scheduled_at: toTrimmedString(interview.scheduled_at),
+      invitation_sent: Boolean(interview.candidate_invitation_sent_at),
+      placement_id: null,
+    };
+    runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `monitor:${eventId}`, admin.agencyId, monitorEvent)
+      .catch((error) => console.error("Maid interview monitor event could not be queued", errMsg(error))));
+  }
   return c.json({ interview });
 }));
 
@@ -14823,6 +15318,25 @@ app.patch("/api/operations-board/interviews/:interviewId", requireAgencyAdminAut
       application_id: toTrimmedString(interview.application_id), status: finalStatus,
       scheduled_at: toTrimmedString(interview.scheduled_at),
     }).catch((error) => console.error("Interview outcome Make event could not be queued", errMsg(error))));
+  }
+  const interviewLifecycleChanged = body?.status !== undefined || body?.scheduledAt !== undefined ||
+    body?.employerConfirmed !== undefined || body?.applicantConfirmed !== undefined ||
+    body?.employerEmail !== undefined || body?.employerContactVerified !== undefined;
+  if (interviewHook && interviewLifecycleChanged) {
+    const updatedAt = toTrimmedString(interview.updated_at) || now();
+    const eventId = `interview:${interviewId}:lifecycle:${updatedAt}`;
+    const monitorEvent = {
+      event_type: eventType, event_id: eventId, agency_id: admin.agencyId,
+      interview_id: interviewId, application_id: toTrimmedString(interview.application_id) || null,
+      placement_id: toTrimmedString(interview.placement_id) || null,
+      status: finalStatus, scheduled_at: toTrimmedString(interview.scheduled_at),
+      employer_confirmed: Boolean(interview.employer_confirmed_at),
+      applicant_confirmed: Boolean(interview.applicant_confirmed_at),
+      employer_invitation_sent: Boolean(interview.employer_invitation_sent_at),
+      cancellation_reason_present: Boolean(toTrimmedString(interview.cancellation_reason)),
+    };
+    runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `monitor:${eventId}`, admin.agencyId, monitorEvent)
+      .catch((error) => console.error("Interview monitor event could not be queued", errMsg(error))));
   }
   return c.json({ interview, auditLogged: eventResponse.ok });
 }));
@@ -15680,7 +16194,7 @@ app.post("/api/ai/direct-marketing/send-email", requireAgencyAdminAuth, requireA
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const config = getSupabaseAppDataConfig(c.env);
   if (!config || !c.env.APP_DATA) return c.json({ error: "Campaign delivery storage is not configured" }, 503);
-  if (!c.env.RESEND_API_KEY?.trim() || !c.env.RESEND_FROM?.trim()) return c.json({ error: "Email delivery is not configured" }, 503);
+  if (!c.env.RESEND_API_KEY?.trim() || !isValidResendFrom(c.env.RESEND_FROM)) return c.json({ error: "Configure email delivery with a valid, verified sender address" }, 503);
   const body = await parseBody<{ campaignId?: unknown; contactId?: unknown }>(c.req.raw);
   const campaignId = toTrimmedString(body?.campaignId);
   const contactId = toTrimmedString(body?.contactId);

@@ -4,7 +4,7 @@
     "instant": true,
     "version": 1,
     "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": false, "confidential": true, "dataloss": false, "dlq": true },
-    "notes": ["Receives privacy-minimized verified deployment task and private integration outcome events from the website's durable Make outbox. Create the webhook, connect Gmail, and set an internal operations recipient after import. Make should deduplicate by event_id because the website retries transient delivery failures."]
+    "notes": ["Receives privacy-minimized placement lifecycle, document upload/review, interview, and deployment milestone events from the website durable outbox. The AI step only summarizes the event and proposes an operational follow-up; it cannot change records, verify documents, or make legal decisions. Create the webhook, select a Make AI Provider connection, connect Gmail, and set an internal operations recipient after import. Make should deduplicate by event_id because the website retries transient delivery failures."]
   },
   "flow": [
     {
@@ -17,6 +17,23 @@
     },
     {
       "id": 2,
+      "module": "ai-local-agent:RunLocalAIAgent",
+      "version": 0,
+      "parameters": {},
+      "mapper": {
+        "defaultModel": "small",
+        "reasoningEffort": "low",
+        "systemPrompt": "You are the placement lifecycle monitor for At The Agency. You receive one privacy-minimized website event at a time. Summarize what changed and recommend the next staff action using only supplied fields. Prioritize BLOCKED, REJECTED, RESUBMISSION_REQUIRED, and VERIFICATION_PENDING as requiring staff attention. For uploads, tell staff to open the secure placement record and review the file; you cannot see or certify the file. For interview events, tell staff to check participant confirmations and the saved schedule. For contract, MOM, insurance, work permit, medical, SIP, arrival, and handover events, treat the event as a workflow signal only; never claim legal approval or real-world completion unless the payload says a staff member verified that task. Never invent dates, identities, requirements, or outcomes. Do not request or expose personal contact details. Return a short plain-text note with: EVENT, PRIORITY (attention or routine), and NEXT STAFF ACTION.",
+        "message": "Event type: {{1.event_type}}\nEvent ID: {{1.event_id}}\nAgency ID: {{1.agency_id}}\nPlacement reference: {{1.placement_id}}\nTask: {{1.task_key}} {{1.title}}\nCurrent status: {{1.status}}\nPrevious status: {{1.from_status}}\nDue at: {{1.due_at}}\nScheduled at: {{1.scheduled_at}}\nDocument category: {{1.category}}\nEmployer invitation sent: {{1.employer_invitation_sent}}\nEmployer confirmed: {{1.employer_confirmed}}\nApplicant confirmed: {{1.applicant_confirmed}}\nSummarize the change and recommend the next staff action.",
+        "threadId": "placement-monitor-{{1.placement_id}}",
+        "modelConfig": { "recursionLimit": 2, "iterationsFromHistoryCount": "0" },
+        "outputType": "text"
+      },
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": {}, "notes": "Select a Make AI Provider connection. This is advisory and event-scoped. It never reads documents or edits the website database." },
+      "tools": []
+    },
+    {
+      "id": 3,
       "module": "google-email:ActionSendEmail",
       "version": 2,
       "parameters": { "account": "" },
@@ -25,19 +42,19 @@
         "bcc": [],
         "from": "",
         "to": ["replace-with-your-internal-operations-email@example.com"],
-        "subject": "Operations workflow event: {{1.event_type}}",
-        "html": "<div style=\"font-family:Arial,sans-serif;color:#172033;max-width:640px\"><h2>Operations workflow update</h2><p>A verified task or private integration outcome was recorded by the website.</p><table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"padding:8px;font-weight:bold\">Event</td><td style=\"padding:8px\">{{1.event_type}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Event ID</td><td style=\"padding:8px\">{{1.event_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Agency ID</td><td style=\"padding:8px\">{{1.agency_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Placement ID</td><td style=\"padding:8px\">{{1.placement_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Task ID</td><td style=\"padding:8px\">{{1.task_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Task</td><td style=\"padding:8px\">{{1.task_key}} - {{1.title}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Status</td><td style=\"padding:8px\">{{1.status}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Recorded at</td><td style=\"padding:8px\">{{1.verified_at}}</td></tr></table><p>Review the Operations Center for the current record. This notification reflects the website event; use the stored staff verification/evidence for operational decisions.</p></div>",
+        "subject": "Placement monitor: {{1.event_type}} - {{1.placement_id}}",
+        "html": "<div style=\"font-family:Arial,sans-serif;color:#172033;max-width:640px\"><h2>Placement monitor update</h2><p>{{2.response}}</p><table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"padding:8px;font-weight:bold\">Event ID</td><td style=\"padding:8px\">{{1.event_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Agency ID</td><td style=\"padding:8px\">{{1.agency_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Placement ID</td><td style=\"padding:8px\">{{1.placement_id}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Task</td><td style=\"padding:8px\">{{1.task_key}} - {{1.title}}</td></tr><tr><td style=\"padding:8px;font-weight:bold\">Status</td><td style=\"padding:8px\">{{1.status}}</td></tr></table><p>Open the Operations Center to review the authoritative record. AI recommendations are advisory; staff must verify documents, outcomes, and milestones.</p></div>",
         "attachments": []
       },
-      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": { "parameters": { "account": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "Choose a Gmail connection and replace the recipient with the internal operations inbox. Do not add applicant or employer personal details to this alert." }
+      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": { "parameters": { "account": { "data": { "scoped": "true", "connection": "google-restricted" } } } }, "notes": "Choose a Gmail connection and replace the recipient with the internal operations inbox. Do not add applicant or employer personal details to this alert." }
     },
     {
-      "id": 3,
+      "id": 4,
       "module": "gateway:WebhookRespond",
       "version": 1,
       "parameters": {},
       "mapper": { "body": "{\"ok\":true}", "status": "200" },
-      "metadata": { "designer": { "x": 300, "y": 0 }, "restore": {}, "notes": "Acknowledges the event after the staff alert module succeeds. Website outbox retries delivery on non-success responses." }
+      "metadata": { "designer": { "x": 600, "y": 0 }, "restore": {}, "notes": "Acknowledges the event after the AI summary and staff alert succeed. Website outbox retries delivery on non-success responses." }
     }
   ]
 }

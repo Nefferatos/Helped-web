@@ -45,6 +45,26 @@ export const getUserFacingError = (error: unknown): UserFacingErrorMessage => {
   const rawMessage = textFromUnknown(error).trim();
   const normalized = rawMessage.toLowerCase();
 
+  if (normalized.includes("invalid username or password") || normalized.includes("invalid credentials")) {
+    return {
+      kind: "validation",
+      title: "Agency sign-in failed",
+      description: "The username or password does not match the agency account. Check the credentials or reset the agency password.",
+      actionLabel: "Close",
+      icon: <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden="true" />,
+    };
+  }
+
+  if (normalized.includes("username and password are required")) {
+    return {
+      kind: "validation",
+      title: "Enter your agency credentials",
+      description: "Both the agency username and password are required.",
+      actionLabel: "Close",
+      icon: <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden="true" />,
+    };
+  }
+
   if (
     normalized.includes("failed to fetch") ||
     normalized.includes("network") ||

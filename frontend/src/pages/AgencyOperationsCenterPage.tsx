@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, BookOpen, CheckCircle2, ExternalLink, FileAudio, FolderSync, Search, ShieldCheck, Sparkles, UsersRound, Plane, Stethoscope, HeartHandshake, ClipboardList } from 'lucide-react'
+import { ArrowRight, BookOpen, CheckCircle2, ExternalLink, FileAudio, FolderSync, Search, ShieldCheck, Sparkles, UsersRound, Plane, Stethoscope, HeartHandshake, ClipboardList, Trash2 } from 'lucide-react'
 import { getAgencyAdminAuthHeaders } from '@/lib/agencyAdminAuth'
 import { adminPath } from '@/lib/routes'
 import ContractorTasksPage from '@/pages/ContractorTasksPage'
@@ -190,20 +190,18 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   }
   useEffect(() => { void loadPlacements() }, [])
 
-  const removeSamplePlacement = async (placement: Placement) => {
+  const removePlacement = async (placement: Placement) => {
     const reference = placement.maid_reference_code || placement.id
-    if (!window.confirm(`Remove sample placement ${reference}? This cannot be undone.`)) return
+    if (!window.confirm(`Delete placement ${reference} and its checklist/task records? This cannot be undone.`)) return
     setRemovingPlacementId(placement.id)
     try {
-      await api(`/api/operations-board/placements/${placement.id}/sample`, { method: 'DELETE' })
+      await api(`/api/operations-board/placements/${placement.id}`, { method: 'DELETE' })
       setPlacements((current) => current.filter((item) => item.id !== placement.id))
-      setNotice(`Removed sample placement ${reference}.`)
+      setNotice(`Deleted placement ${reference}.`)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Unable to remove sample placement')
+      setNotice(error instanceof Error ? error.message : 'Unable to delete placement')
     } finally { setRemovingPlacementId(null) }
   }
-
-  const isSamplePlacement = (placement: Placement) => /^(TEST-|LOCAL-OPS-TEST-)/.test(placement.maid_reference_code || '')
 
   const loadRequirements = async () => {
     const numericEmployerId = getPositiveEmployerId(employerId)
@@ -479,8 +477,8 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
                       <span className="flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1"><span className={`h-2.5 w-2.5 rounded-full ${placement.sip_completed ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,.5)]' : 'bg-slate-300'}`} /><ShieldCheck className="h-3.5 w-3.5" />SIP {placement.sip_completed ? 'done' : 'pending'}</span>
                       <span className="flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1"><span className={`h-2.5 w-2.5 rounded-full ${placement.handover_completed ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,.5)]' : 'bg-slate-300'}`} /><HeartHandshake className="h-3.5 w-3.5" />Handover {placement.handover_completed ? 'done' : 'pending'}</span>
                     </div>
-                    <button type="button" onClick={() => setActiveTab('contractor')} className="text-xs font-semibold text-primary hover:underline">Update steps</button>
-                    {isSamplePlacement(placement) ? <button type="button" onClick={() => void removeSamplePlacement(placement)} disabled={removingPlacementId === placement.id} className="text-xs font-semibold text-rose-700 hover:underline disabled:opacity-50">{removingPlacementId === placement.id ? 'Removing…' : 'Remove sample'}</button> : null}
+                    <button type="button" onClick={() => setActiveTab('contractor')} className="inline-flex min-h-9 items-center rounded-lg border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">Update steps</button>
+                    <button type="button" onClick={() => void removePlacement(placement)} disabled={removingPlacementId === placement.id} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 shadow-sm transition-colors hover:border-rose-300 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-50" aria-label={`Delete placement ${placement.maid_reference_code || placement.id}`}><Trash2 className="h-3.5 w-3.5" />{removingPlacementId === placement.id ? 'Deleting…' : 'Delete placement'}</button>
                   </div>
                 ))}
               </div>
