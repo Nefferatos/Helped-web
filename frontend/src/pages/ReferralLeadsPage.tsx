@@ -1,13 +1,17 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowDownToLine, ArrowRight, BadgeCheck, Check, CheckCircle2, ChevronLeft, ChevronRight,
-  CircleAlert, Clock3, FileSpreadsheet, Filter, LoaderCircle, MessageCircle, RefreshCw,
-  Search, ShieldCheck, Sparkles, Upload, Users, X,
+  AlertTriangle, ArrowDownToLine, ArrowRight, BadgeCheck, Check, ChevronLeft, ChevronRight,
+  CircleAlert, Clock3, Copy, FileSpreadsheet, Filter, LoaderCircle, MessageCircle, RefreshCw,
+  Search, ShieldCheck, Sparkles, Trash2, Upload, Users, X,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
 
@@ -18,10 +22,9 @@ type ReferralLead = {
   country: string;
   source: string;
   preferredLanguage: string;
-  whatsappConsentAt: string | null;
-  whatsappConsentSource: string;
-  whatsappConsentActive: boolean;
-  whatsappOptedOut: boolean;
+  telegramJoined?: boolean;
+  telegramStartedAt?: string | null;
+  telegramInviteExpiresAt?: string | null;
   interestStatus: "new" | "interested" | "not_interested" | "replied";
   leadClassification?: "new_applicant" | "existing_applicant" | "referral" | "general_enquiry" | "unknown";
   leadHunterStatus?: "classified" | "not_configured" | "failed";
@@ -39,12 +42,12 @@ type ReferralLeadResponse = {
   page: number;
   pageCount: number;
   countries: string[];
-  summary: { total: number; eligible: number; awaitingConsent: number; optedOut: number; interested: number; needsReview: number; acceptedByMake: number; failed: number; countries: number };
+  summary: { total: number; telegramJoined: number; telegramNotStarted: number; interested: number; needsReview: number; imported: number; acceptedByMake: number; failed: number; countries: number };
 };
 
 type AutomationInventory = { workflows: Array<{ id: string; configured: boolean; scenarioStatus?: string }> };
 type AutomationState = { referral: boolean | null; agent1: boolean | null; broadcast: boolean | null };
-type Segment = "all" | "eligible" | "awaiting" | "optedOut" | "review";
+type Segment = "all" | "joined" | "notStarted" | "review";
 
 const normalizeHeader = (value: unknown) => String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 const phoneHeader = (value: string) => /^(phone|phoneno|phonenumber|mobile|mobileno|mobilenumber|whatsapp|whatsappno|whatsappnumber|contact|contactno|contactnumber|contactphone|telephone|tel|maidphone|maidphoneno|maidphonenumber|maidmobile|maidmobilenumber|maidwhatsapp|maidwhatsappno|maidwhatsappnumber|referredphone|referredphonenumber)$/.test(value);
@@ -64,7 +67,6 @@ const parseEmbeddedContact = (value: unknown) => {
     .trim();
   return name ? { name, phone: phone.value.trim() } : null;
 };
-const yesValue = (value: unknown) => /^(yes|true|1|active|opted.?in|consented|granted)$/i.test(String(value ?? "").trim());
 const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
 const formatDate = (value: string | null) => value ? new Date(value).toLocaleDateString() : "—";
 
@@ -83,9 +85,8 @@ const request = async <T,>(path: string, init?: RequestInit): Promise<T> => {
 
 const segmentDetails: Record<Segment, { label: string; description: string }> = {
   all: { label: "All leads", description: "Every referral contact in this view." },
-  eligible: { label: "Consented", description: "Active documented WhatsApp opt-in." },
-  awaiting: { label: "Awaiting consent", description: "Saved, but not eligible for broadcast." },
-  optedOut: { label: "Opted out", description: "Suppressed from future WhatsApp campaigns." },
+  joined: { label: "Joined Telegram", description: "People who started the agency Telegram bot from their invite." },
+  notStarted: { label: "Not joined", description: "Invite can be shared; they must start the bot to subscribe." },
   review: { label: "Staff review", description: "Needs a person to review the referral." },
 };
 
@@ -99,9 +100,11 @@ export default function ReferralLeadsPage() {
   const [segment, setSegment] = useState<Segment>("all");
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
-  const [googleSheetRange, setGoogleSheetRange] = useState("Referrals!A1:Z501");
+  const [classifying, setClassifying] = useState(false);
+  const [clearingImports, setClearingImports] = useState(false);
+  const [clearImportsOpen, setClearImportsOpen] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [consentEvidence, setConsentEvidence] = useState<Record<string, string>>({});
+  const [inviteLoadingId, setInviteLoadingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [automation, setAutomation] = useState<AutomationState>({ referral: null, agent1: null, broadcast: null });
   const [automationLoading, setAutomationLoading] = useState(true);
@@ -109,7 +112,7 @@ export default function ReferralLeadsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), pageSize: "100" });
+      const params = new URLSearchParams({ page: String(page), pageSize: "10" });
       if (search.trim()) params.set("q", search.trim());
       if (country) params.set("country", country);
       if (segment !== "all") params.set("segment", segment);
@@ -143,8 +146,6 @@ export default function ReferralLeadsPage() {
       const countryColumn = findColumn("country", "nationality", "countryoforigin", "maidnationality");
       const sourceColumn = findColumn("source", "referralsource", "leadsource");
       const languageColumn = findColumn("language", "preferredlanguage", "nativelanguage");
-      const consentColumn = findColumn("whatsappconsent", "marketingconsent", "consent", "optin", "whatsappoptin");
-      const consentSourceColumn = findColumn("consentsource", "whatsappconsentsource", "optinsource", "consentevidence");
       let rows = matrix.slice(1);
       let embeddedPhoneColumn = -1;
       if (phoneColumn < 0) {
@@ -183,10 +184,10 @@ export default function ReferralLeadsPage() {
             ? embeddedContact?.phone ?? ""
             : String(row[phoneColumn] ?? "").trim(),
           country: countryColumn >= 0 ? String(row[countryColumn] ?? "").trim() : "",
-          source: sourceColumn >= 0 ? String(row[sourceColumn] ?? "").trim() : defaultSource,
+          source: sourceColumn >= 0 && String(row[sourceColumn] ?? "").trim()
+            ? `${defaultSource} · ${String(row[sourceColumn]).trim()}`
+            : defaultSource,
           preferredLanguage: languageColumn >= 0 ? String(row[languageColumn] ?? "").trim() : "",
-          whatsappConsent: consentColumn >= 0 && yesValue(row[consentColumn]),
-          whatsappConsentSource: consentSourceColumn >= 0 ? String(row[consentSourceColumn] ?? "").trim() : "",
         };
       });
       let imported = 0; let duplicateCount = 0; let invalidCount = 0;
@@ -200,9 +201,33 @@ export default function ReferralLeadsPage() {
       return { imported, duplicateCount, invalidCount };
   };
 
+  const runAgent1OnPending = async (announce = true) => {
+    if (classifying) return;
+    setClassifying(true);
+    let classified = 0;
+    let failed = 0;
+    try {
+      for (let batch = 0; batch < 50; batch += 1) {
+        const result = await request<{ processed: number; classified: number; failed: number; remaining: number }>("/api/ats/referral-leads/classify-pending", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ retryFailed: batch === 0 }),
+        });
+        classified += result.classified;
+        failed += result.failed;
+        if (!result.processed || !result.remaining) break;
+      }
+      await load();
+      if (announce && (classified || failed)) toast.success(`Agent 1 classified ${classified} lead${classified === 1 ? "" : "s"}${failed ? `; ${failed} need staff review` : "."}`);
+      return { classified, failed };
+    } catch (classificationError) {
+      if (announce) toast.error(classificationError instanceof Error ? classificationError.message : "Agent 1 could not classify the pending leads.");
+      return { classified, failed, error: true };
+    } finally { setClassifying(false); }
+  };
+
   const showImportSummary = async (result: { imported: number; duplicateCount: number; invalidCount: number }) => {
     toast.success(`Imported ${result.imported}; skipped ${result.duplicateCount} duplicates and ${result.invalidCount} invalid rows.`);
     setPage(1); setSegment("all"); await load();
+    if (result.imported) await runAgent1OnPending();
   };
 
   const importFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -223,61 +248,71 @@ export default function ReferralLeadsPage() {
     finally { setImporting(false); event.target.value = ""; }
   };
 
-  const importGoogleSheet = async () => {
-    const range = googleSheetRange.trim();
-    if (!range) { toast.error("Enter the tab and cell range to import."); return; }
-    setImporting(true);
+  const clearImportedLeads = async () => {
+    const importedCount = data?.summary.imported ?? 0;
+    if (!importedCount) { toast.error("There are no spreadsheet-imported leads to clear."); return; }
+    setClearingImports(true);
     try {
-      const result = await request<{ values: unknown[][] }>("/api/ats/referral-leads/google-sheets/read", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ range }),
-      });
-      await showImportSummary(await importMatrix(result.values ?? [], `Google Sheets: ${range}`));
-    } catch (importError) { toast.error(importError instanceof Error ? importError.message : "Could not import this Google Sheet."); }
-    finally { setImporting(false); }
+      const result = await request<{ deleted: number }>("/api/ats/referral-leads/imported", { method: "DELETE" });
+      toast.success(`Cleared ${result.deleted} spreadsheet-imported leads.`);
+      setClearImportsOpen(false);
+      setPage(1); setSegment("all");
+      await load();
+    } catch (clearError) {
+      toast.error(clearError instanceof Error ? clearError.message : "Could not clear imported leads.");
+    } finally { setClearingImports(false); }
   };
 
   const visibleLeads = useMemo(() => (data?.leads ?? []).filter((lead) => {
-    if (segment === "eligible") return lead.whatsappConsentActive;
-    if (segment === "awaiting") return !lead.whatsappConsentActive && !lead.whatsappOptedOut;
-    if (segment === "optedOut") return lead.whatsappOptedOut;
+    if (segment === "joined") return Boolean(lead.telegramJoined);
+    if (segment === "notStarted") return !lead.telegramJoined;
     if (segment === "review") return lead.staffReviewRequired;
     return true;
   }), [data?.leads, segment]);
 
-  const exportEligible = async () => {
+  const exportTelegramJoined = async () => {
     try {
       const all: ReferralLead[] = [];
-      const first = await request<ReferralLeadResponse>(`/api/ats/referral-leads?page=1&pageSize=200`);
-      all.push(...first.leads.filter((lead) => lead.whatsappConsentActive));
+      const first = await request<ReferralLeadResponse>(`/api/ats/referral-leads?page=1&pageSize=200&segment=joined`);
+      all.push(...first.leads);
       for (let pageNumber = 2; pageNumber <= first.pageCount; pageNumber++) {
-        const result = await request<ReferralLeadResponse>(`/api/ats/referral-leads?page=${pageNumber}&pageSize=200`);
-        all.push(...result.leads.filter((lead) => lead.whatsappConsentActive));
+        const result = await request<ReferralLeadResponse>(`/api/ats/referral-leads?page=${pageNumber}&pageSize=200&segment=joined`);
+        all.push(...result.leads);
       }
-      const headings = ["name", "phone", "language", "whatsappConsent", "consentSource", "country", "source"];
-      const csv = [headings, ...all.map((lead) => [lead.name, lead.phone, lead.preferredLanguage, "Yes", lead.whatsappConsentSource, lead.country, lead.source])]
+      const headings = ["name", "phone", "telegramStartedAt", "language", "country", "source"];
+      const csv = [headings, ...all.map((lead) => [lead.name, lead.phone, lead.telegramStartedAt || "", lead.preferredLanguage, lead.country, lead.source])]
         .map((row) => row.map(csvCell).join(",")).join("\r\n");
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-      const anchor = document.createElement("a"); anchor.href = url; anchor.download = "consented-referral-leads.csv"; anchor.click(); URL.revokeObjectURL(url);
-      toast.success(`Exported ${all.length} contacts with active WhatsApp consent.`);
-    } catch (exportError) { toast.error(exportError instanceof Error ? exportError.message : "Could not export eligible contacts."); }
+      const anchor = document.createElement("a"); anchor.href = url; anchor.download = "telegram-started-referral-leads.csv"; anchor.click(); URL.revokeObjectURL(url);
+      toast.success(`Exported ${all.length} referrals that started Telegram.`);
+    } catch (exportError) { toast.error(exportError instanceof Error ? exportError.message : "Could not export Telegram subscribers."); }
   };
 
   const prepareBroadcast = () => navigate(adminPath("/telegram-broadcast"));
 
-  const updateLead = async (lead: ReferralLead, update: { whatsappConsent?: boolean; whatsappConsentSource?: string; interestStatus?: ReferralLead["interestStatus"] }) => {
-    if (update.whatsappConsent && (consentEvidence[lead.id]?.trim().length ?? 0) < 5) {
-      toast.error("Record where and when the person gave permission before enabling messages."); return;
-    }
+  const updateLead = async (lead: ReferralLead, update: { interestStatus: ReferralLead["interestStatus"] }) => {
     setSavingId(lead.id);
     try {
       await request(`/api/ats/referral-leads/${encodeURIComponent(lead.id)}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...update, ...(update.whatsappConsent ? { whatsappConsentSource: consentEvidence[lead.id]?.trim() } : {}) }),
+        body: JSON.stringify(update),
       });
-      toast.success(update.whatsappConsent === false ? "Contact suppressed from WhatsApp marketing." : "Referral lead updated.");
+      toast.success("Referral lead updated.");
       await load();
     } catch (updateError) { toast.error(updateError instanceof Error ? updateError.message : "Could not update lead."); }
     finally { setSavingId(null); }
+  };
+
+  const createTelegramInvite = async (lead: ReferralLead) => {
+    setInviteLoadingId(lead.id);
+    try {
+      const result = await request<{ inviteLink: string; expiresAt: string }>(`/api/ats/referral-leads/${encodeURIComponent(lead.id)}/telegram-invite`, { method: "POST" });
+      await navigator.clipboard.writeText(result.inviteLink);
+      toast.success("Telegram invite copied");
+      await load();
+    } catch (inviteError) {
+      toast.error(inviteError instanceof Error ? inviteError.message : "Could not create the Telegram invite.");
+    } finally { setInviteLoadingId(null); }
   };
 
   const summary = data?.summary;
@@ -314,10 +349,11 @@ export default function ReferralLeadsPage() {
             <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={importing} className="h-11 border-slate-300 bg-white text-black hover:bg-emerald-50">
               {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}{importing ? "Importing" : "Import leads"}
             </Button>
-            <label className="sr-only" htmlFor="referral-google-sheet-range">Google Sheets tab and range</label>
-            <input id="referral-google-sheet-range" value={googleSheetRange} onChange={(event) => setGoogleSheetRange(event.target.value)} placeholder="Referrals!A1:Z501" aria-label="Google Sheets tab and range" className="h-11 w-48 rounded-xl border border-slate-300 bg-white px-3 text-sm text-black placeholder:text-slate-600 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100" />
-            <Button variant="outline" onClick={() => void importGoogleSheet()} disabled={importing || !googleSheetRange.trim()} className="h-11 border-slate-300 bg-white text-black hover:bg-emerald-50">
-              {importing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}Import Sheet
+            <Button variant="outline" onClick={() => void runAgent1OnPending()} disabled={classifying || !data?.summary.imported} className="h-11 border-slate-300 bg-white text-black hover:bg-emerald-50">
+              {classifying ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}{classifying ? "Running Agent 1…" : "Run Agent 1 on pending"}
+            </Button>
+            <Button variant="outline" onClick={() => setClearImportsOpen(true)} disabled={clearingImports || !data?.summary.imported} className="h-11 border-rose-300 bg-white text-rose-700 hover:bg-rose-50">
+              {clearingImports ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}Clear imported numbers{data?.summary.imported ? ` (${data.summary.imported})` : ""}
             </Button>
             <Button onClick={prepareBroadcast} className="h-11 bg-emerald-200 text-black hover:bg-emerald-300">
               <MessageCircle className="h-4 w-4" />Open Telegram broadcast<ArrowRight className="h-4 w-4" />
@@ -337,12 +373,34 @@ export default function ReferralLeadsPage() {
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-black"><span className="inline-flex items-center gap-1.5"><CircleAlert className="h-3.5 w-3.5" />Webhook configuration is shown here; Make’s live scenario switch and run history are not available to the website.</span><button type="button" onClick={() => void loadAutomation()} className="inline-flex items-center gap-1.5 font-semibold underline decoration-emerald-500 underline-offset-4 hover:text-emerald-800" disabled={automationLoading}><RefreshCw className={`h-3.5 w-3.5 ${automationLoading ? "animate-spin" : ""}`} />Refresh connections</button></div>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Referral lead summary">
+      <AlertDialog open={clearImportsOpen} onOpenChange={(open) => { if (!clearingImports) setClearImportsOpen(open); }}>
+        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-2xl border border-rose-100 bg-white p-6 text-slate-900 shadow-2xl">
+          <AlertDialogHeader className="space-y-3 text-left">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-700"><AlertTriangle className="h-5 w-5" /></span>
+            <AlertDialogTitle className="text-xl font-bold">Clear spreadsheet imports?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-6 text-slate-600">
+              This will permanently remove <strong className="font-semibold text-slate-900">{data?.summary.imported ?? 0} spreadsheet-imported leads</strong> from this agency. Website referral submissions will be kept. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel disabled={clearingImports} className="mt-0">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={clearingImports || !data?.summary.imported}
+              onClick={(event) => { event.preventDefault(); void clearImportedLeads(); }}
+              className="bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-600"
+            >
+              {clearingImports ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {clearingImports ? "Clearing…" : "Clear imported leads"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Referral lead summary">
         {[
           { id: "all" as const, label: "Total leads", value: summary?.total ?? 0, icon: Users, active: segment === "all" },
-          { id: "eligible" as const, label: "Consented", value: summary?.eligible ?? 0, icon: BadgeCheck, active: segment === "eligible" },
-          { id: "awaiting" as const, label: "Awaiting consent", value: summary?.awaitingConsent ?? 0, icon: Clock3, active: segment === "awaiting" },
-          { id: "optedOut" as const, label: "Opted out", value: summary?.optedOut ?? 0, icon: X, active: segment === "optedOut" },
+          { id: "joined" as const, label: "Joined Telegram", value: summary?.telegramJoined ?? 0, icon: BadgeCheck, active: segment === "joined" },
+          { id: "notStarted" as const, label: "Not joined", value: summary?.telegramNotStarted ?? 0, icon: Clock3, active: segment === "notStarted" },
           { id: "review" as const, label: "Staff review", value: summary?.needsReview ?? 0, icon: FileSpreadsheet, active: segment === "review" },
           { id: null, label: "Interested / replied", value: summary?.interested ?? 0, icon: MessageCircle, active: false },
         ].map((item, index) => {
@@ -359,7 +417,7 @@ export default function ReferralLeadsPage() {
             <label className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-black" /><input value={search} onChange={(event) => { setPage(1); setSearch(event.target.value); }} placeholder="Search name, phone, source" aria-label="Search referral leads" className="h-10 w-full rounded-xl border border-slate-300 bg-white pl-9 pr-3 text-sm text-black focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100 sm:w-64" /></label>
             <select value={country} onChange={(event) => { setPage(1); setCountry(event.target.value); }} aria-label="Filter by country" className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm text-black focus:border-emerald-600 focus:outline-none"><option value="">All countries</option>{(data?.countries ?? []).map((value) => <option key={value} value={value}>{value}</option>)}</select>
             <Button type="button" variant="outline" size="icon" onClick={() => void load()} aria-label="Refresh leads" disabled={loading} className="h-10 w-10 border-slate-300 text-black"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></Button>
-            <Button type="button" variant="outline" onClick={() => void exportEligible()} disabled={!summary?.eligible} className="h-10 gap-2 border-slate-300 text-black"><ArrowDownToLine className="h-4 w-4" />Export opted-in</Button>
+            <Button type="button" variant="outline" onClick={() => void exportTelegramJoined()} disabled={!summary?.telegramJoined} className="h-10 gap-2 border-slate-300 text-black"><ArrowDownToLine className="h-4 w-4" />Export joined</Button>
           </div>
         </div>
 
@@ -372,14 +430,14 @@ export default function ReferralLeadsPage() {
           <>
             <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
               <table className="w-full min-w-[1050px] text-left text-sm text-black">
-                <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-black"><tr><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Location</th><th className="px-4 py-3">Source & triage</th><th className="px-4 py-3">WhatsApp consent</th><th className="px-4 py-3">Interest</th><th className="px-4 py-3">Last message</th></tr></thead>
+                <thead className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-black"><tr><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Location</th><th className="px-4 py-3">Source & triage</th><th className="px-4 py-3">Telegram</th><th className="px-4 py-3">Interest</th><th className="px-4 py-3">Last message</th></tr></thead>
                 <tbody>
                   {visibleLeads.map((lead, index) => <tr key={lead.id} className="referral-row border-t border-slate-200 align-top transition-colors hover:bg-emerald-50/40" style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}>
                     <td className="px-4 py-4"><p className="font-bold text-black">{lead.name}</p><p className="mt-1 font-mono text-xs text-black">{lead.phone || "No phone"}</p>{lead.possibleDuplicateOf && <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-black"><CircleAlert className="h-3 w-3" />Possible duplicate · review {lead.possibleDuplicateOf}</p>}</td>
                     <td className="px-4 py-4"><p className="font-medium text-black">{lead.country || "Unknown"}</p><p className="mt-1 text-xs text-black">{lead.preferredLanguage || "Language not recorded"}</p></td>
                     <td className="px-4 py-4"><p className="max-w-48 truncate font-medium text-black" title={lead.source}>{lead.source || "Unspecified"}</p><p className="mt-1 text-xs text-black">Added {formatDate(lead.createdAt)}</p><span className={`mt-2 inline-flex rounded-full px-2 py-1 text-xs font-bold ${lead.leadHunterStatus === "classified" ? "bg-emerald-100" : lead.leadHunterStatus === "failed" ? "bg-rose-100" : "bg-slate-100"}`}><Sparkles className="mr-1 h-3 w-3" />{lead.leadHunterStatus === "classified" ? `Agent 1 · ${(lead.leadClassification ?? "unknown").replace(/_/g, " ")}` : lead.leadHunterStatus === "failed" ? "Agent 1 · needs retry" : "Agent 1 · not configured"}</span></td>
                     <td className="px-4 py-4">
-                      {lead.whatsappConsentActive ? <><span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-black"><Check className="h-3 w-3" />Opted in</span><p className="mt-2 max-w-56 text-xs text-black">{lead.whatsappConsentSource || "Evidence not recorded"}</p><Button size="sm" variant="outline" className="mt-2 h-8 border-slate-300 text-black" disabled={savingId === lead.id} onClick={() => void updateLead(lead, { whatsappConsent: false })}>{savingId === lead.id ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}Suppress</Button></> : lead.whatsappOptedOut ? <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-black"><X className="h-3 w-3" />Opted out</span> : <><span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-black"><Clock3 className="h-3 w-3" />Awaiting consent</span><input aria-label={`Consent evidence for ${lead.name}`} value={consentEvidence[lead.id] ?? ""} onChange={(event) => setConsentEvidence((current) => ({ ...current, [lead.id]: event.target.value }))} placeholder="Where and when was consent recorded?" className="mt-2 h-9 w-60 max-w-full rounded-lg border border-slate-300 px-2 text-xs text-black focus:border-emerald-600 focus:outline-none" /><Button size="sm" variant="outline" className="mt-2 h-8 border-slate-300 text-black" disabled={savingId === lead.id} onClick={() => void updateLead(lead, { whatsappConsent: true })}>{savingId === lead.id ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}Record opt-in</Button></>}
+                      {lead.telegramJoined ? <><span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-black"><Check className="h-3 w-3" />Started bot</span><p className="mt-2 max-w-56 text-xs text-black">{lead.telegramStartedAt ? `Started ${formatDate(lead.telegramStartedAt)}` : "Invite used; identity is unverified"}</p></> : <><span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-black"><Clock3 className="h-3 w-3" />Not started</span><p className="mt-1 max-w-56 text-xs text-black">{lead.telegramInviteExpiresAt && new Date(lead.telegramInviteExpiresAt).getTime() > Date.now() ? `Invite active until ${formatDate(lead.telegramInviteExpiresAt)}` : "Share an invite; applicant must press Start."}</p><Button size="sm" variant="outline" className="mt-2 h-8 border-slate-300 text-black" disabled={inviteLoadingId === lead.id} onClick={() => void createTelegramInvite(lead)}>{inviteLoadingId === lead.id ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <Copy className="h-3 w-3" />}{lead.telegramInviteExpiresAt ? "Copy new invite" : "Create invite"}</Button></>}
                     </td>
                     <td className="px-4 py-4"><select value={lead.interestStatus} onChange={(event) => void updateLead(lead, { interestStatus: event.target.value as ReferralLead["interestStatus"] })} disabled={savingId === lead.id} aria-label={`Interest status for ${lead.name}`} className="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-semibold text-black focus:border-emerald-600 focus:outline-none"><option value="new">New</option><option value="interested">Interested</option><option value="replied">Replied</option><option value="not_interested">Not interested</option></select></td>
                     <td className="px-4 py-4"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold capitalize text-black">{lead.lastDeliveryStatus.replace(/_/g, " ")}</span><p className="mt-2 text-xs text-black">{formatDate(lead.lastMessageAt)}</p></td>
@@ -393,7 +451,7 @@ export default function ReferralLeadsPage() {
       </Card>
 
       <section className="referral-enter referral-delay-3 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:p-6">
-        <div className="flex items-start gap-3"><ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-black" /><div><h2 className="font-bold text-black">Telegram requires a voluntary start</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-black">Referral details and historical phone marketing consent are never used for Telegram delivery. Applicants must start the bot and retain active consent before they become eligible.</p></div></div>
+        <div className="flex items-start gap-3"><ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-black" /><div><h2 className="font-bold text-black">Telegram requires the applicant to start the bot</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-black">Create and share the invite link with the applicant. Their Telegram subscription is recorded only after they press Start. A phone number or prior WhatsApp permission does not make someone reachable on Telegram.</p></div></div>
         <div className="flex flex-wrap gap-2"><Button asChild variant="outline" className="border-slate-300 bg-white text-black"><Link to={adminPath("/telegram-broadcast")}>Open Telegram<ArrowRight className="h-4 w-4" /></Link></Button><Button asChild variant="outline" className="border-slate-300 bg-white text-black"><Link to={adminPath("/ai-marketing")}>Campaign tools</Link></Button></div>
       </section>
     </main>

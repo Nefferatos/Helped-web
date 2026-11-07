@@ -38,6 +38,10 @@ import {
   Mail,
   MessageCircle,
   MessageSquare,
+  Mic,
+  MicOff,
+  Volume2,
+  Square,
   Phone,
   Reply,
   Send,
@@ -1367,7 +1371,7 @@ function ContractsList({ contracts, onView }: { contracts: EmployerRow[]; onView
   );
 }
 
-// ─── AI Command Center ──────────────────────────────────────────────────────
+// ─── AI Assistant ───────────────────────────────────────────────────────────
 
 type AiTopic = "enquiries" | "requests" | "applicants" | "contracts";
 
@@ -1790,6 +1794,31 @@ interface CommandCenterAction {
 }
 
 const COMMAND_CENTER_HISTORY_KEY = "helped:ai-command-center:history";
+const AI_ASSISTANT_GREETING = "Hello! Welcome to your AI Assistant. What can I help you with today?";
+const COMMAND_CENTER_WELCOME = "Welcome! I’m your agency assistant. I can help with client enquiries, service requests, maid profiles, applicants, and follow-ups. What would you like help with today?";
+const AI_ASSISTANT_GREETING_AUDIO_URL = "/audio/ai-assistant-greeting.mp3";
+const splitSpeechChunks = (text: string, maxLength = 180): string[] => {
+  const words = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (current && current.length + word.length + 1 > maxLength) {
+      // Prefer finishing a sentence before splitting a long answer into audio.
+      const sentenceEnd = Math.max(current.lastIndexOf(". "), current.lastIndexOf("? "), current.lastIndexOf("! "));
+      if (sentenceEnd >= Math.floor(maxLength * 0.55)) {
+        chunks.push(current.slice(0, sentenceEnd + 1));
+        current = `${current.slice(sentenceEnd + 2)} ${word}`.trim();
+      } else {
+        chunks.push(current);
+        current = word;
+      }
+      continue;
+    }
+    current = current ? `${current} ${word}` : word;
+  }
+  if (current) chunks.push(current);
+  return chunks;
+};
 
 const loadCommandCenterHistory = (): CommandCenterMessage[] => {
   try {
@@ -1799,14 +1828,20 @@ const loadCommandCenterHistory = (): CommandCenterMessage[] => {
       Boolean(item) && typeof item === "object" &&
       ((item as CommandCenterMessage).role === "user" || (item as CommandCenterMessage).role === "assistant") &&
       typeof (item as CommandCenterMessage).id === "string" && typeof (item as CommandCenterMessage).content === "string",
-    ).map((item) => item.role === "user" && /openEnquiry|publicMaidCatalog|pendingRequest|applicantHighlights|contractRecords|recentEnquiries/.test(item.content)
-      ? { ...item, content: "Please review the relevant agency records and summarize the results using verified details. Mention if the data is partial." }
-      : item).slice(-40);
+    ).map((item) => {
+      if (item.role === "assistant" && item.id.startsWith("welcome-")) {
+        return { ...item, content: COMMAND_CENTER_WELCOME };
+      }
+      if (item.role === "user" && /openEnquiry|publicMaidCatalog|pendingRequest|applicantHighlights|contractRecords|recentEnquiries/.test(item.content)) {
+        return { ...item, content: "Please review the relevant agency records and summarize the results using verified details. Mention if the data is partial." };
+      }
+      return item;
+    }).slice(-40);
   } catch { return []; }
 };
 
 function formatCommandCenterInlineText(text: string): ReactNode[] {
-  const parts = text.split(/(\*\*.*?\*\*|__.*?__)/g);
+  const parts = text.split(/(\*\*.*?\*\*|__.*?__|`[^`]+`|\*[^*\n]+\*)/g);
 
   return parts.flatMap((part, index) => {
     if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
@@ -1815,6 +1850,18 @@ function formatCommandCenterInlineText(text: string): ReactNode[] {
           {part.replace(/^\*\*|\*\*$|^__|__$/g, "")}
         </strong>,
       ];
+    }
+
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return [
+        <code key={`${part}-${index}`} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.92em] text-violet-800">
+          {part.slice(1, -1)}
+        </code>,
+      ];
+    }
+
+    if (part.startsWith("*") && part.endsWith("*")) {
+      return [<em key={`${part}-${index}`} className="italic">{part.slice(1, -1)}</em>];
     }
 
     const labelMatch = part.match(/^([^:]{1,40}):\s*(.*)$/);
@@ -1844,8 +1891,8 @@ function formatCommandCenterText(content: string, isUser: boolean): ReactNode {
   const flushParagraph = () => {
     if (!paragraph.length) return;
     output.push(
-      <p key={`p-${output.length}`} className={`${isUser ? "text-white" : "text-slate-800"} my-1.5 leading-relaxed`}>
-        <span className="font-medium">{formatCommandCenterInlineText(paragraph.join(" "))}</span>
+      <p key={`p-${output.length}`} className={`${isUser ? "text-white" : "text-slate-700"} my-2 leading-6`}>
+        {formatCommandCenterInlineText(paragraph.join(" "))}
       </p>,
     );
     paragraph = [];
@@ -1855,11 +1902,12 @@ function formatCommandCenterText(content: string, isUser: boolean): ReactNode {
   const flushList = () => {
     if (!listItems.length || !listType) return;
     const ListTag = listType === "ul" ? "ul" : "ol";
+    const listStyle = listType === "ul" ? "list-disc" : "list-decimal";
     output.push(
-      <ListTag key={`list-${output.length}`} className={`my-2 space-y-2 pl-5 ${isUser ? "text-white" : "text-slate-800"}`}>
+      <ListTag key={`list-${output.length}`} className={`my-2 space-y-1.5 pl-5 ${listStyle} ${isUser ? "text-white marker:text-white/70" : "text-slate-700 marker:text-violet-500"}`}>
         {listItems.map((item, idx) => (
-          <li key={`${listType}-${idx}`} className="leading-relaxed">
-            <span className="font-medium">{formatCommandCenterInlineText(item)}</span>
+          <li key={`${listType}-${idx}`} className="pl-0.5 leading-6">
+            {formatCommandCenterInlineText(item)}
           </li>
         ))}
       </ListTag>,
@@ -1897,13 +1945,15 @@ function formatCommandCenterText(content: string, isUser: boolean): ReactNode {
       continue;
     }
 
-    if (/^#{1,3}\s+/.test(line)) {
+    const markdownHeading = line.match(/^#{1,3}\s+(.+)$/)?.[1];
+    const boldHeading = line.match(/^\*\*(.{1,80})\*\*$/)?.[1];
+    if (markdownHeading || boldHeading) {
       flushParagraph();
       flushList();
       output.push(
-        <p key={`heading-${output.length}`} className={`mt-3 mb-1 text-sm font-bold ${isUser ? "text-white" : "text-slate-900"}`}>
-          {formatCommandCenterInlineText(line.replace(/^#{1,3}\s+/, ""))}
-        </p>,
+        <h4 key={`heading-${output.length}`} className={`mt-4 mb-1.5 border-b pb-1 text-[13px] font-bold tracking-tight ${isUser ? "border-white/25 text-white" : "border-slate-200 text-slate-900"}`}>
+          {formatCommandCenterInlineText(markdownHeading || boldHeading || "")}
+        </h4>,
       );
       previousWasList = false;
       continue;
@@ -1934,12 +1984,55 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"insights" | "chat" | "actions">("insights");
   const [messages, setMessages] = useState<CommandCenterMessage[]>(loadCommandCenterHistory);
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
+  const [typingCharacterCount, setTypingCharacterCount] = useState(0);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailDraft, setEmailDraft] = useState<CommandCenterAction | null>(null);
   const [emailSending, setEmailSending] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speechRequestsRef = useRef<Set<AbortController>>(new Set());
+  const speechObjectUrlRef = useRef<string | null>(null);
+  const speechGenerationRef = useRef(0);
+  const speakReplyRef = useRef<((text: string) => Promise<void>) | null>(null);
+  const speakGreetingRef = useRef<(() => Promise<void>) | null>(null);
+  const greetingAudioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const audio = new Audio(AI_ASSISTANT_GREETING_AUDIO_URL);
+    audio.preload = "auto";
+    greetingAudioRef.current = audio;
+    audio.load();
+    return () => {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      if (greetingAudioRef.current === audio) greetingAudioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!typingMessageId || voiceEnabled) return;
+    const typingMessage = messages.find((item) => item.id === typingMessageId);
+    if (!typingMessage) return;
+    const timer = window.setInterval(() => {
+      setTypingCharacterCount((current) => {
+        const next = Math.min(current + 5, typingMessage.content.length);
+        if (next >= typingMessage.content.length) {
+          window.clearInterval(timer);
+          setTypingMessageId(null);
+        }
+        return next;
+      });
+    }, 14);
+    return () => window.clearInterval(timer);
+  }, [typingMessageId, messages, voiceEnabled]);
 
   const analytics = useMemo(() => {
     const urgentEnquiries = enquiries.filter((e) => e.status === "new" || e.status === "in_progress");
@@ -1984,7 +2077,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
       window.cancelAnimationFrame(secondFrame);
       window.clearTimeout(timer);
     };
-  }, [isOpen, messages, isSubmitting]);
+  }, [isOpen, messages, isSubmitting, typingCharacterCount]);
 
   useEffect(() => {
     try {
@@ -1997,12 +2090,16 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
   }, [messages]);
 
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
+    if (!isOpen) return;
+    if (messages.length === 0) {
       setMessages([{
         id: `welcome-${Date.now()}`,
         role: "assistant",
-        content: `Welcome to your agency operations assistant. I can summarize this dashboard, review the latest enquiries and pending requests, compare maid profiles with recorded requirements, and draft replies or website copy. If you ask me to email a specific enquiry or applicant, I can prepare a draft for you to review and confirm before sending. You can ask about Make.com workflows too: I can report which scenarios appeared On in the screenshots you shared and whether the website webhook is configured. Screenshot status is not a live Make.com check, and I cannot confirm successful runs without checking Make history.`,
+        content: COMMAND_CENTER_WELCOME,
       }]);
+    }
+    if (voiceEnabled) {
+      void speakGreetingRef.current?.();
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2091,6 +2188,8 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
 
   const clearChat = () => {
     setMessages([]);
+    setTypingMessageId(null);
+    setTypingCharacterCount(0);
     setError(null);
     setMessage("");
     setIsSubmitting(false);
@@ -2122,17 +2221,202 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
         : isMaidMatchRequest(msg)
           ? validateAiMaidMatchReply(aiResponse.reply, maids)
           : aiResponse.reply;
+      const finalReply = enforceMaidNationality(profileReply, maids);
+      const assistantMessageId = `a-${Date.now()}`;
+      setTypingMessageId(assistantMessageId);
+      setTypingCharacterCount(0);
       setMessages((prev) => [...prev, {
-        id: `a-${Date.now()}`,
+        id: assistantMessageId,
         role: "assistant",
-        content: enforceMaidNationality(profileReply, maids),
+        content: finalReply,
         actions: verifiedProfile.action ? [verifiedProfile.action] : aiResponse.actions,
       }]);
+      if (voiceEnabled) void speakReply(finalReply);
     } catch (err) {
       const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
       setError(isTimeout ? "The AI is taking longer than expected. Please try again." : err instanceof Error ? err.message : "Failed to get AI response");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const speakReply = async (text: string) => {
+    stopSpeaking();
+    const generation = speechGenerationRef.current;
+    const fullChunks = splitSpeechChunks(text);
+    if (!fullChunks.length) return;
+    const firstChunkParts = splitSpeechChunks(fullChunks[0], 80);
+    const firstChunk = firstChunkParts.shift();
+    const remainingText = [...firstChunkParts, ...fullChunks.slice(1)].join(" ");
+    const chunks = [firstChunk, ...splitSpeechChunks(remainingText)].filter((chunk): chunk is string => Boolean(chunk));
+    const normalizedLength = text.replace(/\s+/g, " ").trim().length;
+    let spokenCharacters = 0;
+    const requestAudio = async (chunk: string): Promise<{ blob: Blob } | { error: unknown }> => {
+      const controller = new AbortController();
+      speechRequestsRef.current.add(controller);
+      const timeout = window.setTimeout(() => controller.abort(new DOMException("Speech request timed out", "TimeoutError")), 60_000);
+      try {
+        const response = await fetch("/api/ai/command-center/speak", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+          body: JSON.stringify({ text: chunk }),
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const result = await readSafeJson<{ error?: string }>(response);
+          throw new Error(result.error || `Voice generation failed (HTTP ${response.status})`);
+        }
+        return { blob: await response.blob() };
+      } catch (error) {
+        return { error };
+      } finally {
+        window.clearTimeout(timeout);
+        speechRequestsRef.current.delete(controller);
+      }
+    };
+
+    setIsSpeaking(true);
+    try {
+      let audioPromise = requestAudio(chunks[0]);
+      for (const [chunkIndex, chunk] of chunks.entries()) {
+        if (generation !== speechGenerationRef.current) return;
+        const audioResult = await audioPromise;
+        if ("error" in audioResult) throw audioResult.error;
+        if (generation !== speechGenerationRef.current) return;
+        // Generate the next clip while this one plays so playback can continue without a request gap.
+        const nextAudioPromise = chunkIndex < chunks.length - 1 ? requestAudio(chunks[chunkIndex + 1]) : null;
+        let audioUrl: string | null = null;
+        try {
+          audioUrl = URL.createObjectURL(audioResult.blob);
+          if (generation !== speechGenerationRef.current) {
+            URL.revokeObjectURL(audioUrl);
+            return;
+          }
+          speechObjectUrlRef.current = audioUrl;
+          const audio = new Audio(audioUrl);
+          audioRef.current = audio;
+          const chunkStart = spokenCharacters;
+          const revealSpeechProgress = () => {
+            if (generation !== speechGenerationRef.current) return;
+            const fraction = audio.duration > 0 ? Math.min(audio.currentTime / audio.duration, 1) : 0;
+            const progress = Math.min(chunkStart + chunk.length * fraction, normalizedLength);
+            const fasterProgress = (progress / Math.max(normalizedLength, 1)) * text.length * 2.2;
+            setTypingCharacterCount(Math.min(text.length, Math.max(1, Math.floor(fasterProgress))));
+          };
+          audio.onplay = revealSpeechProgress;
+          audio.ontimeupdate = revealSpeechProgress;
+          await new Promise<void>((resolve, reject) => {
+            audio.onended = () => {
+              spokenCharacters = Math.min(chunkStart + chunk.length + (chunkIndex < chunks.length - 1 ? 1 : 0), normalizedLength);
+              const fasterProgress = (spokenCharacters / Math.max(normalizedLength, 1)) * text.length * 2.2;
+              setTypingCharacterCount(Math.min(text.length, Math.ceil(fasterProgress)));
+              resolve();
+            };
+            audio.onpause = () => {
+              if (generation !== speechGenerationRef.current) resolve();
+            };
+            audio.onerror = () => reject(new Error("The browser could not play the generated audio."));
+            void audio.play().catch(reject);
+          });
+        } finally {
+          if (audioUrl && speechObjectUrlRef.current === audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+            speechObjectUrlRef.current = null;
+          }
+        }
+        if (generation !== speechGenerationRef.current) return;
+        if (nextAudioPromise) audioPromise = nextAudioPromise;
+      }
+      if (generation === speechGenerationRef.current) {
+        setTypingCharacterCount(text.length);
+        setTypingMessageId(null);
+        setIsSpeaking(false);
+      }
+    } catch (error) {
+      if (generation !== speechGenerationRef.current) return;
+      setTypingMessageId(null);
+      setIsSpeaking(false);
+      const detail = error instanceof DOMException && error.name === "AbortError"
+        ? "Speech generation was interrupted. Please try again."
+        : error instanceof Error ? error.message : "Voice playback failed";
+      setError(`The reply is in chat, but voice playback failed: ${detail}`);
+      toast.error(detail);
+    }
+  };
+
+  // The open effect runs after render, so this always points at the current voice handler.
+  speakReplyRef.current = speakReply;
+
+  const stopSpeaking = () => {
+    speechGenerationRef.current += 1;
+    speechRequestsRef.current.forEach((controller) => controller.abort());
+    speechRequestsRef.current.clear();
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (speechObjectUrlRef.current) URL.revokeObjectURL(speechObjectUrlRef.current);
+    speechObjectUrlRef.current = null;
+    setIsSpeaking(false);
+  };
+
+  speakGreetingRef.current = async () => {
+    stopSpeaking();
+    const generation = speechGenerationRef.current;
+    const audio = greetingAudioRef.current ?? new Audio(AI_ASSISTANT_GREETING_AUDIO_URL);
+    audio.currentTime = 0;
+    audioRef.current = audio;
+    setIsSpeaking(true);
+    let fallbackStarted = false;
+    const fallBackToFishRequest = () => {
+      if (fallbackStarted || generation !== speechGenerationRef.current) return;
+      fallbackStarted = true;
+      setIsSpeaking(false);
+      void speakReplyRef.current?.(AI_ASSISTANT_GREETING);
+    };
+    audio.onended = () => {
+      if (generation === speechGenerationRef.current) setIsSpeaking(false);
+      if (audioRef.current === audio) audioRef.current = null;
+    };
+    audio.onerror = fallBackToFishRequest;
+    void audio.play().catch(fallBackToFishRequest);
+  };
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+    try {
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error("Audio recording is not supported in this browser.");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onerror = () => { stream.getTracks().forEach((track) => track.stop()); setIsRecording(false); setError("Recording failed. Please try again."); };
+      recorder.onstop = async () => {
+        setIsRecording(false);
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        if (!blob.size) { setError("No audio was recorded. Please try again."); return; }
+        setIsSubmitting(true);
+        setError(null);
+        try {
+          const form = new FormData();
+          form.append("file", blob, "recording.webm");
+          const response = await fetch("/api/integrations/media/upload-and-transcribe", { method: "POST", headers: getAgencyAdminAuthHeaders(), body: form, signal: AbortSignal.timeout(55_000) });
+          const result = await readSafeJson<{ transcript?: string; error?: string }>(response);
+          if (!response.ok || !result.transcript) throw new Error(result.error || `Speech recognition failed (HTTP ${response.status}). Check the local Worker log for details.`);
+          setIsSubmitting(false);
+          await handleSubmit(result.transcript);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Speech recognition failed");
+          setIsSubmitting(false);
+        }
+      };
+      recorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Microphone access failed. Check browser permissions.");
     }
   };
 
@@ -2147,7 +2431,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
             setIsOpen(true);
           }}
           className="fixed bottom-6 right-6 z-50 group flex h-14 items-center gap-2.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 pl-5 pr-4 text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30 hover:scale-[1.03] active:scale-[0.97]"
-          aria-label="Open AI Command Center"
+          aria-label="Open AI Assistant"
         >
           <Bot className="h-5 w-5 shrink-0" />
           <span className="hidden whitespace-nowrap text-sm font-bold sm:inline">AI Command</span>
@@ -2165,7 +2449,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
                   <Bot className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">AI Command Center</h3>
+                  <h3 className="text-sm font-bold text-white">AI Assistant</h3>
                   <p className="text-[11px] text-violet-100">Agency operations assistant</p>
                 </div>
               </div>
@@ -2279,14 +2563,17 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
                 <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
                   {messages.map((msg) => {
                     const isUser = msg.role === "user";
+                    const isTyping = msg.id === typingMessageId;
+                    const visibleContent = isTyping ? msg.content.slice(0, typingCharacterCount) : msg.content;
                     return (
                       <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
                         <div className={`max-w-[88%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-1`}>
-                          <div className={`rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed ${
-                            isUser ? "bg-violet-600 text-white rounded-br-md" : "bg-slate-50 border border-slate-200 text-slate-800 rounded-bl-md"
+                          <div className={`rounded-2xl px-3.5 py-3 text-[13px] leading-relaxed ${
+                            isUser ? "bg-violet-600 text-white rounded-br-md" : "bg-white border border-slate-200 shadow-sm text-slate-800 rounded-bl-md"
                           }`}>
                             <div className="space-y-2">
-                              {formatCommandCenterText(msg.content, isUser)}
+                              {formatCommandCenterText(visibleContent, isUser)}
+                              {isTyping && <span className="ml-0.5 inline-block h-3 w-0.5 animate-pulse bg-violet-500 align-middle" aria-label="AI is typing" />}
                             </div>
                           </div>
                           {!isUser && msg.actions?.map((action) => (
@@ -2314,7 +2601,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
                         <span className="h-2 w-2 rounded-full bg-violet-400 animate-bounce [animation-delay:150ms]" />
                         <span className="h-2 w-2 rounded-full bg-violet-400 animate-bounce [animation-delay:300ms]" />
                       </div>
-                      <span className="text-[11px] text-slate-400">AI Command Center thinking...</span>
+                      <span className="text-[11px] text-slate-400">AI Assistant is thinking...</span>
                     </div>
                   )}
                   {error && (
@@ -2345,6 +2632,13 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
                 )}
 
                 <div className="shrink-0 border-t border-slate-100 bg-slate-50/50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[10px] text-slate-500">{isRecording ? "Listening… click the mic to finish" : isSubmitting ? "Thinking…" : isSpeaking ? "Speaking" : "Push to talk · Make transcription + Fish Audio voice"}</p>
+                    <div className="flex gap-1">
+                      <Button type="button" size="sm" variant="ghost" aria-label={voiceEnabled ? "Mute voice responses" : "Enable voice responses"} onClick={() => { setVoiceEnabled((value) => !value); if (voiceEnabled) stopSpeaking(); }}><Volume2 className={`h-4 w-4 ${voiceEnabled ? "text-violet-600" : "text-slate-400"}`} /></Button>
+                      {isSpeaking && <Button type="button" size="sm" variant="ghost" aria-label="Stop speaking" onClick={() => { stopSpeaking(); setTypingMessageId(null); }}><Square className="h-3.5 w-3.5" /></Button>}
+                    </div>
+                  </div>
                   <form onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }} className="flex gap-2">
                     <Input
                       value={message}
@@ -2353,6 +2647,9 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
                       className="flex-1 text-[12.5px] bg-white"
                       disabled={isSubmitting}
                     />
+                    <Button type="button" size="sm" disabled={isSubmitting} onClick={() => void toggleRecording()} aria-label={isRecording ? "Stop recording" : "Start voice recording"} className={`shrink-0 ${isRecording ? "bg-rose-600 hover:bg-rose-700" : "bg-slate-700 hover:bg-slate-800"}`}>
+                      {isRecording ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+                    </Button>
                     <Button type="submit" size="sm" disabled={isSubmitting || !message.trim()} className="gap-1 bg-violet-600 hover:bg-violet-700">
                       <Send className="h-3.5 w-3.5" />
                     </Button>
@@ -2904,7 +3201,7 @@ function AddApplicantModal({ onClose, onCreated }: { onClose: () => void; onCrea
   );
 }
 
-/** Floating Command Center for authenticated agency-admin routes outside this page. */
+/** Floating AI Assistant for authenticated agency-admin routes outside this page. */
 export function GlobalAiCommandCenter() {
   const [enquiries, setEnquiries] = useState<EnquiryRecord[]>([]);
   const [requests, setRequests] = useState<RequestRecord[]>([]);
@@ -3259,7 +3556,7 @@ export default function AiAgentsPage() {
           )}
         </TabsContent>
 
-        {/* AI Command Center Bubble rendered outside tabs */}
+        {/* AI Assistant bubble rendered outside tabs */}
         <AiCommandCenterBubble enquiries={enquiries} requests={requests} applicants={applicants} contracts={contracts} maids={maids} publicMaids={publicMaids} />
         {/* Marketing Tab */}
         <TabsContent value="marketing" className="mt-0 space-y-3">

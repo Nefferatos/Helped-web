@@ -15,8 +15,19 @@ Import each JSON file as its own Make scenario. Do not combine webhook-triggered
 | Marketing campaign events | `helped-marketing-campaign-events.blueprint.json` | `MAKE_WEBHOOK_URL_MARKETING_CAMPAIGN_EVENTS` | Create webhook, reconnect Gmail, set an internal marketing inbox, then copy the webhook URL to the Worker secret. It alerts on draft-created and email lifecycle events; payloads exclude recipient details and message text. |
 | Interview scheduled staff alert | `helped-interview-scheduled-alert.blueprint.json` | `MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT` | Create webhook, reconnect Gmail, set internal recipient. |
 | Private document to Google Drive | `helped-google-drive-sync.blueprint.json` | `MAKE_WEBHOOK_URL_GOOGLE_DRIVE_SYNC` | Create webhook, connect Google Drive, select destination folder. |
-| Private media transcription | `helped-media-transcription.blueprint.json` | `MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE` | Create webhook, choose/configure the transcription provider, and test that it returns `transcript`. |
+| Private media transcription (Make AI Content Extractor) | `helped-media-transcription.blueprint.json` | `MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE` | Import the scenario, reconnect/select the Make AI Content Extractor module if prompted, run once, and verify the response contains `transcript`. |
 | FDW application chatbot + referral | `helped-fdw-application-chatbot.blueprint.json` | Worker: `MAKE_WEBHOOK_URL_FDW_CHATBOT` | Create the webhook, then reconnect the Make AI Agent connection and select your Google Sheets connection for both "Add a Row" modules (application + referral spreadsheets). See `docs/FDW_APPLICATION_CHATBOT.md`. |
+
+### Private media transcription with Make AI Content Extractor
+
+The blueprint now contains **Make AI Content Extractor → Transcribe an audio file** as module 6 (`make-ai-extractors:transcribeAnAudio`). Its Audio source is URL, mapped to webhook module 1's short-lived `mediaUrl`; the webhook response maps module 6's `text` output into `transcript` and preserves `syncJobId`.
+
+1. Import the blueprint and create/select the **Helped Media Transcription** custom webhook in module 1.
+2. If Make asks to resolve module 2, select **Make AI Content Extractor → Transcribe an audio file** and confirm Audio source = URL, with URL mapped to module 1's `mediaUrl`.
+3. Click **Run once** and test from the agency portal. Confirm module 2 emits `text` and module 3 returns `{ ok: true, syncJobId, transcript }`.
+4. Activate the scenario and set its webhook URL as the Worker's `MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE` secret.
+
+Make AI Content Extractor requires a paid Make plan and is currently priced at 20 Make credits per audio minute. Its audio transcription uses Microsoft Azure AI services in the EU data zone. Confirm the account's plan, credits, and data handling requirements before enabling it. See [Make AI Content Extractor docs](https://apps.make.com/make-ai-extractors) and [Make AI provider/data zone details](https://help.make.com/ai-providers-and-data-zones-in-make).
 
 ### Previous WhatsApp broadcast integration
 

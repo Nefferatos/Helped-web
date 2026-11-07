@@ -476,6 +476,10 @@ interface AtsReferralLeadRecord {
   whatsappConsentAt: string | null;
   whatsappConsentWithdrawnAt: string | null;
   whatsappConsentSource: string;
+  telegramChatId?: string | null;
+  telegramStartedAt?: string | null;
+  telegramInviteToken?: string | null;
+  telegramInviteExpiresAt?: string | null;
   shareContactConsentAt: string | null;
   possibleDuplicateOf?: string;
   referrerName: string;
@@ -620,6 +624,8 @@ type Bindings = {
   // Shared synchronous Make AI gateway. This must be the webhook for
   // helped-ai-gateway.blueprint.json, not the legacy workflow orchestrator.
   MAKE_AI_ENGINE_WEBHOOK_URL?: string;
+  FISH_API_KEY?: string;
+  FISH_REFERENCE_ID?: string;
   // Dedicated synchronous Make AI Agent webhook for PDF biodata extraction.
   // Set its URL as a Worker secret; do not expose it to the browser.
   MAKE_PDF_AUTOFILL_WEBHOOK_URL?: string;
@@ -3586,6 +3592,12 @@ const safeApi =
       }
       if (/contractor_jobs/i.test(message) && /acknowledgement_token_hash|PGRST204|schema cache|could not find the table|column .* does not exist/i.test(message)) {
         return jsonError("Contractor acknowledgement storage is not installed yet. Apply supabase/20261101_contractor_self_service_acknowledgement.sql after the contractor assignment migration, then retry.", 503);
+      }
+      if (/ats_referral_leads/i.test(message) && /PGRST205|PGRST204|schema cache|could not find the table|column .* does not exist/i.test(message)) {
+        return jsonError("Referral lead storage is not installed or is out of date. Apply supabase/20261113_ats_referral_leads.sql and supabase/20261119_ats_referral_telegram_invites.sql, then retry.", 503);
+      }
+      if (/Google OAuth|Google Sheets|Google Spreadsheet/i.test(message)) {
+        return jsonError(message, 502);
       }
       // Propagate upstream rate-limit as 429 so clients can retry correctly.
       if (/rate.?limit|429/i.test(message)) return jsonError("Rate limit exceeded, please try again later", 429);
@@ -13476,6 +13488,7 @@ app.post(
       "Workflow actions only propose work. Do not claim a workflow was sent, activated, or changed. Never make data changes or claim to have made them. Return actions only for opening a helper profile when explicitly requested, or for the draft_email confirmation flow above. Never invent record IDs or statuses.",
       "For questions about Make.com or whether an automation is working, use makeAutomationInventory. Its screenshotEvidence lists the named Make scenarios and IDs whose toggles appeared green/on in screenshots the user supplied. Report this precisely as 'shown On in your screenshot', never as a current live status: the website does not query Make.com's API. For scenarioStatus=on_in_user_screenshot, mention that recent successful runs and end-to-end delivery were not verified. For scenarioStatus=unknown, do not infer a status. Separately report webhookConfigured as the Worker-side website connection only; a configured webhook does not prove the Make scenario is On or working, and a missing webhook means that website flow cannot dispatch through that Worker setting. To confirm operation, ask staff to open the scenario in Make.com, verify it is currently On, submit a safe test through the website, and inspect Make run history and the resulting delivery. Never expose webhook URLs, tokens, secret values, or configuration variables.",
       "Never disclose information belonging to another agency. Be concise, practical, and clear, and say when the supplied data is insufficient.",
+      "Format chat replies for easy reading: answer the question first, use short paragraphs, add a brief Markdown heading only when the answer has distinct sections, and use bullets or numbered steps for grouped items. Use bold sparingly for labels or key facts. Keep the language plain and agency-focused; avoid dense walls of text, repeated conclusions, and unnecessary technical terms.",
       'When the user explicitly asks to open a maid profile, you may include an action with the exact reference code from maidCatalog: {"type":"open_maid_profile","maidReferenceCode":"exact reference","label":"Open maid profile"}.',
       `Verified agency data and Make.com configuration context (JSON; use this as the only source for live records and webhook setup): ${JSON.stringify(commandContext)}`,
     ].join("\n\n");
@@ -13596,6 +13609,32 @@ app.post(
       { error: "Make.com could not generate a response. " + failures.slice(0, 2).join("; ") },
       502,
     );
+  }),
+);
+
+app.post(
+  "/api/ai/command-center/speak",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    if (!c.env.FISH_API_KEY?.trim() || !c.env.FISH_REFERENCE_ID?.trim()) return c.json({ error: "Voice playback is not configured (FISH_API_KEY and FISH_REFERENCE_ID)." }, 503);
+    const body = await parseBody<{ text?: string }>(c.req.raw);
+    const text = typeof body?.text === "string" ? body.text.trim() : "";
+    if (!text || text.length > 3000) return c.json({ error: "Text must be between 1 and 3,000 characters." }, 400);
+    let upstream: Response;
+    try {
+      upstream = await fetch("https://api.fish.audio/v1/tts", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${c.env.FISH_API_KEY.trim()}`, "Content-Type": "application/json", model: "s2.1-pro-free" },
+        body: JSON.stringify({ text, reference_id: c.env.FISH_REFERENCE_ID.trim(), format: "mp3", normalize: true }),
+        signal: AbortSignal.timeout(45_000),
+      });
+    } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === "TimeoutError";
+      console.error("[Fish Audio TTS] upstream request failed", timedOut ? "timeout" : error);
+      return c.json({ error: timedOut ? "Fish Audio took too long to generate speech. Please try again." : "Could not connect to Fish Audio. Check the Worker logs and try again." }, timedOut ? 504 : 502);
+    }
+    if (!upstream.ok) return c.json({ error: `Fish Audio speech generation failed (${upstream.status}).` }, 502);
+    return new Response(upstream.body, { headers: { "Content-Type": upstream.headers.get("Content-Type") || "audio/mpeg", "Cache-Control": "no-store" } });
   }),
 );
 
@@ -19201,6 +19240,7 @@ type AtsReferralLeadDbRow = {
   id: string; agency_id: number; name: string; phone: string; normalized_phone: string; country: string; source: string;
   preferred_language: string; campaign_id: string; whatsapp_consent_at: string | null; whatsapp_consent_withdrawn_at: string | null;
   whatsapp_consent_source: string; share_contact_consent_at: string | null; possible_duplicate_of: string | null;
+  telegram_chat_id?: string | null; telegram_started_at?: string | null; telegram_invite_token?: string | null; telegram_invite_expires_at?: string | null;
   referrer_name: string; referrer_phone: string; notes: string; interest_status: AtsReferralLeadRecord["interestStatus"];
   lead_classification: NonNullable<AtsReferralLeadRecord["leadClassification"]>;
   lead_hunter_status: NonNullable<AtsReferralLeadRecord["leadHunterStatus"]>; eligible_for_next_step: boolean;
@@ -19213,6 +19253,8 @@ const referralLeadToDbRow = (lead: AtsReferralLeadRecord): AtsReferralLeadDbRow 
   preferred_language: lead.preferredLanguage, campaign_id: lead.campaignId,
   whatsapp_consent_at: lead.whatsappConsentAt, whatsapp_consent_withdrawn_at: lead.whatsappConsentWithdrawnAt,
   whatsapp_consent_source: lead.whatsappConsentSource, share_contact_consent_at: lead.shareContactConsentAt,
+  telegram_chat_id: lead.telegramChatId ?? null, telegram_started_at: lead.telegramStartedAt ?? null,
+  telegram_invite_token: lead.telegramInviteToken ?? null, telegram_invite_expires_at: lead.telegramInviteExpiresAt ?? null,
   possible_duplicate_of: lead.possibleDuplicateOf ?? null, referrer_name: lead.referrerName,
   referrer_phone: lead.referrerPhone, notes: lead.notes, interest_status: lead.interestStatus,
   lead_classification: lead.leadClassification ?? "unknown", lead_hunter_status: lead.leadHunterStatus ?? "not_configured",
@@ -19225,6 +19267,8 @@ const referralLeadFromDbRow = (row: AtsReferralLeadDbRow): AtsReferralLeadRecord
   preferredLanguage: row.preferred_language, campaignId: row.campaign_id,
   whatsappConsentAt: row.whatsapp_consent_at, whatsappConsentWithdrawnAt: row.whatsapp_consent_withdrawn_at,
   whatsappConsentSource: row.whatsapp_consent_source, shareContactConsentAt: row.share_contact_consent_at,
+  telegramChatId: row.telegram_chat_id ?? null, telegramStartedAt: row.telegram_started_at ?? null,
+  telegramInviteToken: row.telegram_invite_token ?? null, telegramInviteExpiresAt: row.telegram_invite_expires_at ?? null,
   ...(row.possible_duplicate_of ? { possibleDuplicateOf: row.possible_duplicate_of } : {}),
   referrerName: row.referrer_name, referrerPhone: row.referrer_phone, notes: row.notes,
   interestStatus: row.interest_status, leadClassification: row.lead_classification, leadHunterStatus: row.lead_hunter_status,
@@ -19278,13 +19322,49 @@ const saveAtsReferralLeadRecords = async (env: Bindings, agencyId: number, leads
   for (const lead of leads) byId.set(lead.id, lead);
   await saveAtsReferralLeads(env.APP_DATA, agencyId, [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
 };
+const isSpreadsheetImportedReferralLead = (lead: AtsReferralLeadRecord) =>
+  /^(spreadsheet|google sheets)(?:\s*:|\s)/i.test(toTrimmedString(lead.source));
+const findReferralLeadByTelegramInvite = async (env: Bindings, agencyId: number, token: string) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (config) {
+    const params = new URLSearchParams({ agency_id: `eq.${agencyId}`, telegram_invite_token: `eq.${token}`, select: "*", limit: "1" });
+    const response = await fetch(`${config.baseUrl}/rest/v1/ats_referral_leads?${params.toString()}`, {
+      headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error(`Could not verify Telegram referral invite (${response.status}): ${await readSupabaseError(response)}`);
+    const rows = await response.json() as AtsReferralLeadDbRow[];
+    return rows[0] ? referralLeadFromDbRow(rows[0]) : null;
+  }
+  if (!env.APP_DATA) return null;
+  return (await loadAtsReferralLeads(env.APP_DATA, agencyId)).find((lead) => lead.telegramInviteToken === token) ?? null;
+};
+const deleteAtsReferralLeadRecords = async (env: Bindings, agencyId: number, ids: string[]) => {
+  if (!ids.length) return;
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) {
+    if (!env.APP_DATA) throw new Error("Referral storage is not configured");
+    const current = await loadAtsReferralLeads(env.APP_DATA, agencyId);
+    const remove = new Set(ids);
+    await saveAtsReferralLeads(env.APP_DATA, agencyId, current.filter((lead) => !remove.has(lead.id)));
+    return;
+  }
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const params = new URLSearchParams({ agency_id: `eq.${agencyId}`, id: `in.(${ids.slice(offset, offset + 200).join(",")})` });
+    const response = await fetch(`${config.baseUrl}/rest/v1/ats_referral_leads?${params.toString()}`, {
+      method: "DELETE",
+      headers: supabaseHeaders(config, { prefer: "return=minimal" }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`Could not clear imported referral leads (${response.status}): ${await readSupabaseError(response)}`);
+  }
+};
 const isAtsReferralLeadWhatsappConsented = (lead: AtsReferralLeadRecord) => Boolean(
   lead.whatsappConsentAt &&
   (!lead.whatsappConsentWithdrawnAt || lead.whatsappConsentWithdrawnAt < lead.whatsappConsentAt),
 );
 const classifyReferralLeadWithAgent1 = async (
   env: Bindings,
-  input: { referralId: string; name: string; phone: string; country: string; source: string },
+  input: { referralId: string; name: string; phone: string; country: string; source: string; consent?: boolean },
 ) => {
   const fallback = {
     classification: "unknown" as const,
@@ -19309,8 +19389,8 @@ const classifyReferralLeadWithAgent1 = async (
         campaign_id: null,
         referrer_id: null,
         preferred_language: null,
-        consent: true,
-        message: `Consented referral from ${input.country || "unspecified country"}. The person agreed to share their contact with the agency.`,
+        consent: input.consent ?? true,
+        message: `Referral lead from ${input.country || "unspecified country"}. Use the consent field to determine whether any follow-up is permitted.`,
       });
     let response: Response | null = null;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -19338,12 +19418,12 @@ const classifyReferralLeadWithAgent1 = async (
     if (isPlainObject(result) && typeof result.response === "string") result = parseJson(result.response);
     const classifications = ["new_applicant", "existing_applicant", "referral", "general_enquiry", "unknown"] as const;
     if (!isPlainObject(result) || result.lead_id !== input.referralId || !classifications.includes(result.classification as typeof classifications[number]) ||
-      result.consent !== true || typeof result.eligible_for_agent_2 !== "boolean" || typeof result.staff_review_required !== "boolean" ||
+      result.consent !== (input.consent ?? true) || typeof result.eligible_for_agent_2 !== "boolean" || typeof result.staff_review_required !== "boolean" ||
       !Array.isArray(result.missing_fields) || !result.missing_fields.every((item) => typeof item === "string" && item.length <= 100)) {
       return { ...fallback, status: "failed" as const };
     }
     const classification = result.classification as typeof classifications[number];
-    const eligibleForNextStep = result.eligible_for_agent_2 === true && Boolean(input.phone) &&
+    const eligibleForNextStep = (input.consent ?? true) && result.eligible_for_agent_2 === true && Boolean(input.phone) &&
       (classification === "new_applicant" || classification === "referral") && result.missing_fields.length === 0;
     return {
       classification,
@@ -19483,17 +19563,11 @@ app.get("/api/ats/referral-leads", requireAgencyAdminAuth, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   if (!getSupabaseAppDataConfig(c.env) && !c.env.APP_DATA) return c.json({ error: "Referral storage is not configured" }, 503);
   const leads = await loadAtsReferralLeadsForAgency(c.env, admin.agencyId);
-  const withConsent = leads.map((lead) => ({
-    ...lead,
-    whatsappConsentActive: isAtsReferralLeadWhatsappConsented(lead),
-    whatsappOptedOut: Boolean(lead.whatsappConsentWithdrawnAt &&
-      (!lead.whatsappConsentAt || lead.whatsappConsentWithdrawnAt >= lead.whatsappConsentAt)),
-  }));
   const summary = {
     total: leads.length,
-    eligible: withConsent.filter((lead) => lead.whatsappConsentActive).length,
-    awaitingConsent: withConsent.filter((lead) => !lead.whatsappConsentActive && !lead.whatsappOptedOut).length,
-    optedOut: withConsent.filter((lead) => lead.whatsappOptedOut).length,
+    imported: leads.filter(isSpreadsheetImportedReferralLead).length,
+    telegramJoined: leads.filter((lead) => Boolean(lead.telegramChatId)).length,
+    telegramNotStarted: leads.filter((lead) => !lead.telegramChatId).length,
     interested: leads.filter((lead) => lead.interestStatus === "interested" || lead.interestStatus === "replied").length,
     needsReview: leads.filter((lead) => lead.staffReviewRequired === true).length,
     acceptedByMake: leads.filter((lead) => lead.lastDeliveryStatus === "accepted").length,
@@ -19503,24 +19577,28 @@ app.get("/api/ats/referral-leads", requireAgencyAdminAuth, async (c) => {
   const query = (c.req.query("q") || "").trim().toLowerCase();
   const country = (c.req.query("country") || "").trim().toLowerCase();
   const segment = c.req.query("segment") || "all";
-  if (!["all", "eligible", "awaiting", "optedOut", "review"].includes(segment)) {
+  if (!["all", "joined", "notStarted", "review"].includes(segment)) {
     return c.json({ error: "Unsupported referral lead segment" }, 400);
   }
-  const filtered = withConsent.filter((lead) => {
+  const filtered = leads.filter((lead) => {
     const matchesQuery = !query || `${lead.name} ${lead.phone} ${lead.country} ${lead.source} ${lead.referrerName}`.toLowerCase().includes(query);
     const matchesCountry = !country || toTrimmedString(lead.country).toLowerCase() === country;
     const matchesSegment = segment === "all" ||
-      (segment === "eligible" && lead.whatsappConsentActive) ||
-      (segment === "awaiting" && !lead.whatsappConsentActive && !lead.whatsappOptedOut) ||
-      (segment === "optedOut" && lead.whatsappOptedOut) ||
+      (segment === "joined" && Boolean(lead.telegramChatId)) ||
+      (segment === "notStarted" && !lead.telegramChatId) ||
       (segment === "review" && lead.staffReviewRequired);
     return matchesQuery && matchesCountry && matchesSegment;
   });
   const pageSize = Math.min(200, Math.max(1, Number(c.req.query("pageSize")) || 100));
   const page = Math.max(1, Number(c.req.query("page")) || 1);
   const start = (page - 1) * pageSize;
+  const pageLeads = filtered.slice(start, start + pageSize).map((lead) => {
+    const { telegramInviteToken, telegramChatId, ...publicLead } = lead;
+    void telegramInviteToken;
+    return { ...publicLead, telegramJoined: Boolean(telegramChatId) };
+  });
   return c.json({
-    leads: filtered.slice(start, start + pageSize),
+    leads: pageLeads,
     total: filtered.length,
     page,
     pageSize,
@@ -19530,7 +19608,7 @@ app.get("/api/ats/referral-leads", requireAgencyAdminAuth, async (c) => {
   });
 });
 
-app.post("/api/ats/referral-leads/import", requireAgencyAdminAuth, async (c) => {
+app.post("/api/ats/referral-leads/import", requireAgencyAdminAuth, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   if (!getSupabaseAppDataConfig(c.env) && !c.env.APP_DATA) return c.json({ error: "Referral storage is not configured" }, 503);
   const body = await parseBody<{ leads?: unknown[]; defaultSource?: string }>(c.req.raw);
@@ -19573,7 +19651,72 @@ app.post("/api/ats/referral-leads/import", requireAgencyAdminAuth, async (c) => 
   if (leads.length + accepted.length > 5000) return c.json({ error: "This agency already has 5,000 leads. Export or archive records before importing more." }, 413);
   if (accepted.length) await saveAtsReferralLeadRecords(c.env, admin.agencyId, accepted);
   return c.json({ imported: accepted.length, duplicateCount, invalidCount, total: leads.length + accepted.length }, 201);
-});
+}));
+
+app.post("/api/ats/referral-leads/classify-pending", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  if (!getSupabaseAppDataConfig(c.env) && !c.env.APP_DATA) return c.json({ error: "Referral storage is not configured" }, 503);
+  const webhookUrl = c.env.MAKE_WEBHOOK_URL_AGENT_1_LEAD_HUNTER?.trim();
+  if (!webhookUrl) return c.json({ error: "Agent 1 is not configured. Add MAKE_WEBHOOK_URL_AGENT_1_LEAD_HUNTER to the Worker secrets." }, 503);
+  const body = await parseBody<{ retryFailed?: boolean }>(c.req.raw);
+  const leads = await loadAtsReferralLeadsForAgency(c.env, admin.agencyId);
+  const pending = leads.filter((lead) => lead.leadHunterStatus === "not_configured" || (body?.retryFailed === true && lead.leadHunterStatus === "failed")).slice(0, 10);
+  if (!pending.length) return c.json({ processed: 0, classified: 0, failed: 0, remaining: 0 });
+
+  const results = await Promise.all(pending.map(async (lead) => {
+    const result = await classifyReferralLeadWithAgent1(c.env, {
+      referralId: lead.id,
+      name: lead.name,
+      phone: lead.phone,
+      country: lead.country,
+      source: lead.source || "Spreadsheet import",
+      // Spreadsheet import is not proof of consent to contact or share the lead.
+      consent: Boolean(lead.shareContactConsentAt),
+    });
+    lead.leadClassification = result.classification;
+    lead.leadHunterStatus = result.status;
+    lead.eligibleForNextStep = result.eligibleForNextStep;
+    lead.staffReviewRequired = result.staffReviewRequired;
+    lead.updatedAt = now();
+    return { lead, status: result.status };
+  }));
+  await saveAtsReferralLeadRecords(c.env, admin.agencyId, results.map((result) => result.lead));
+  const remaining = leads.filter((lead) => lead.leadHunterStatus === "not_configured" && !pending.some((item) => item.id === lead.id)).length;
+  return c.json({
+    processed: results.length,
+    classified: results.filter((result) => result.status === "classified").length,
+    failed: results.filter((result) => result.status === "failed").length,
+    remaining,
+  });
+}));
+
+app.post("/api/ats/referral-leads/:leadId/telegram-invite", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const botUsername = (c.env.TELEGRAM_BOT_USERNAME || "").trim().replace(/^@+/, "");
+  if (!botUsername) return c.json({ error: "Telegram bot username is not configured. Configure TELEGRAM_BOT_USERNAME first." }, 503);
+  if (!c.env.TELEGRAM_BOT_TOKEN?.trim() || !c.env.TELEGRAM_WEBHOOK_SECRET?.trim()) return c.json({ error: "Telegram bot delivery is not configured. Set the bot token and webhook secret first." }, 503);
+  const leads = await loadAtsReferralLeadsForAgency(c.env, admin.agencyId);
+  const lead = leads.find((item) => item.id === c.req.param("leadId"));
+  if (!lead) return c.json({ error: "Referral lead not found." }, 404);
+  if (lead.telegramChatId) return c.json({ error: "This referral has already started the Telegram bot." }, 409);
+  const token = `r${admin.agencyId}_${crypto.randomUUID().replaceAll("-", "")}`;
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  lead.telegramInviteToken = token;
+  lead.telegramInviteExpiresAt = expiresAt;
+  lead.updatedAt = now();
+  await saveAtsReferralLeadRecords(c.env, admin.agencyId, [lead]);
+  return c.json({ inviteLink: `https://t.me/${encodeURIComponent(botUsername)}?start=${encodeURIComponent(token)}`, expiresAt });
+}));
+
+app.delete("/api/ats/referral-leads/imported", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  if (!getSupabaseAppDataConfig(c.env) && !c.env.APP_DATA) return c.json({ error: "Referral storage is not configured" }, 503);
+  const leads = await loadAtsReferralLeadsForAgency(c.env, admin.agencyId);
+  const imported = leads.filter(isSpreadsheetImportedReferralLead);
+  if (!imported.length) return c.json({ deleted: 0 });
+  await deleteAtsReferralLeadRecords(c.env, admin.agencyId, imported.map((lead) => lead.id));
+  return c.json({ deleted: imported.length });
+}));
 
 app.post("/api/ats/referral-leads/google-sheets/read", requireAgencyAdminAuth, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
@@ -21765,11 +21908,33 @@ app.post("/api/telegram/webhook", async (c) => {
   const sender = message?.from;
   if (!chat?.id || chat.type !== "private" || !sender?.id) return c.json({ ok: true });
   const text = message?.text?.trim() || "";
-    const agencyId = 1;
+  let agencyId = 1;
+  let invitedLead: AtsReferralLeadRecord | null = null;
+  const startPayload = text.match(/^\/start(?:@\w+)?\s+([A-Za-z0-9_-]{1,64})$/i)?.[1];
+  const tokenMatch = startPayload?.match(/^r(\d{1,10})_([a-f0-9]{32})$/i);
+  if (tokenMatch) {
+    const tokenAgencyId = Number(tokenMatch[1]);
+    if (Number.isSafeInteger(tokenAgencyId) && tokenAgencyId > 0) {
+      const candidate = await findReferralLeadByTelegramInvite(c.env, tokenAgencyId, startPayload!);
+      if (candidate?.telegramInviteExpiresAt && new Date(candidate.telegramInviteExpiresAt).getTime() > Date.now()) {
+        agencyId = candidate.agencyId;
+        invitedLead = candidate;
+      }
+    }
+  }
   const identity = { agency_id: agencyId, telegram_chat_id: String(chat.id), telegram_user_id: String(sender.id), telegram_username: sender.username || null, first_name: (sender.first_name || "").slice(0, 120), language_code: sender.language_code || null, last_interaction_at: now(), updated_at: now() };
   try {
-    if (/^\/start(?:\s|$)/i.test(text)) {
-      await telegramDbRequest(c.env, "telegram_subscribers?on_conflict=agency_id,telegram_chat_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ ...identity, subscription_status: "active", consent_status: "active", subscribed_at: now(), unsubscribed_at: null }) });
+    if (/^\/start(?:@\w+)?(?:\s|$)/i.test(text)) {
+      const savedSubscriber = await telegramDbRequest(c.env, "telegram_subscribers?on_conflict=agency_id,telegram_chat_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ ...identity, subscription_status: "active", consent_status: "active", subscribed_at: now(), unsubscribed_at: null }) });
+      if (!savedSubscriber.ok) throw new Error("Could not save Telegram subscriber consent");
+      if (invitedLead) {
+        invitedLead.telegramChatId = String(chat.id);
+        invitedLead.telegramStartedAt = now();
+        invitedLead.telegramInviteToken = null;
+        invitedLead.telegramInviteExpiresAt = null;
+        invitedLead.updatedAt = now();
+        await saveAtsReferralLeadRecords(c.env, agencyId, [invitedLead]);
+      }
       const token = c.env.TELEGRAM_BOT_TOKEN?.trim();
       if (token) await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: String(chat.id), text: "Welcome to Rinzin Agency applicant support. You can ask recruitment questions here. Send /stop at any time to unsubscribe from Telegram messages." }), signal: AbortSignal.timeout(8000) });
     } else if (/^\/stop(?:\s|$)/i.test(text)) {
@@ -21811,6 +21976,51 @@ app.patch("/api/telegram/conversations/:id", requireAgencyAdminAuth, async (c) =
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const response = await telegramDbRequest(c.env, `telegram_conversations?id=eq.${encodeURIComponent(c.req.param("id"))}&agency_id=eq.${admin.agencyId}`, { method: "PATCH", body: JSON.stringify({ conversation_status: status, updated_at: now() }) });
   return response.ok ? c.json({ updated: true }) : c.json({ error: "Could not update conversation." }, 503);
+});
+
+app.post("/api/telegram/conversations/:id/messages", requireAgencyAdminAuth, async (c) => {
+  const body = await parseBody<{ message?: string }>(c.req.raw);
+  const message = body?.message?.trim() || "";
+  if (!message || message.length > 4096) return c.json({ error: "Write a reply up to 4,096 characters." }, 400);
+  const token = c.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) return c.json({ error: "The agency Telegram bot is not configured." }, 503);
+
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const conversationResponse = await telegramDbRequest(c.env, `telegram_conversations?id=eq.${encodeURIComponent(c.req.param("id"))}&agency_id=eq.${admin.agencyId}&select=id,telegram_chat_id,conversation_status&limit=1`);
+  if (!conversationResponse.ok) return c.json({ error: "Could not load this Telegram conversation." }, 503);
+  const rows = await conversationResponse.json() as Array<{ id: string; telegram_chat_id: string; conversation_status: string }>;
+  const conversation = rows[0];
+  if (!conversation) return c.json({ error: "Telegram conversation not found." }, 404);
+  if (conversation.conversation_status !== "human") return c.json({ error: "Take over this conversation before sending a staff reply." }, 409);
+
+  try {
+    const telegramResponse = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: conversation.telegram_chat_id, text: message }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const telegramResult = await telegramResponse.json() as { ok?: boolean; result?: { message_id?: number }; description?: string };
+    if (!telegramResponse.ok || !telegramResult.ok) {
+      return c.json({ error: telegramResult.description || "Telegram could not send the reply." }, 502);
+    }
+
+    const sentAt = now();
+    const logged = await telegramDbRequest(c.env, "telegram_messages", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ conversation_id: conversation.id, sender_type: "admin", message_text: message, telegram_message_id: telegramResult.result?.message_id ? String(telegramResult.result.message_id) : null }),
+    });
+    await telegramDbRequest(c.env, `telegram_conversations?id=eq.${encodeURIComponent(conversation.id)}&agency_id=eq.${admin.agencyId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ last_message_at: sentAt, updated_at: sentAt }),
+    });
+    if (!logged.ok) return c.json({ sent: true, historySaved: false, warning: "Reply was sent, but could not be added to conversation history. Do not resend it." }, 200);
+    return c.json({ sent: true, historySaved: true });
+  } catch (error) {
+    console.error("Telegram staff reply failed:", errMsg(error));
+    return c.json({ error: "Could not send the Telegram reply." }, 502);
+  }
 });
 
 app.post("/api/telegram/automation/chat-reply", async (c) => {

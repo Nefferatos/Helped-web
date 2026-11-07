@@ -23,6 +23,8 @@ export default function TelegramBroadcastPage() {
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [subscriberSearch, setSubscriberSearch] = useState("");
   const [sending, setSending] = useState(false);
+  const [conversationReplies, setConversationReplies] = useState<Record<string, string>>({});
+  const [sendingReplyFor, setSendingReplyFor] = useState<string | null>(null);
   const [lastBroadcast, setLastBroadcast] = useState("");
   const [broadcastRequestKey, setBroadcastRequestKey] = useState(() => crypto.randomUUID());
 
@@ -63,6 +65,29 @@ export default function TelegramBroadcastPage() {
     finally { setSending(false); }
   };
 
+  const sendConversationReply = async (conversation: Conversation) => {
+    const reply = (conversationReplies[conversation.id] || "").trim();
+    if (!reply) return;
+    setSendingReplyFor(conversation.id);
+    try {
+      const response = await fetch(`/api/telegram/conversations/${encodeURIComponent(conversation.id)}/messages`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ message: reply }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not send Telegram reply.");
+      setConversationReplies((current) => ({ ...current, [conversation.id]: "" }));
+      if (result.historySaved === false) toast.error(result.warning || "Reply was sent, but could not be saved in the conversation history. Do not resend it.");
+      else toast.success("Reply sent to the applicant.");
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not send Telegram reply.");
+    } finally {
+      setSendingReplyFor(null);
+    }
+  };
+
   const tabs = [{ id: "broadcast", label: "Broadcasting", icon: Send }, { id: "subscribers", label: "Subscribers", icon: Users }, { id: "conversations", label: "AI conversations", icon: MessageCircle }, { id: "history", label: "Broadcast history", icon: Activity }] as const;
   return <main className="mx-auto w-full max-w-7xl space-y-6 p-4 text-slate-900 md:p-8">
     <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border bg-white p-6 shadow-sm md:p-8">
@@ -92,7 +117,7 @@ export default function TelegramBroadcastPage() {
       </CardContent></Card>
     </div>}
     {section === "subscribers" && <Card><CardHeader><CardTitle>Registered Telegram subscribers ({subscribers.length})</CardTitle></CardHeader><CardContent><input aria-label="Search subscribers" className="mb-3 w-full rounded-lg border px-3 py-2 sm:max-w-md" value={subscriberSearch} onChange={e => setSubscriberSearch(e.target.value)} placeholder="Search name, username, applicant reference" /><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="p-2">Applicant</th><th className="p-2">Nationality / experience</th><th className="p-2">Language</th><th className="p-2">Status</th><th className="p-2">Last interaction</th></tr></thead><tbody>{subscribers.filter(s => `${s.first_name} ${s.telegram_username || ""} ${s.applicant_id || ""}`.toLowerCase().includes(subscriberSearch.toLowerCase())).map(s => <tr key={s.id} className="border-b"><td className="p-2">{s.first_name}{s.telegram_username ? ` · @${s.telegram_username}` : ""}{s.applicant_id ? ` · ${s.applicant_id}` : ""}</td><td className="p-2">{s.nationality || "—"} / {s.experience_years ?? "—"} yrs</td><td className="p-2">{s.language_code || "—"}</td><td className="p-2">{s.subscription_status} / {s.consent_status}</td><td className="p-2">{s.last_interaction_at ? new Date(s.last_interaction_at).toLocaleString() : "—"}</td></tr>)}</tbody></table></div></CardContent></Card>}
-    {section === "conversations" && <Card><CardHeader><CardTitle>AI chatbot conversations</CardTitle></CardHeader><CardContent className="space-y-3">{conversations.map(c => <article key={c.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-3"><strong>Telegram chat {c.telegram_chat_id}</strong><div className="flex items-center gap-2"><span className="text-sm text-slate-500">{c.conversation_status}</span><Button size="sm" variant="outline" onClick={async () => { const next = c.conversation_status === "human" ? "active" : "human"; const r = await fetch(`/api/telegram/conversations/${encodeURIComponent(c.id)}`, { method: "PATCH", headers: headers(), body: JSON.stringify({ conversationStatus: next }) }); if (!r.ok) toast.error("Could not change conversation assignment."); else { toast.success(next === "human" ? "Human handover enabled." : "AI responses resumed."); await refresh(); } }}>{c.conversation_status === "human" ? "Resume AI" : "Take over"}</Button></div></div><div className="mt-3 space-y-2">{(c.telegram_messages || []).slice(-5).map((m, i) => <p key={`${c.id}-${i}`} className="text-sm"><b className="capitalize">{m.sender_type}: </b>{m.message_text}</p>)}</div></article>)}{conversations.length === 0 && <p className="text-sm text-slate-500">No Telegram conversations yet.</p>}</CardContent></Card>}
+    {section === "conversations" && <Card><CardHeader><CardTitle>Telegram conversations</CardTitle></CardHeader><CardContent className="space-y-3">{conversations.map(c => <article key={c.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-3"><strong>Telegram chat {c.telegram_chat_id}</strong><div className="flex items-center gap-2"><span className="text-sm text-slate-500">{c.conversation_status}</span><Button size="sm" variant="outline" onClick={async () => { const next = c.conversation_status === "human" ? "active" : "human"; const r = await fetch(`/api/telegram/conversations/${encodeURIComponent(c.id)}`, { method: "PATCH", headers: headers(), body: JSON.stringify({ conversationStatus: next }) }); if (!r.ok) toast.error("Could not change conversation assignment."); else { toast.success(next === "human" ? "Human handover enabled. You can now reply below." : "AI responses resumed."); await refresh(); } }}>{c.conversation_status === "human" ? "Resume AI" : "Take over"}</Button></div></div><div className="mt-3 space-y-2">{(c.telegram_messages || []).slice(-20).map((m, i) => <p key={`${c.id}-${i}`} className="whitespace-pre-wrap text-sm"><b className="capitalize">{m.sender_type}: </b>{m.message_text}</p>)}</div>{c.conversation_status === "human" ? <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void sendConversationReply(c); }}><textarea aria-label="Reply to applicant on Telegram" className="min-h-20 flex-1 rounded-lg border p-3 text-sm" maxLength={4096} placeholder="Write a reply to the applicant…" value={conversationReplies[c.id] || ""} onChange={(event) => setConversationReplies((current) => ({ ...current, [c.id]: event.target.value }))} /><Button type="submit" disabled={sendingReplyFor === c.id || !(conversationReplies[c.id] || "").trim()}><Send className="mr-2 h-4 w-4" />{sendingReplyFor === c.id ? "Sending…" : "Send reply"}</Button></form> : <p className="mt-3 text-xs text-slate-500">Take over this conversation to pause AI and reply as the agency.</p>}</article>)}{conversations.length === 0 && <p className="text-sm text-slate-500">No Telegram conversations yet.</p>}</CardContent></Card>}
     {section === "history" && <Card><CardHeader><CardTitle>Broadcast history</CardTitle></CardHeader><CardContent className="space-y-3">{broadcasts.map(b => <article key={b.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><strong>{b.title || b.message.slice(0, 90)}</strong><span className="text-sm capitalize text-slate-500">{b.status}</span></div><p className="mt-2 whitespace-pre-wrap text-sm">{b.message}</p><p className="mt-3 text-xs text-slate-500">{new Date(b.created_at).toLocaleString()} · {b.total_recipients} recipients · {b.successful_count} sent · {b.failed_count} failed</p></article>)}{broadcasts.length === 0 && <p className="text-sm text-slate-500">No broadcasts yet.</p>}</CardContent></Card>}
     <p className="flex items-center gap-2 text-xs text-slate-500"><Activity className="h-4 w-4" />Telegram API and Make scenario health are checked through the backend.</p>
   </main>;

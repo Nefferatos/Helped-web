@@ -23,6 +23,12 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
+      // Private media uploads and Make.com transcription are implemented in
+      // the Worker; keep this route ahead of the generic Express `/api` proxy.
+      "/api/integrations/media": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       // The public AI receptionist calls Make.com through the Worker so local
       // development follows the same secure webhook path as production.
       "/api/ai/receptionist": {

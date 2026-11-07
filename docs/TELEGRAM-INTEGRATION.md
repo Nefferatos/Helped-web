@@ -7,7 +7,9 @@ a Telegram recipient.
 
 ## One-time setup
 
-1. Apply `supabase/20261118_telegram_communications.sql` to the production
+1. Apply `supabase/20261113_ats_referral_leads.sql`,
+   `supabase/20261118_telegram_communications.sql`, and
+   `supabase/20261119_ats_referral_telegram_invites.sql` to the production
    Supabase project and local database.
    Create an R2 bucket named `helped-telegram-media` and add this binding to
    `wrangler.toml` in environments that accept broadcast attachments:
@@ -73,11 +75,11 @@ a Telegram recipient.
 ## Current integration contract and known setup work
 
 - `/start` records the Telegram identity and consent and sends a welcome
-  message; `/stop` immediately
-  revokes it. Registration is not linked to an applicant profile because
-  Telegram does not provide a verified website identifier. Use a secure,
-  one-time application reference linking flow before populating `applicant_id`
-  or verified profile filters.
+  message; `/stop` immediately revokes it. Referral Leads can create a
+  single-use, expiring deep link that records which referral invitation was
+  used when the recipient starts the bot. This records invite usage only; it
+  does not verify the Telegram user's identity or phone number and does not
+  populate the verified ATS `applicant_id`.
 - Bot token status is checked through Telegram `getMe`. The link on the admin
   page and applicant status page is generated from the configured username.
 - The broadcast composer supports text, images/documents (when R2 is bound),
