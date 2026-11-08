@@ -54,10 +54,11 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
-      // Operations Center summary counts are served by the Worker (the
-      // Express API only exposes the placement board itself). Keep this
-      // specific route ahead of the generic "/api" proxy in local dev.
-      "/api/operations-board/summary": {
+      // The Operations Board's placement, checklist, document, employer,
+      // interview, arrival, and MOM endpoints are served by the Worker.
+      // Proxy the whole route family here so local development does not send
+      // Worker-only endpoints to the legacy Express API.
+      "/api/operations-board": {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },

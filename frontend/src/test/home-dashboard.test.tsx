@@ -37,6 +37,28 @@ const successfulFetch = vi.fn(async (input: RequestInfo | URL) => {
   if (url.includes("/api/operations-board/transcript")) {
     return jsonResponse({ entries: [], count: 0 });
   }
+  if (url.includes("/api/operations-board/summary")) {
+    return jsonResponse({
+      generatedAt: now,
+      unavailable: [],
+      totalApplicants: 1,
+      totalEmployers: 1,
+      activePlacements: 0,
+      newInquiries: 1,
+      upcomingInterviews: 0,
+      contractsAwaitingSignatures: 0,
+      momApplicationsPending: 0,
+      ipaApprovalsPending: 0,
+      upcomingArrivals: 0,
+      airportPickupsPending: 0,
+      medicalExaminationsPending: 0,
+      sipPending: 0,
+      workPermitsPending: 0,
+      completedHandovers: 0,
+      overdueTasks: 0,
+      openChecklistTasks: 0,
+    });
+  }
   if (url.includes("/api/operations-board")) {
     return jsonResponse({ placements: [], count: 0 });
   }
@@ -49,17 +71,18 @@ describe("Agency dashboard", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the summary tiles from successful API data without crashing", async () => {
+  it("renders the Operations Center from successful dashboard and summary responses", async () => {
     vi.stubGlobal("fetch", successfulFetch);
-    const { container } = render(<MemoryRouter><HomePage /></MemoryRouter>);
+    render(<MemoryRouter><HomePage /></MemoryRouter>);
 
-    // Wait until loading finished and the five tiles rendered their values.
-    // A crash while deriving the tiles/chart would surface here instead.
-    await waitFor(() => expect(container.querySelectorAll(".dash-value").length).toBe(5));
+    expect(await screen.findByRole("heading", { name: "Operations Center" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("0").length).toBeGreaterThan(0));
 
-    expect(screen.getByText("Maid profiles")).toBeInTheDocument();
-    expect(screen.getByText("Employment contracts")).toBeInTheDocument();
-    expect(screen.getByText("Requests")).toBeInTheDocument();
+    expect(screen.getAllByText("Applicants").length).toBeGreaterThan(0);
+    expect(screen.getByText("Active placements")).toBeInTheDocument();
+    expect(screen.getByText("Contract signature tasks")).toBeInTheDocument();
+    expect(screen.getByText("No active placements yet.")).toBeInTheDocument();
+    expect(screen.queryByText("N/A")).not.toBeInTheDocument();
     expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
   });
 });

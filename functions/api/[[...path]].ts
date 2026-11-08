@@ -9759,7 +9759,7 @@ const getClientPlacementForEmployer = async (
   placementId: string,
 ) => {
   const config = getSupabaseAppDataConfig(env);
-  if (!config || !isNormalizedSupabaseEnabled(env)) return { config: null, placement: null };
+  if (!config) return { config: null, placement: null };
   const email = normalizeEmail(client.email);
   if (!email) return { config, placement: null };
   const data = await loadData(env, { readOnly: true });
@@ -9781,7 +9781,7 @@ const getClientPlacementForEmployer = async (
 app.get("/api/client/placements", requireClientAuth, safeApi(async (c) => {
   const client = c.get("client") as ClientRecord;
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Placement documents are not available right now" }, 503);
+  if (!config) return c.json({ error: "Placement documents are not available right now" }, 503);
   const email = normalizeEmail(client.email);
   if (!email) return c.json({ placements: [], accountLinked: false });
   const data = await loadData(c.env, { readOnly: true });
@@ -10121,10 +10121,10 @@ app.put("/api/operations-board/placements/:placementId/mom-application", require
   if (approvalDate && submissionDate && approvalDate < submissionDate) return c.json({ error: "Approval date cannot be before the submission date" }, 400);
   if (ipaDocumentId && !/^[0-9a-f-]{36}$/i.test(ipaDocumentId)) return c.json({ error: "Choose a valid IPA evidence document" }, 400);
   if (ipaDocumentId) {
-    const documents = await fetchSupabaseTableRows<{ id: string }>(config, "document_metadata", {
-      select: "id", filters: { id: ipaDocumentId, agency_id: admin.agencyId, entity_type: "placement", entity_id: placementId }, limit: 1,
+    const documents = await fetchSupabaseTableRows<{ id: string; employer_visible: boolean }>(config, "document_metadata", {
+      select: "id,employer_visible", filters: { id: ipaDocumentId, agency_id: admin.agencyId, entity_type: "placement", entity_id: placementId }, limit: 1,
     });
-    if (!documents[0]) return c.json({ error: "IPA evidence must be a private document linked to this placement" }, 404);
+    if (!documents[0] || documents[0].employer_visible) return c.json({ error: "IPA evidence must be a private document linked to this placement" }, 404);
   }
   const previous = await getMomApplication(config, placementId, admin.agencyId);
   const actor = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
@@ -10289,7 +10289,7 @@ app.post("/api/operations-board/placements/:placementId/documents", requireAgenc
   const category = toTrimmedString(formData.get("category")) || "other";
   const employerVisible = formData.get("share_with_employer") === "true";
   if (employerVisible && !placement.employer_id) return c.json({ error: "Link this placement to an employer before sharing documents" }, 409);
-  const allowedCategories = new Set(["employer", "contract", "insurance", "security_bond", "flight", "arrival", "medical", "sip", "work_permit", "handover", "other"]);
+  const allowedCategories = new Set(["employer", "contract", "signed_contract", "insurance", "security_bond", "flight", "arrival", "medical", "sip", "work_permit", "handover", "other"]);
   if (!allowedCategories.has(category)) return c.json({ error: "Choose a valid document category" }, 400);
   const uploadedBy = toTrimmedString(admin.username) || toTrimmedString(admin.email) || "Agency staff";
   const { objectPath, storageRef } = await uploadOperationFileToPrivateStorage(storage, file, admin.agencyId, "placement-documents");
@@ -10481,7 +10481,7 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
       "work_permit_issuance",
     ]);
     if (evidenceRequiredTaskKeys.has(existing.task_key) && !evidenceId) {
-      return c.json({ error: "Attach the verified private placement document before completing this task" }, 400);
+      return c.json({ error: "Attach the verified placement document before completing this task" }, 400);
     }
     if (proofNote.length < 5 && !evidenceId) return c.json({ error: "Add a verification note or attach placement evidence before marking this task verified" }, 400);
     const verifiedAt = existing.status === "VERIFIED" && existing.verified_at ? existing.verified_at : new Date().toISOString();

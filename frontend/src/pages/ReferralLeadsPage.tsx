@@ -188,6 +188,8 @@ export default function ReferralLeadsPage() {
             ? `${defaultSource} · ${String(row[sourceColumn]).trim()}`
             : defaultSource,
           preferredLanguage: languageColumn >= 0 ? String(row[languageColumn] ?? "").trim() : "",
+          whatsappConsent: false,
+          whatsappConsentSource: "",
         };
       });
       let imported = 0; let duplicateCount = 0; let invalidCount = 0;
