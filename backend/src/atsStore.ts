@@ -279,6 +279,13 @@ export interface PublicApplicantSubmissionInput {
   files: PublicApplicantFileInput[];
 }
 
+export class DuplicatePublicAtsApplicantError extends Error {
+  constructor() {
+    super("An application under this name or contact information is already on file. Please do not submit another one. Contact the agency if you need to update an existing application.");
+    this.name = "DuplicatePublicAtsApplicantError";
+  }
+}
+
 const dataDir = path.resolve(__dirname, "../data");
 const dataFile = path.join(dataDir, "ats-data.json");
 const uploadsRoot = path.resolve(__dirname, "../data/uploads");
@@ -984,6 +991,29 @@ export const createPublicAtsApplication = async (
   payload: PublicApplicantSubmissionInput,
 ) => {
   const data = await readData();
+  const normalizeName = (value: unknown) => String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+  const normalizePhone = (value: unknown) => String(value ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  const submittedName = normalizeName(payload.fullName);
+  const submittedEmail = payload.email.trim().toLowerCase();
+  const submittedPhone = normalizePhone(payload.contactNumber);
+  const existingApplicationIds = new Set(
+    data.applications
+      .filter((application) => application.agencyId === payload.agencyId)
+      .map((application) => application.id),
+  );
+  const duplicate = data.profiles.some((profile) => {
+    if (!existingApplicationIds.has(profile.applicationId)) return false;
+    return normalizeName(profile.fullName) === submittedName ||
+      String(profile.email ?? "").trim().toLowerCase() === submittedEmail ||
+      (submittedPhone.length > 0 && normalizePhone(profile.contactNumber) === submittedPhone);
+  });
+  if (duplicate) throw new DuplicatePublicAtsApplicantError();
+
   const applicationId = randomUUID();
   const createdAt = now();
   const uploadedDocs: Array<
@@ -1192,6 +1222,50 @@ export const createPublicAtsApplication = async (
   };
 };
 
+export const deletePublicAtsApplications = async (
+  agencyId: number,
+  applicationIds: string[],
+) => {
+  const data = await readData();
+  const applicationsToDelete = data.applications.filter(
+    (application) =>
+      application.agencyId === agencyId &&
+      applicationIds.includes(application.id),
+  );
+  const removable = new Set(applicationsToDelete.map((application) => application.id));
+
+  if (removable.size === 0) return 0;
+
+  const uploadDirectories = applicationsToDelete
+    .filter((application) => application.source === "resume_upload")
+    .map((application) =>
+      path.resolve(
+        uploadsRoot,
+        "ats-applicants",
+        `agency-${agencyId}`,
+        sanitizePathSegment(application.id, "application"),
+      ),
+    );
+  const uploadRootPrefix = `${path.resolve(uploadsRoot)}${path.sep}`;
+  if (uploadDirectories.some((directory) => !directory.startsWith(uploadRootPrefix))) {
+    throw new Error("Applicant upload path is invalid");
+  }
+
+  data.applications = data.applications.filter((application) => !removable.has(application.id));
+  data.profiles = data.profiles.filter((profile) => !removable.has(profile.applicationId));
+  data.interviews = data.interviews.filter((interview) => !removable.has(interview.applicationId));
+  data.backgroundChecks = data.backgroundChecks.filter((check) => !removable.has(check.applicationId));
+  data.scores = data.scores.filter((score) => !removable.has(score.applicationId));
+  data.matches = data.matches.filter((match) => !removable.has(match.applicationId));
+  data.history = data.history.filter((entry) => !removable.has(entry.applicationId));
+  data.notifications = data.notifications.filter((notification) => !removable.has(notification.applicationId));
+  for (const applicationId of removable) delete data.documents[applicationId];
+
+  await writeData(data);
+  await Promise.all(uploadDirectories.map((directory) => rm(directory, { recursive: true, force: true })));
+  return removable.size;
+};
+
 const getApplicationBundleInternal = (
   data: AtsData,
   application: MaidApplicationRecord,
@@ -1310,6 +1384,15 @@ export const getPublicAtsApplicationSummary = async (
           nationality: bundle.profile.nationality,
           availableDate: bundle.profile.availableDate,
           expectedSalary: bundle.profile.expectedSalary,
+          yearsOfExperience: bundle.profile.yearsOfExperience,
+          skillRatings: {
+            childcare: bundle.profile.childcareExperience,
+            newbornCare: bundle.profile.newbornCareExperience,
+            elderlyCare: bundle.profile.elderlyCareExperience,
+            disabledCare: bundle.profile.disabledCareExperience,
+            housekeeping: bundle.profile.housekeepingExperience,
+            petCare: bundle.profile.petCareExperience,
+          },
         }
       : null,
     documents: bundle.documents.map((item) => ({

@@ -14,6 +14,7 @@ import PublicSiteFooter from "@/components/PublicSiteFooter";
 import ClientReviewRequest from "@/ClientPage/ClientReviewRequest";
 import ClientRatingPopup from "@/ClientPage/ClientRatingPopup";
 import AgencyReviewsShowcase from "@/components/AgencyReviewsShowcase";
+import { RequestForm, defaultFilters, GLOBAL_CSS as REQUEST_FORM_CSS } from "./ClientMaidsPage";
 import { toast } from "@/components/ui/sonner";
 import { getStoredClient, getClientAuthHeaders, getClientToken, refreshClientToken, type ClientUser } from "@/lib/clientAuth";
 import { getMaidAge, MaidProfile } from "@/lib/maids";
@@ -26,7 +27,6 @@ import heroImage from "./assets/maid1-optimized.webp";
 import housekeepingImg from "./assets/housekeeping-optimized.webp";
 import infantImg from "./assets/infant-care-optimized.webp";
 import "./ClientTheme.css";
-import { RequestForm, defaultFilters, GLOBAL_CSS as REQUEST_FORM_CSS } from "./ClientMaidsPage";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    GLOBAL STYLES
@@ -51,8 +51,6 @@ const GLOBAL_STYLES = `
   *, *::before, *::after { box-sizing: border-box; }
 
   .client-landing p { font-size: 16px !important; }
-  .landing-request-tab { width: 52px; height: 154px; padding: 12px 0; font-size: 13px; }
-  @media (max-width: 640px) { .landing-request-tab { width: 40px; height: 118px; padding: 8px 0; font-size: 11px; border-radius: 0 9px 9px 0 !important; } }
 
   @keyframes morphOrb {
     0%,100% { border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%; transform: scale(1) rotate(0deg); }
@@ -919,12 +917,11 @@ const GLOBAL_STYLES = `
    SMALL SVG COMPONENTS
 ───────────────────────────────────────────────────────────────────────────── */
 const ClipboardList = ({ size = 16 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-    <line x1="9" y1="12" x2="15" y2="12"/>
-    <line x1="9" y1="16" x2="13" y2="16"/>
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <line x1="9" y1="12" x2="15" y2="12" />
+    <line x1="9" y1="16" x2="13" y2="16" />
   </svg>
 );
 
@@ -1534,9 +1531,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     const query = buildParams().toString();
     navigate(`${maidSearchResultsHref}${query ? `?${query}` : ""}`);
   };
-  const handleRequestMaid = () => {
-    setRequestModalOpen(true);
-  };
+  const handleRequestMaid = () => setRequestModalOpen(true);
   const clearFilters = () => {
     setKeyword(""); setMaidTypes([]); setNationality("No Preference"); setLanguage("No Preference"); setCurrentPage(1);
   };
@@ -1564,9 +1559,6 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           minHeight: showSocialRail ? undefined : 42,
         }}
       >
-        <button type="button" onClick={() => setRequestModalOpen(true)} style={{ display:"none" }}>
-          Request help
-        </button>
         <button
           type="button"
           onClick={() => setShowSocialRail((visible) => !visible)}
@@ -1634,14 +1626,14 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
           </a>
         ))}
       </aside>
-      <button type="button" className="landing-request-tab" onClick={() => setRequestModalOpen(true)} aria-label="Request Maid" title="Request Maid" style={{ position:"fixed", left:0, top:"50%", transform:"translateY(-50%)", zIndex:46, border:0, borderRadius:"0 12px 12px 0", background:"#FCD34D", color:"#0B3340", cursor:"pointer", boxShadow:"0 6px 16px rgba(11,51,64,.22)", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, writingMode:"vertical-rl", whiteSpace:"nowrap" }}>
+      <button type="button" className="landing-request-tab" onClick={() => setRequestModalOpen(true)} aria-label="Request Maid" title="Request Maid" style={{ position: "fixed", left: 0, top: "50%", transform: "translateY(-50%)", zIndex: 46, border: 0, borderRadius: "0 12px 12px 0", background: "#FCD34D", color: "#0B3340", cursor: "pointer", boxShadow: "0 6px 16px rgba(11,51,64,.22)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, writingMode: "vertical-rl", whiteSpace: "nowrap" }}>
         Request Maid
       </button>
       {requestModalOpen && <div className="request-modal-overlay" onMouseDown={() => setRequestModalOpen(false)}><div className="request-modal-shell" onMouseDown={(event) => event.stopPropagation()}><style>{`${REQUEST_FORM_CSS}
-        .request-modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.52);padding:16px;overflow:hidden;display:flex;align-items:center;justify-content:center}
-        .request-modal-shell{width:min(960px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:hidden}
-        .request-modal-scale{zoom:.72}
-        @media(max-width:640px){.request-modal-overlay{padding:8px;align-items:flex-start;overflow-y:auto}.request-modal-shell{width:calc(100vw - 16px);max-height:none;overflow:visible;margin:auto 0}.request-modal-scale{zoom:.52}}
+        .request-modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(8,25,32,.62);padding:clamp(8px,2.5vw,24px);overflow-y:auto;display:flex;align-items:flex-start;justify-content:center;backdrop-filter:blur(4px)}
+        .request-modal-shell{width:min(1080px,100%);margin:auto 0;overflow:visible;border-radius:20px;background:#f0f7f9;box-shadow:0 24px 80px rgba(0,0,0,.28)}
+        .request-modal-scale{zoom:1}
+        @media(max-width:640px){.request-modal-shell{margin:0}.request-modal-scale{zoom:1}}
       `}</style><div className="request-modal-scale"><RequestForm prefillFilters={defaultFilters} onBack={() => setRequestModalOpen(false)} /></div></div></div>}
 
       {!embedded && <PublicSiteNavbar />}

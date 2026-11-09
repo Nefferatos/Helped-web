@@ -120,6 +120,15 @@ export interface PublicAtsApplicationSummary {
     nationality: string;
     availableDate: string;
     expectedSalary: number | null;
+    yearsOfExperience: number;
+    skillRatings: {
+      childcare: number;
+      newbornCare: number;
+      elderlyCare: number;
+      disabledCare: number;
+      housekeeping: number;
+      petCare: number;
+    };
   } | null;
   documents: Array<{ id: string; name: string; type: string; status: string; required: boolean; url: string }>;
   history: Array<{ id: string; toStage: string; reason: string; createdAt: string }>;
@@ -251,10 +260,19 @@ export const saveAtsPreset = async (name: string, filters: Record<string, unknow
 };
 
 export const submitPublicAtsApplication = async (formData: FormData) => {
-  const response = await fetch("/api/ats/public/apply", {
-    method: "POST",
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch("/api/ats/public/apply", {
+      method: "POST",
+      body: formData,
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new Error("We couldn't confirm your submission before the connection timed out. Check your email or contact the agency before submitting again.");
+    }
+    throw error;
+  }
   return ensureOk<PublicAtsApplicationCreated & { error?: string }>(response);
 };
 

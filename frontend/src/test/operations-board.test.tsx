@@ -102,4 +102,58 @@ describe("Operations Board", () => {
       expect(new Date(savedDueAt).toISOString()).toBe(dueAt);
     });
   });
+
+  it("only offers private documents as evidence for IPA decisions", async () => {
+    const ipaTask = { ...task, task_key: "ipa_approval", task_group: "Work permit", title: "Record IPA decision" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/operations-board") {
+        return jsonResponse({
+          placements: [{
+            id: "placement-1",
+            maid_reference_code: "M-001",
+            employer_id: null,
+            status: "CANDIDATE_SELECTED",
+            target_start_date: null,
+            last_status_at: dueAt,
+            last_actor: "staff",
+            flight_booked: false,
+            medical_completed: false,
+            sip_completed: false,
+            handover_completed: false,
+          }],
+        });
+      }
+      if (url === "/api/operations-board/employers") return jsonResponse({ employers: [] });
+      if (url === "/api/operations-board/interviews") return jsonResponse({ interviews: [] });
+      if (url === "/api/operations-board/arrivals/rolling-three-day") return jsonResponse({ days: [] });
+      if (url.endsWith("/placements/placement-1/tasks")) return jsonResponse({ tasks: [ipaTask] });
+      if (url.endsWith("/placements/placement-1/documents")) {
+        return jsonResponse({
+          documents: [
+            { id: "private-doc", category: "ipa", original_name: "private-ipa.pdf", employer_visible: false },
+            { id: "shared-doc", category: "ipa", original_name: "shared-ipa.pdf", employer_visible: true },
+          ],
+        });
+      }
+      if (url.endsWith("/placements/placement-1/flights")) return jsonResponse({ flights: [] });
+      if (url.endsWith("/placements/placement-1/mom-application")) {
+        return jsonResponse({ application: null, applicantId: "", employerId: "" });
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, false);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <MemoryRouter initialEntries={["/agencyadmin/operations/placements/placement-1"]}>
+        <Routes>
+          <Route path="/agencyadmin/operations/placements/:placementId" element={<OperationsBoardPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const evidenceSelect = await screen.findByLabelText("Linked document evidence");
+    expect(evidenceSelect.querySelector('option[value="private-doc"]')).not.toBeNull();
+    expect(evidenceSelect.querySelector('option[value="shared-doc"]')).toBeNull();
+  });
 });

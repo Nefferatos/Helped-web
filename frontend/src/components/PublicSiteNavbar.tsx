@@ -151,14 +151,11 @@ const PublicSiteNavbar = () => {
   const showFloatingRequest = !location.pathname.startsWith("/search-maids")
     && !location.pathname.startsWith("/client/")
     && !location.pathname.startsWith("/agency")
-    // The FDW application flow is focused on the applicant's submission, so
-    // it should not display the separate employer "Request Maid" shortcut.
     && !location.pathname.startsWith("/apply-as-maid");
   const [isRequestOpen, setIsRequestOpen] = useState(false);
   const [requestStatus, setRequestStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [requestForm, setRequestForm] = useState({ name: "", email: "", phone: "", notes: "" });
   const submitRequest = async (event: FormEvent) => { event.preventDefault(); setRequestStatus("idle"); };
-
   /* ── Login Button ── */
   const LoginButton = ({ full = false, onClick }: { full?: boolean; onClick?: () => void }) => (
     <Link
@@ -487,22 +484,15 @@ const PublicSiteNavbar = () => {
           </div>
         </>
       )}
-
-      {showFloatingRequest && (
-        <>
-          <button type="button" onClick={() => { setIsRequestOpen(true); setRequestStatus("idle"); }}
-            className="fixed left-0 top-1/2 z-40 h-[118px] w-10 -translate-y-1/2 text-[11px] font-bold shadow-lg sm:h-[154px] sm:w-[52px] sm:text-[13px]"
-            style={{ border:0, borderRadius:"0 12px 12px 0", background: "#FCD34D", color: "#0B3340", writingMode:"vertical-rl", boxShadow: "0 10px 28px rgba(11,51,64,.28)" }}>
-            Request Maid
-          </button>
-          {isRequestOpen && <div className="request-modal-overlay" onMouseDown={() => setIsRequestOpen(false)}><div className="request-modal-shell" onMouseDown={(event) => event.stopPropagation()}><style>{`${REQUEST_FORM_CSS}
-            .request-modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.52);padding:16px;overflow:hidden;display:flex;align-items:center;justify-content:center}
-            .request-modal-shell{width:min(960px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:hidden}
-            .request-modal-scale{zoom:.72}
-            @media(max-width:640px){.request-modal-overlay{padding:8px;align-items:flex-start;overflow-y:auto}.request-modal-shell{width:calc(100vw - 16px);max-height:none;overflow:visible;margin:auto 0}.request-modal-scale{zoom:.52}}
-          `}</style><div className="request-modal-scale"><RequestForm prefillFilters={defaultFilters} onBack={() => setIsRequestOpen(false)} /></div></div></div>}
-        </>
-      )}
+      {showFloatingRequest && <>
+        <button type="button" onClick={() => { setIsRequestOpen(true); setRequestStatus("idle"); }} className="fixed left-0 top-1/2 z-40 h-[118px] w-10 -translate-y-1/2 text-[11px] font-bold shadow-lg sm:h-[154px] sm:w-[52px] sm:text-[13px]" style={{ border: 0, borderRadius: "0 12px 12px 0", background: "#FCD34D", color: "#0B3340", writingMode: "vertical-rl", boxShadow: "0 10px 28px rgba(11,51,64,.28)" }}>Request Maid</button>
+        {isRequestOpen && <div className="request-modal-overlay" onMouseDown={() => setIsRequestOpen(false)}><div className="request-modal-shell" onMouseDown={(event) => event.stopPropagation()}><style>{`${REQUEST_FORM_CSS}
+          .request-modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(8,25,32,.62);padding:clamp(8px,2.5vw,24px);overflow-y:auto;display:flex;align-items:flex-start;justify-content:center;backdrop-filter:blur(4px)}
+          .request-modal-shell{width:min(1080px,100%);margin:auto 0;overflow:visible;border-radius:20px;background:#f0f7f9;box-shadow:0 24px 80px rgba(0,0,0,.28)}
+          .request-modal-scale{zoom:1}
+          @media(max-width:640px){.request-modal-shell{margin:0}.request-modal-scale{zoom:1}}
+        `}</style><div className="request-modal-scale"><RequestForm prefillFilters={defaultFilters} onBack={() => setIsRequestOpen(false)} /></div></div></div>}
+      </>}
     </header>
   );
 };

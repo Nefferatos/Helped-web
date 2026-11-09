@@ -674,6 +674,10 @@ const AtsRecruitmentPage = () => {
       toast.error("Choose an interview date and time first");
       return;
     }
+    if (!Number.isFinite(new Date(interviewDateTime).getTime()) || new Date(interviewDateTime).getTime() <= Date.now()) {
+      toast.error("Choose a valid interview time in the future");
+      return;
+    }
     setWorkflowSaving(true);
     let interviewSaved = false;
     let applicantStageUpdated = false;
@@ -2024,7 +2028,7 @@ const AtsRecruitmentPage = () => {
                                         ],
                                         [
                                           "Care",
-                                          `Child ${item.profile.childcareExperience} · Elderly ${item.profile.elderlyCareExperience}`,
+                                          `Childcare ${item.profile.childcareExperience}/5 · Elderly ${item.profile.elderlyCareExperience}/5 stars`,
                                         ],
                                       ].map(([label, val]) => (
                                         <div
@@ -2114,8 +2118,8 @@ const AtsRecruitmentPage = () => {
                                 </p>
                                 <p className="text-slate-400 truncate">
                                   {item.profile.yearsOfExperience} yrs ·{" "}
-                                  {item.profile.childcareExperience} child ·{" "}
-                                  {item.profile.elderlyCareExperience} elderly
+                                  Childcare {item.profile.childcareExperience}/5 ·{" "}
+                                  Elderly {item.profile.elderlyCareExperience}/5 stars
                                 </p>
                               </div>
                             </td>
@@ -2299,15 +2303,15 @@ const AtsRecruitmentPage = () => {
       </Dialog>
 
       <Dialog open={Boolean(interviewTarget)} onOpenChange={(open) => !open && !workflowSaving && setInterviewTarget(null)}>
-        <DialogContent className="max-w-lg rounded-2xl border-slate-200 bg-white p-0 overflow-hidden">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border-slate-200 bg-white p-0">
           <div className="border-b border-violet-100 bg-violet-50 px-6 py-5">
             <DialogTitle className="flex items-center gap-2 text-lg font-black text-slate-950"><CalendarDays className="h-5 w-5 text-violet-700" />Schedule interview</DialogTitle>
             <DialogDescription className="mt-1 text-sm text-slate-600">Set the time, save it to the applicant record, then create the calendar booking and send the invitation in one step.</DialogDescription>
           </div>
-          <div className="space-y-4 px-6 py-5">
+          <div className="min-h-0 space-y-4 overflow-y-auto px-6 py-5">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Applicant</p><p className="mt-0.5 text-sm font-bold text-slate-900">{interviewTarget?.name}</p></div>
             <div className="grid gap-2 sm:grid-cols-2"><div className="rounded-xl border border-violet-100 bg-violet-50 p-3"><p className="text-xs font-bold text-violet-900">1. Save interview</p><p className="mt-0.5 text-xs leading-5 text-violet-700">The selected date, time, and format are saved to this applicant.</p></div><div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3"><p className="text-xs font-bold text-emerald-900">2. Send to Make</p><p className="mt-0.5 text-xs leading-5 text-emerald-700">Make creates the calendar event, Google Meet link, and invitation email.</p></div></div>
-            <label className="block text-sm font-semibold text-slate-800">Interview date and time<Input type="datetime-local" className="mt-1.5" value={interviewDateTime} min={toDateTimeLocalInput(new Date())} onChange={(event) => setInterviewDateTime(event.target.value)} /></label>
+            <label className="block text-sm font-semibold text-slate-800">Interview date and time<Input type="datetime-local" required aria-invalid={Boolean(interviewDateTime && (!Number.isFinite(new Date(interviewDateTime).getTime()) || new Date(interviewDateTime).getTime() <= Date.now()))} className="mt-1.5" value={interviewDateTime} min={toDateTimeLocalInput(new Date())} onChange={(event) => setInterviewDateTime(event.target.value)} />{interviewDateTime && Number.isFinite(new Date(interviewDateTime).getTime()) && new Date(interviewDateTime).getTime() <= Date.now() && <span className="mt-1 block text-xs font-medium text-rose-700">Choose a future date and time.</span>}</label>
             <label className="block text-sm font-semibold text-slate-800">Interview format<select className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={interviewMode} onChange={(event) => setInterviewMode(event.target.value)}><option value="video">Video call</option><option value="phone">Phone call</option><option value="in_person">In-person</option></select></label>
             <label className="block text-sm font-semibold text-slate-800">Use an existing meeting link <span className="font-normal text-slate-400">(optional)</span><Input className="mt-1.5" type="url" placeholder="Leave blank to let Make create a Google Meet link" value={interviewMeetingLink} onChange={(event) => setInterviewMeetingLink(event.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Leave this blank for a new Google Meet link from the Make calendar workflow.</span></label>
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -2319,7 +2323,7 @@ const AtsRecruitmentPage = () => {
             <label className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={sendApplicantEmail} disabled={!interviewTarget?.email} onChange={(event) => setSendApplicantEmail(event.target.checked)} /><span><span className="font-bold">Create calendar event and send invitation</span><span className="mt-0.5 block text-xs text-emerald-700">{interviewTarget?.email ? `Make will send the interview invitation to ${interviewTarget.email}.` : "No email is saved for this applicant, so only the interview record can be saved."}</span></span></label>
             <label className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={sendInterviewReminders} disabled={!interviewTarget?.email} onChange={(event) => setSendInterviewReminders(event.target.checked)} /><span><span className="font-bold">Enable automatic interview reminders</span><span className="mt-0.5 block text-xs text-blue-800">{interviewTarget?.email ? `Send reminders to ${interviewTarget.email}: 24 hours before, interview morning, and 2 hours before. Requires the agency email service.` : "Add an applicant email before enabling reminders."}</span></span></label>
           </div>
-          <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4"><Button variant="outline" onClick={() => setInterviewTarget(null)} disabled={workflowSaving}>Cancel</Button><Button className="bg-violet-600 hover:bg-violet-700" onClick={() => void saveInterviewAndInvitation()} disabled={workflowSaving || Boolean(employerParticipantEmail.trim() && (!employerContactVerified || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employerParticipantEmail.trim())))}>{workflowSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}{sendApplicantEmail && interviewTarget?.email ? "Schedule, book & send" : "Save interview"}</Button></div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 bg-white px-6 py-4"><Button variant="outline" onClick={() => setInterviewTarget(null)} disabled={workflowSaving}>Cancel</Button><Button className="bg-violet-600 hover:bg-violet-700" onClick={() => void saveInterviewAndInvitation()} disabled={workflowSaving || !interviewDateTime || (Number.isFinite(new Date(interviewDateTime).getTime()) && new Date(interviewDateTime).getTime() <= Date.now()) || Boolean(employerParticipantEmail.trim() && (!employerContactVerified || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employerParticipantEmail.trim())))}>{workflowSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}{sendApplicantEmail && interviewTarget?.email ? "Schedule, book & send" : "Save interview"}</Button></div>
         </DialogContent>
       </Dialog>
 

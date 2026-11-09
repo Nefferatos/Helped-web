@@ -99,10 +99,18 @@ const parseApiError = async (response: Response, fallbackMessage: string) => {
   return data.error || fallbackMessage;
 };
 
-const postJson = async <TResponse, TPayload>(url: string, payload: TPayload, fallbackMessage: string) => {
+const postJson = async <TResponse, TPayload>(
+  url: string,
+  payload: TPayload,
+  fallbackMessage: string,
+  authenticated = false,
+) => {
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(authenticated ? getAgencyAdminAuthHeaders() : {}),
+    },
     body: JSON.stringify(payload),
   });
 
@@ -252,6 +260,7 @@ export const submitInterviewSession = async (payload: InterviewSessionPayload) =
     "/api/ai/hr-interview/session",
     payload,
     "Failed to save interview session",
+    true,
   );
 
   let makeTriggered = false;

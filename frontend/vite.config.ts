@@ -23,6 +23,12 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
+      // HR interview AI calls are handled by the Worker Make AI gateway path.
+      // The legacy Express route only returns scripted questions and bypasses AI.
+      "/api/ai/hr-interview": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       // Private media uploads and Make.com transcription are implemented in
       // the Worker; keep this route ahead of the generic Express `/api` proxy.
       "/api/integrations/media": {

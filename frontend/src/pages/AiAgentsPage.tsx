@@ -584,6 +584,14 @@ function DetailField({ label, value, icon: Icon }: { label: string; value?: Reac
   );
 }
 
+const SkillRatingDisplay = ({ value }: { value?: number }) => {
+  const rating = Math.max(0, Math.min(5, Math.round(Number(value) || 0)));
+  return <span className="inline-flex items-center gap-1" aria-label={`${rating} out of 5 stars`}>
+    <span className="flex items-center gap-0.5" aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <Star key={index} className={`h-3.5 w-3.5 ${index < rating ? "fill-amber-400 text-amber-400" : "text-slate-300"}`} />)}</span>
+    <span className="text-xs tabular-nums text-slate-600">{rating}/5</span>
+  </span>;
+};
+
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4">
@@ -799,15 +807,15 @@ function ApplicantDetailModal({ applicant, onClose }: { applicant: AtsApplicatio
               <DetailField label="WhatsApp" value={p.whatsappNumber} icon={MessageSquare} />
             </DetailSection>
 
-            <DetailSection title="Work Experience">
+            <DetailSection title="Experience & skill ratings">
               <DetailField label="Years of Experience" value={p.yearsOfExperience != null ? `${p.yearsOfExperience} years` : undefined} icon={Briefcase} />
               <DetailField label="Previous Countries" value={p.previousCountriesWorkedIn?.join(", ")} icon={Globe} />
-              <DetailField label="Childcare" value={p.childcareExperience != null ? `${p.childcareExperience} years` : undefined} icon={Baby} />
-              <DetailField label="Newborn Care" value={p.newbornCareExperience != null ? `${p.newbornCareExperience} years` : undefined} icon={Baby} />
-              <DetailField label="Elderly Care" value={p.elderlyCareExperience != null ? `${p.elderlyCareExperience} years` : undefined} icon={HeartPulse} />
-              <DetailField label="Disabled Care" value={p.disabledCareExperience != null ? `${p.disabledCareExperience} years` : undefined} icon={HeartPulse} />
-              <DetailField label="Housekeeping" value={p.housekeepingExperience != null ? `${p.housekeepingExperience} years` : undefined} icon={Home} />
-              <DetailField label="Pet Care" value={p.petCareExperience != null ? `${p.petCareExperience} years` : undefined} icon={PawPrint} />
+              <DetailField label="Childcare skill rating" value={<SkillRatingDisplay value={p.childcareExperience} />} icon={Baby} />
+              <DetailField label="Newborn care skill rating" value={<SkillRatingDisplay value={p.newbornCareExperience} />} icon={Baby} />
+              <DetailField label="Elderly care skill rating" value={<SkillRatingDisplay value={p.elderlyCareExperience} />} icon={HeartPulse} />
+              <DetailField label="Disabled care skill rating" value={<SkillRatingDisplay value={p.disabledCareExperience} />} icon={HeartPulse} />
+              <DetailField label="Housekeeping skill rating" value={<SkillRatingDisplay value={p.housekeepingExperience} />} icon={Home} />
+              <DetailField label="Pet care skill rating" value={<SkillRatingDisplay value={p.petCareExperience} />} icon={PawPrint} />
             </DetailSection>
 
             <DetailSection title="Skills & Qualifications">
@@ -3128,10 +3136,13 @@ function AddApplicantModal({ onClose, onCreated }: { onClose: () => void; onCrea
               </div>
             </DetailSection>
 
-            <DetailSection title="Experience (years)">
+            <DetailSection title="Formal experience and skill ratings">
               <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Formal FDW experience (years)</label>
+                  <input className={inputClass} type="number" min="0" value={form.yearsOfExperience} onChange={(e) => update("yearsOfExperience", e.target.value)} />
+                </div>
                 {([
-                  ["yearsOfExperience", "Total Experience"],
                   ["childcareExperience", "Childcare"],
                   ["newbornCareExperience", "Newborn Care"],
                   ["elderlyCareExperience", "Elderly Care"],
@@ -3140,8 +3151,8 @@ function AddApplicantModal({ onClose, onCreated }: { onClose: () => void; onCrea
                   ["petCareExperience", "Pet Care"],
                 ] as const).map(([field, label]) => (
                   <div key={field}>
-                    <label className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{label}</label>
-                    <input className={inputClass} type="number" min="0" value={form[field]} onChange={(e) => update(field, e.target.value)} />
+                    <label className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{label} rating (0–5 stars)</label>
+                    <input className={inputClass} type="number" min="0" max="5" step="1" value={form[field]} onChange={(e) => update(field, e.target.value)} />
                   </div>
                 ))}
               </div>

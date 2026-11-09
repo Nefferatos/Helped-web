@@ -66,6 +66,41 @@ export const getUserFacingError = (error: unknown): UserFacingErrorMessage => {
   }
 
   if (
+    normalized.includes("application under this name") ||
+    normalized.includes("application with this name") ||
+    normalized.includes("duplicate applicant") ||
+    normalized.includes("already submitted")
+  ) {
+    return {
+      kind: "validation",
+      title: "Application already submitted",
+      description: "An application with this name or contact information is already on file. Please don't submit another application. Contact the agency if you need to update the existing one.",
+      actionLabel: "Close",
+      icon: <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden="true" />,
+    };
+  }
+
+  if (normalized.includes("insufficient agency role") || normalized.includes("forbidden") || /\b403\b/.test(normalized)) {
+    return {
+      kind: "unauthorized",
+      title: "Agency permission required",
+      description: "Your account role cannot delete applicants. Ask an agency administrator to update your access.",
+      actionLabel: "Close",
+      icon: <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden="true" />,
+    };
+  }
+
+  if (normalized.includes("no selected applicants were found")) {
+    return {
+      kind: "notFound",
+      title: "Applicant list changed",
+      description: "Refresh the applicant list, select the records again, and retry.",
+      actionLabel: "Refresh",
+      icon: <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden="true" />,
+    };
+  }
+
+  if (
     normalized.includes("failed to fetch") ||
     normalized.includes("network") ||
     normalized.includes("connection") ||

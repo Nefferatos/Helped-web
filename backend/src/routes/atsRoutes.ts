@@ -2,6 +2,7 @@ import express, { Router } from 'express'
 import {
   bulkAtsActionController,
   createPublicAtsApplicationController,
+  deletePublicAtsApplicationsController,
   getAtsApplicationController,
   getAtsDashboardController,
   getUnreadAtsApplicationCountController,
@@ -23,6 +24,7 @@ const router: Router = express.Router()
 
 const canReviewApplicant = requireAgencyRole('SUPER_ADMIN', 'admin', 'agency', 'RECRUITER', 'staff', 'DOCUMENT_REVIEWER')
 const canRecruitApplicant = requireAgencyRole('SUPER_ADMIN', 'admin', 'agency', 'RECRUITER', 'staff')
+const canDeleteApplicants = requireAgencyRole('SUPER_ADMIN', 'admin', 'agency', 'RECRUITER', 'staff')
 
 router.post('/public/apply', createPublicAtsApplicationController)
 router.post('/public/referrals', submitPublicMaidReferralController)
@@ -30,6 +32,7 @@ router.get('/public/applications/:applicationId', getPublicAtsApplicationSummary
 router.get('/dashboard', requireAgencyAuth, canReviewApplicant, getAtsDashboardController)
 router.get('/applications', requireAgencyAuth, canReviewApplicant, listAtsApplicationsController)
 router.get('/applications/unread-count', requireAgencyAuth, canReviewApplicant, getUnreadAtsApplicationCountController)
+router.post('/applications/delete', requireAgencyAuth, canDeleteApplicants, deletePublicAtsApplicationsController)
 router.post('/applications/mark-viewed', requireAgencyAuth, canReviewApplicant, markAtsApplicationsViewedController)
 router.post('/sync-from-maids', requireAgencyAuth, canRecruitApplicant, syncAtsFromMaidsController)
 router.get('/presets', requireAgencyAuth, canRecruitApplicant, listAtsPresetsController)

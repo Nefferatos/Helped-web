@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/sonner";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import {
   Bot,
   Send,
@@ -59,6 +60,7 @@ interface InterviewSession {
 
 interface ScheduledInterview {
   id: string;
+  applicationId: string;
   candidateName: string;
   candidateEmail: string;
   position: string;
@@ -76,6 +78,14 @@ interface InterviewInvitationResponse {
   eventId?: string | null;
   eventUrl?: string | null;
   error?: string | null;
+}
+
+interface AtsInterviewCandidate {
+  applicationId: string;
+  applicationCode: string;
+  name: string;
+  email: string;
+  position: string;
 }
 
 // ─── Interview Stages ─────────────────────────────────────────────────────────
@@ -159,12 +169,6 @@ const generateInterviewResult = (messages: ChatMessage[]): InterviewSession["res
 
 // ─── Mock sessions ────────────────────────────────────────────────────────────
 
-const mockSessions: InterviewSession[] = [
-  { id: "int-001", candidateName: "Maria Santos", candidateEmail: "maria@email.com", position: "Domestic Worker (Childcare)", status: "passed", currentStage: "conclusion", startedAt: "2026-08-15T10:00:00Z", completedAt: "2026-08-15T10:25:00Z", messages: [], result: { overallScore: 82, recommendation: "pass", summary: "Strong candidate with 5+ years childcare experience.", strengths: ["Detailed responses", "International experience"], weaknesses: [], emailSent: true } },
-  { id: "int-002", candidateName: "Siti Rahma", candidateEmail: "siti@email.com", position: "Domestic Worker (Elderly Care)", status: "in_progress", currentStage: "skills", startedAt: "2026-08-16T14:00:00Z", messages: [] },
-  { id: "int-003", candidateName: "Priya Sharma", candidateEmail: "priya@email.com", position: "Domestic Worker (General)", status: "failed", currentStage: "conclusion", startedAt: "2026-08-14T09:00:00Z", completedAt: "2026-08-14T09:15:00Z", messages: [], result: { overallScore: 35, recommendation: "fail", summary: "Insufficient experience.", strengths: [], weaknesses: ["Brief responses"], emailSent: false } },
-];
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const AiHrInterviewerPage = () => {
@@ -177,11 +181,17 @@ const AiHrInterviewerPage = () => {
   const [candidateName, setCandidateName] = useState("");
   const [candidateEmail, setCandidateEmail] = useState("");
   const [position, setPosition] = useState("");
+  const [applicationId, setApplicationId] = useState("");
+  const [staffApprovedResult, setStaffApprovedResult] = useState<"" | "pass" | "fail">("");
+  const [atsCandidates, setAtsCandidates] = useState<AtsInterviewCandidate[]>([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(true);
+  const [candidatesError, setCandidatesError] = useState("");
   const [showSetup, setShowSetup] = useState(true);
   const [interviewResult, setInterviewResult] = useState<InterviewSession["result"] | null>(null);
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [sessions] = useState<InterviewSession[]>(mockSessions);
+  const [sessions, setSessions] = useState<InterviewSession[]>([]);
+  const [sessionsError, setSessionsError] = useState("");
   const [makeTriggered, setMakeTriggered] = useState(false);
   const [makeError, setMakeError] = useState<string | null>(null);
   const [isSubmittingSession, setIsSubmittingSession] = useState(false);
@@ -202,55 +212,95 @@ const AiHrInterviewerPage = () => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isThinking]);
 
+  useEffect(() => {
+    let active = true;
+    setCandidatesLoading(true);
+    fetch("/api/ai/hr-interview/candidates", { headers: getAgencyAdminAuthHeaders() })
+      .then(async (response) => {
+        const data = (await response.json().catch(() => ({}))) as {
+          candidates?: AtsInterviewCandidate[];
+          error?: string;
+        };
+        if (!response.ok) throw new Error(data.error || `Unable to load ATS applicants (${response.status})`);
+        return data.candidates ?? [];
+      })
+      .then((candidates) => {
+        if (!active) return;
+        setAtsCandidates(candidates);
+        setCandidatesError("");
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setCandidatesError(error instanceof Error ? error.message : "Unable to load ATS applicants");
+      })
+      .finally(() => {
+        if (active) setCandidatesLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (view !== "manage") return;
+    let active = true;
+    fetch("/api/ai/hr-interview/sessions", { headers: getAgencyAdminAuthHeaders() })
+      .then(async (response) => {
+        const data = (await response.json().catch(() => ({}))) as {
+          sessions?: InterviewSession[];
+          error?: string;
+        };
+        if (!response.ok) throw new Error(data.error || `Unable to load interview history (${response.status})`);
+        return data.sessions ?? [];
+      })
+      .then((savedSessions) => {
+        if (!active) return;
+        setSessions(savedSessions);
+        setSessionsError("");
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setSessionsError(error instanceof Error ? error.message : "Unable to load interview history");
+      });
+    return () => { active = false; };
+  }, [view]);
+
   const addMessage = useCallback((role: "interviewer" | "candidate", content: string, stage?: string, evaluation?: { score: number; notes: string }) => {
     setMessages((prev) => [...prev, { id: `${role}-${Date.now()}-${Math.random()}`, role, content, stage, evaluation }]);
   }, []);
 
-  const getImmediateSchedule = useCallback(() => {
-    const dt = new Date(Date.now() + 10 * 60 * 1000);
-    return {
-      date: dt.toISOString().slice(0, 10),
-      time: dt.toTimeString().slice(0, 5),
-    };
-  }, []);
-
-  const sendInterviewInvitation = useCallback(async (options?: { allowImmediate?: boolean; showToast?: boolean }) => {
-    const allowImmediate = options?.allowImmediate ?? false;
-    const showToast = options?.showToast ?? true;
-
+  const sendInterviewInvitation = useCallback(async () => {
     if (!candidateName.trim() || !candidateEmail.trim() || !position.trim()) {
       toast.error("Fill in candidate details first");
       return null;
     }
-
-    const immediate = allowImmediate ? getImmediateSchedule() : null;
-    const inviteDate = scheduledDate || immediate?.date || "";
-    const inviteTime = scheduledTime || immediate?.time || "";
-
-    if (!inviteDate || !inviteTime) {
+    if (!applicationId) {
+      toast.error("Select an ATS applicant first");
+      return null;
+    }
+    if (!scheduledDate || !scheduledTime) {
       toast.error("Select a date and time");
       return null;
     }
 
     setIsScheduling(true);
     try {
-      const dt = new Date(`${inviteDate}T${inviteTime}`);
+      const dt = new Date(`${scheduledDate}T${scheduledTime}`);
       const formattedDate = dt.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
       const formattedTime = dt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 
       const response = await fetch("/api/ai/hr-interview/email", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify({
           to: candidateEmail,
           candidateName,
           position,
           type: "interview_invitation",
-          scheduledDate: inviteDate,
-          scheduledTime: inviteTime,
+          applicationId,
+          scheduledDate,
+          scheduledTime,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           meetLink: meetLink.trim() || undefined,
-          source: allowImmediate ? "start_interview" : "schedule_interview",
+          source: "schedule_interview",
         }),
       });
 
@@ -263,18 +313,19 @@ const AiHrInterviewerPage = () => {
 
       const newSchedule: ScheduledInterview = {
         id: `sched-${Date.now()}`,
+        applicationId,
         candidateName,
         candidateEmail,
         position,
-        scheduledDate: inviteDate,
-        scheduledTime: inviteTime,
+        scheduledDate,
+        scheduledTime,
         meetLink: finalMeetLink,
         status: "scheduled",
         createdAt: new Date().toISOString(),
       };
 
       setScheduledInterviews((prev) => [newSchedule, ...prev]);
-      if (showToast) toast.success(`Make.com triggered: invitation sent for ${formattedDate} at ${formattedTime}`);
+      toast.success(`Make.com triggered: invitation sent for ${formattedDate} at ${formattedTime}`);
       return newSchedule;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to schedule");
@@ -282,7 +333,7 @@ const AiHrInterviewerPage = () => {
     } finally {
       setIsScheduling(false);
     }
-  }, [candidateName, candidateEmail, position, scheduledDate, scheduledTime, meetLink, getImmediateSchedule]);
+  }, [applicationId, candidateName, candidateEmail, position, scheduledDate, scheduledTime, meetLink]);
 
   // ── AI-powered interview call ─────────────────────────────────────────
   const callAiInterviewer = useCallback(async (conversationHistory: ChatMessage[]): Promise<{
@@ -291,51 +342,59 @@ const AiHrInterviewerPage = () => {
     stage: string;
     isComplete: boolean;
     result: InterviewSession["result"] | null;
-  } | null> => {
-    try {
-      const response = await fetch("/api/ai/hr-interview/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          candidateName, position,
-          messages: conversationHistory.map((m) => ({ role: m.role === "interviewer" ? "assistant" : "user", content: m.content })),
-          currentStage: interviewStages[currentStageIndex]?.id || "introduction",
-        }),
-      });
-      if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || `AI request failed (${response.status})`); }
-      return await response.json();
-    } catch (err) { console.error("[AiHrInterviewer] AI call failed:", err); return null; }
+  }> => {
+    const response = await fetch("/api/ai/hr-interview/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+      body: JSON.stringify({
+        candidateName, position,
+        messages: conversationHistory.map((m) => ({ role: m.role === "interviewer" ? "assistant" : "user", content: m.content })),
+        currentStage: interviewStages[currentStageIndex]?.id || "introduction",
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `AI request failed (${response.status})`);
+    if (!data || (data.nextQuestion !== null && typeof data.nextQuestion !== "string") || typeof data.stage !== "string" || typeof data.isComplete !== "boolean" || (data.isComplete && !data.result) || (!data.isComplete && !data.nextQuestion)) {
+      throw new Error("The AI service returned an invalid interview response");
+    }
+    return data;
   }, [candidateName, position, currentStageIndex]);
 
   const startInterview = useCallback(async () => {
-    if (!candidateName.trim() || !candidateEmail.trim() || !position.trim()) { toast.error("Please fill in all fields"); return; }
-    await sendInterviewInvitation({ allowImmediate: true, showToast: true });
-    setShowSetup(false);
+    if (!applicationId || !candidateName.trim() || !candidateEmail.trim() || !position.trim()) { toast.error("Select an ATS applicant first"); return; }
     setIsThinking(true);
-    if (aiEnabled) {
-      const aiResponse = await callAiInterviewer([{ id: `start-${Date.now()}`, role: "candidate", content: "Hello, I'm ready to start the interview." }]);
-      if (aiResponse?.nextQuestion) {
+    try {
+      if (aiEnabled) {
+        const aiResponse = await callAiInterviewer([{ id: `start-${Date.now()}`, role: "candidate", content: "Hello, I'm ready to start the interview." }]);
+        if (!aiResponse.nextQuestion) throw new Error("The AI service did not provide the first interview question");
         const stageIdx = interviewStages.findIndex((s) => s.id === aiResponse.stage);
         if (stageIdx >= 0) setCurrentStageIndex(stageIdx);
         addMessage("interviewer", aiResponse.nextQuestion, aiResponse.stage);
-      } else { addMessage("interviewer", "Hello! Could you please tell me your full name and what position you're applying for?", "introduction"); }
-    } else { addMessage("interviewer", stageQuestions.introduction[0], "introduction"); }
-    setIsThinking(false);
-  }, [candidateName, candidateEmail, position, addMessage, aiEnabled, callAiInterviewer, sendInterviewInvitation]);
+      } else {
+        addMessage("interviewer", stageQuestions.introduction[0], "introduction");
+      }
+      setShowSetup(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The AI interviewer is unavailable. Please try again.");
+    } finally {
+      setIsThinking(false);
+    }
+  }, [applicationId, candidateName, candidateEmail, position, addMessage, aiEnabled, callAiInterviewer]);
 
   const handleAiResponse = useCallback((aiResponse: { evaluation: { score: number; notes: string }; nextQuestion: string | null; stage: string; isComplete: boolean; result: InterviewSession["result"] | null }) => {
     const stageIdx = interviewStages.findIndex((s) => s.id === aiResponse.stage);
     if (stageIdx >= 0 && stageIdx !== currentStageIndex) { setCurrentStageIndex(stageIdx); setQuestionIndex(0); }
     if (aiResponse.isComplete && aiResponse.result) {
       setInterviewResult(aiResponse.result);
+      setStaffApprovedResult("");
       addMessage("interviewer", `Thank you, ${candidateName}! Interview complete. Score: ${aiResponse.result.overallScore}/100. ${aiResponse.result.summary}`, "conclusion");
       setIsSubmittingSession(true);
-      submitInterviewSession({ applicationId: `interview-${Date.now()}`, sessionData: { candidateName, candidateEmail, position, messages }, rating: aiResponse.result.overallScore, recommendation: aiResponse.result.recommendation, summary: aiResponse.result.summary })
+      submitInterviewSession({ applicationId, sessionData: { candidateName, candidateEmail, position, messages }, rating: aiResponse.result.overallScore, recommendation: aiResponse.result.recommendation, summary: aiResponse.result.summary })
         .then(({ makeTriggered: mt, makeError: me }) => { setMakeTriggered(mt); setMakeError(me); if (mt && !me) toast.success("Session saved & Make.com triggered"); else if (me) toast.warning(`Session saved, Make.com failed: ${me}`); })
         .catch((err) => { setMakeError(err instanceof Error ? err.message : "Failed to save"); toast.error("Failed to save session"); })
         .finally(() => setIsSubmittingSession(false));
     } else if (aiResponse.nextQuestion) { addMessage("interviewer", aiResponse.nextQuestion, aiResponse.stage); }
-  }, [candidateName, candidateEmail, position, messages, addMessage, currentStageIndex]);
+  }, [applicationId, candidateName, candidateEmail, position, messages, addMessage, currentStageIndex]);
 
   const askNextQuestion = useCallback(() => {
     const stage = interviewStages[currentStageIndex];
@@ -349,15 +408,16 @@ const AiHrInterviewerPage = () => {
       setTimeout(() => {
         const result = generateInterviewResult(messages);
         setInterviewResult(result);
+        setStaffApprovedResult("");
         addMessage("interviewer", `Thank you, ${candidateName}! Complete. Score: ${result?.overallScore}/100. ${result?.summary}`, "conclusion");
         setIsSubmittingSession(true);
-        submitInterviewSession({ applicationId: `interview-${Date.now()}`, sessionData: { candidateName, candidateEmail, position, messages, result }, rating: result?.overallScore, recommendation: result?.recommendation, summary: result?.summary })
+        submitInterviewSession({ applicationId, sessionData: { candidateName, candidateEmail, position, messages, result }, rating: result?.overallScore, recommendation: result?.recommendation, summary: result?.summary })
           .then(({ makeTriggered: mt, makeError: me }) => { setMakeTriggered(mt); setMakeError(me); })
           .catch(() => toast.error("Failed to save session"))
           .finally(() => setIsSubmittingSession(false));
       }, 1000);
     }
-  }, [currentStageIndex, questionIndex, messages, candidateName, candidateEmail, position, addMessage]);
+  }, [applicationId, currentStageIndex, questionIndex, messages, candidateName, candidateEmail, position, addMessage]);
 
   const handleSendResponse = useCallback(async () => {
     const response = input.trim();
@@ -368,16 +428,16 @@ const AiHrInterviewerPage = () => {
       addMessage("candidate", response, stage);
       setIsThinking(true);
       const updatedMessages = [...messages, { id: `c-${Date.now()}`, role: "candidate" as const, content: response, stage }];
-      const aiResponse = await callAiInterviewer(updatedMessages);
-      setIsThinking(false);
-      if (aiResponse) {
+      try {
+        const aiResponse = await callAiInterviewer(updatedMessages);
         setMessages((prev) => { const u = [...prev]; const last = [...u].reverse().find((m) => m.role === "candidate"); if (last && aiResponse.evaluation) last.evaluation = aiResponse.evaluation; return u; });
         handleAiResponse(aiResponse);
-      } else {
-        const evaluation = evaluateResponse(response, stage);
-        setMessages((prev) => { const u = [...prev]; const last = [...u].reverse().find((m) => m.role === "candidate"); if (last) last.evaluation = evaluation; return u; });
-        toast.warning("AI unavailable — using local evaluation");
-        askNextQuestion();
+      } catch (error) {
+        setMessages((prev) => prev.at(-1)?.role === "candidate" ? prev.slice(0, -1) : prev);
+        setInput(response);
+        toast.error(error instanceof Error ? error.message : "The AI interviewer is unavailable. Your answer was not evaluated.");
+      } finally {
+        setIsThinking(false);
       }
     } else {
       const evaluation = evaluateResponse(response, stage);
@@ -391,11 +451,11 @@ const AiHrInterviewerPage = () => {
 
   // ── Schedule Interview & Send Invitation (via Make.com) ───────────────
   const scheduleInterview = useCallback(async () => {
-    await sendInterviewInvitation({ allowImmediate: false, showToast: true });
+    await sendInterviewInvitation();
   }, [sendInterviewInvitation]);
 
   const sendResultEmail = useCallback(async (type: "pass" | "fail") => {
-    if (!candidateEmail) return;
+    if (!candidateEmail || !staffApprovedResult || type !== staffApprovedResult) return;
     setEmailSending(true);
     try {
       // Build structured data for Make.com workflow (generates its own HTML templates)
@@ -418,19 +478,19 @@ const AiHrInterviewerPage = () => {
 
       const response = await fetch("/api/ai/hr-interview/email", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify(payload),
       });
       if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || "Failed to send email"); }
       setEmailSent(true);
       toast.success(`${type === "pass" ? "Pass" : "Fail"} email sent to ${candidateEmail}`);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to send email"); setEmailSent(true); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Failed to send email"); }
     finally { setEmailSending(false); }
-  }, [candidateEmail, candidateName, position, interviewResult]);
+  }, [candidateEmail, candidateName, position, interviewResult, staffApprovedResult]);
 
   const resetInterview = useCallback(() => {
     setMessages([]); setInput(""); setCurrentStageIndex(0); setQuestionIndex(0);
-    setCandidateName(""); setCandidateEmail(""); setPosition(""); setShowSetup(true);
+    setCandidateName(""); setCandidateEmail(""); setPosition(""); setApplicationId(""); setStaffApprovedResult(""); setShowSetup(true);
     setInterviewResult(null); setEmailSent(false); setMakeTriggered(false); setMakeError(null); setIsSubmittingSession(false);
     setScheduledDate(""); setScheduledTime(""); setMeetLink("");
   }, []);
@@ -457,7 +517,7 @@ const AiHrInterviewerPage = () => {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-sm"><Bot className="h-5 w-5" /></div>
               <div>
                 <h1 className="text-lg font-bold text-slate-900">AI HR Interviewer</h1>
-                <p className="text-xs text-slate-500">AI-powered interviews for domestic worker hiring {aiEnabled && <span className="text-emerald-600 font-semibold">• Kimi K2.6</span>}</p>
+                <p className="text-xs text-slate-500">Make AI Agent conducts the interview; a server-configured fallback may be used if Make is unavailable.</p>
               </div>
             </div>
             <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
@@ -485,9 +545,19 @@ const AiHrInterviewerPage = () => {
                       <p className="mt-1 text-sm text-slate-500">The AI will conduct a structured interview and evaluate the candidate</p>
                     </div>
                     <div className="space-y-3">
-                      <label className="block"><span className="text-xs font-semibold text-slate-600">Candidate Name</span><Input className="mt-1.5" value={candidateName} onChange={(e) => setCandidateName(e.target.value)} placeholder="e.g. Maria Santos" /></label>
-                      <label className="block"><span className="text-xs font-semibold text-slate-600">Candidate Email</span><Input className="mt-1.5" type="email" value={candidateEmail} onChange={(e) => setCandidateEmail(e.target.value)} placeholder="candidate@email.com" /></label>
-                      <label className="block"><span className="text-xs font-semibold text-slate-600">Position</span><Input className="mt-1.5" value={position} onChange={(e) => setPosition(e.target.value)} placeholder="e.g. Domestic Worker (Childcare)" /></label>
+                      <label className="block"><span className="text-xs font-semibold text-slate-600">ATS applicant</span><select aria-label="ATS applicant" className="mt-1.5 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm" value={applicationId} disabled={candidatesLoading} onChange={(event) => {
+                        const selected = atsCandidates.find((candidate) => candidate.applicationId === event.target.value);
+                        setApplicationId(selected?.applicationId ?? "");
+                        setCandidateName(selected?.name ?? "");
+                        setCandidateEmail(selected?.email ?? "");
+                        setPosition(selected?.position ?? "");
+                      }}>
+                        <option value="">{candidatesLoading ? "Loading applicants…" : "Select an ATS applicant"}</option>
+                        {atsCandidates.map((candidate) => <option key={candidate.applicationId} value={candidate.applicationId}>{candidate.name} · {candidate.applicationCode}</option>)}
+                      </select></label>
+                      {candidatesError && <p role="alert" className="text-xs text-rose-700">Applicant list unavailable: {candidatesError}</p>}
+                      {!candidatesLoading && !candidatesError && atsCandidates.length === 0 && <p className="text-xs text-amber-800">No ATS applicants with a valid name and email are available for this agency.</p>}
+                      {applicationId && <p className="text-xs text-slate-600">{candidateName} · {candidateEmail} · {position}</p>}
                     </div>
 
                     {/* Schedule Interview Section */}
@@ -496,7 +566,7 @@ const AiHrInterviewerPage = () => {
                         <Calendar className="h-4 w-4 text-blue-600" />
                         <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">Schedule Interview</p>
                       </div>
-                      <p className="text-[11px] text-slate-500">Optionally schedule a future interview and send an invitation email to the candidate.</p>
+                      <p className="text-[11px] text-slate-500">Optionally schedule and send an invitation. Starting the interview alone does not email the applicant.</p>
                       <div className="grid grid-cols-2 gap-2">
                         <label className="block"><span className="text-[11px] font-semibold text-slate-600">Date</span><Input className="mt-1" type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} min={new Date().toISOString().split("T")[0]} /></label>
                         <label className="block"><span className="text-[11px] font-semibold text-slate-600">Time</span><Input className="mt-1" type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} /></label>
@@ -513,11 +583,11 @@ const AiHrInterviewerPage = () => {
                     <div className="flex items-center gap-2 mb-2">
                       <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                         <input type="checkbox" checked={aiEnabled} onChange={(e) => setAiEnabled(e.target.checked)} className="rounded border-slate-300" />
-                        <Bot className="h-3 w-3" /> AI-powered interview (Kimi K2.6)
+                        <Bot className="h-3 w-3" /> {aiEnabled ? "Make AI Agent (primary)" : "Scripted interview (AI disabled)"}
                       </label>
                     </div>
-                    <Button onClick={() => void startInterview()} className="w-full bg-violet-600 hover:bg-violet-700" size="lg">
-                      <Sparkles className="mr-2 h-4 w-4" /> Start Interview Now
+                    <Button onClick={() => void startInterview()} disabled={candidatesLoading || !applicationId || isThinking} className="w-full bg-violet-600 hover:bg-violet-700" size="lg">
+                      {isThinking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} Start Interview Now
                     </Button>
                   </div>
                 </div>
@@ -568,7 +638,7 @@ const AiHrInterviewerPage = () => {
                           <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${interviewResult.recommendation === "pass" ? "bg-emerald-100 text-emerald-700" : interviewResult.recommendation === "borderline" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
                             {interviewResult.recommendation === "pass" ? <CheckCircle2 className="h-6 w-6" /> : interviewResult.recommendation === "borderline" ? <AlertCircle className="h-6 w-6" /> : <XCircle className="h-6 w-6" />}
                           </div>
-                          <div><h3 className="text-base font-bold text-slate-900">Interview Result</h3><p className="text-sm text-slate-500">Score: {interviewResult.overallScore}/100 — <span className={`font-bold ${interviewResult.recommendation === "pass" ? "text-emerald-600" : interviewResult.recommendation === "borderline" ? "text-amber-600" : "text-rose-600"}`}>{interviewResult.recommendation.toUpperCase()}</span></p></div>
+                          <div><h3 className="text-base font-bold text-slate-900">AI Interview Assessment (Advisory)</h3><p className="text-sm text-slate-500">Advisory score: {interviewResult.overallScore}/100 — <span className={`font-bold ${interviewResult.recommendation === "pass" ? "text-emerald-600" : interviewResult.recommendation === "borderline" ? "text-amber-600" : "text-rose-600"}`}>AI suggests {interviewResult.recommendation.toUpperCase()}</span></p></div>
                         </div>
                         <p className="text-sm leading-relaxed text-slate-700">{interviewResult.summary}</p>
                         {interviewResult.strengths.length > 0 && (<div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Strengths</p><ul className="mt-1 space-y-1">{interviewResult.strengths.map((s, i) => (<li key={i} className="flex items-start gap-2 text-sm text-slate-700"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" /> {s}</li>))}</ul></div>)}
@@ -578,10 +648,10 @@ const AiHrInterviewerPage = () => {
                           {isSubmittingSession ? (<div className="flex items-center gap-2 text-xs text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving & triggering Make.com...</div>) : makeTriggered ? (<div className="flex items-center gap-2 text-xs font-semibold text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> Make.com triggered</div>) : makeError ? (<div className="flex items-center gap-2 text-xs font-semibold text-amber-600"><AlertCircle className="h-3.5 w-3.5" /> Make.com failed: {makeError}</div>) : null}
                         </div>
                         <div className="mt-3 border-t border-violet-200 pt-4">
-                          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600">Send Result Email</p>
+                          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600">Staff decision required before emailing</p>
+                          <label className="mb-3 block text-xs font-semibold text-slate-700">Staff-approved outcome<select aria-label="Staff-approved outcome" value={staffApprovedResult} onChange={(event) => setStaffApprovedResult(event.target.value as "" | "pass" | "fail")} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm font-normal text-slate-900"><option value="">Choose after reviewing the assessment</option><option value="pass">Proceed — send pass email</option><option value="fail">Do not proceed — send fail email</option></select></label>
                           <div className="flex gap-2">
-                            <Button onClick={() => void sendResultEmail("pass")} disabled={emailSending || emailSent} className="bg-emerald-600 hover:bg-emerald-700" size="sm"><Mail className="mr-1.5 h-3.5 w-3.5" />{emailSent ? "Sent" : "Pass Email"}</Button>
-                            <Button onClick={() => void sendResultEmail("fail")} disabled={emailSending || emailSent} variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50" size="sm"><Mail className="mr-1.5 h-3.5 w-3.5" /> Fail Email</Button>
+                            <Button onClick={() => { if (staffApprovedResult) void sendResultEmail(staffApprovedResult); }} disabled={emailSending || emailSent || !staffApprovedResult} className={staffApprovedResult === "fail" ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"} size="sm"><Mail className="mr-1.5 h-3.5 w-3.5" />{emailSending ? "Sending…" : emailSent ? "Sent" : "Send approved outcome email"}</Button>
                             <Button onClick={resetInterview} variant="ghost" size="sm" className="ml-auto">New Interview</Button>
                           </div>
                         </div>
@@ -625,7 +695,7 @@ const AiHrInterviewerPage = () => {
               <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <p className="mb-3 text-sm font-bold text-slate-900">How it works</p>
                 <ul className="space-y-2 text-xs leading-relaxed text-slate-600">
-                  <li className="flex gap-2"><span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">1</span>Enter candidate details</li>
+                  <li className="flex gap-2"><span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">1</span>Select an agency ATS applicant</li>
                   <li className="flex gap-2"><span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">2</span>Optionally schedule & send invitation email</li>
                   <li className="flex gap-2"><span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">3</span>AI conducts the interview dynamically</li>
                   <li className="flex gap-2"><span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[9px] font-bold text-violet-700">4</span>AI evaluates and generates pass/fail result</li>
@@ -643,8 +713,8 @@ const AiHrInterviewerPage = () => {
             <div className="grid gap-3 sm:grid-cols-4">
               {[
                 { label: "Total Interviews", value: sessions.length, icon: Users, color: "text-violet-600 bg-violet-50" },
-                { label: "In Progress", value: sessions.filter((s) => s.status === "in_progress").length, icon: Clock, color: "text-blue-600 bg-blue-50" },
-                { label: "Passed", value: sessions.filter((s) => s.status === "passed").length, icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50" },
+                { label: "Completed", value: sessions.filter((s) => s.status === "completed").length, icon: Clock, color: "text-blue-600 bg-blue-50" },
+                { label: "AI suggests proceed", value: sessions.filter((s) => s.result?.recommendation === "pass").length, icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50" },
                 { label: "Scheduled", value: scheduledInterviews.filter((s) => s.status === "scheduled").length, icon: Calendar, color: "text-amber-600 bg-amber-50" },
               ].map((stat) => {
                 const Icon = stat.icon;
@@ -678,7 +748,7 @@ const AiHrInterviewerPage = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600"><Mail className="h-3 w-3" /> Invitation sent</span>
-                        <Button size="sm" variant="outline" onClick={() => { setView("interview"); resetInterview(); setCandidateName(sched.candidateName); setCandidateEmail(sched.candidateEmail); setPosition(sched.position); }}><ChevronRight className="h-3.5 w-3.5" /> Start</Button>
+                        <Button size="sm" variant="outline" onClick={() => { setView("interview"); resetInterview(); setApplicationId(sched.applicationId); setCandidateName(sched.candidateName); setCandidateEmail(sched.candidateEmail); setPosition(sched.position); }}><ChevronRight className="h-3.5 w-3.5" /> Start</Button>
                       </div>
                     </div>
                   ))}
@@ -689,9 +759,10 @@ const AiHrInterviewerPage = () => {
             {/* Past Interviews */}
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-100 px-5 py-4">
-                <h2 className="text-sm font-bold text-slate-900">All Interviews</h2>
-                <p className="text-xs text-slate-500">Manage candidates and send pass/fail emails</p>
+                <h2 className="text-sm font-bold text-slate-900">Saved AI Interview Sessions</h2>
+                <p className="text-xs text-slate-500">ATS-linked history. AI recommendations are advisory and are not hiring decisions.</p>
               </div>
+              {sessionsError && <p role="alert" className="m-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">Interview history unavailable: {sessionsError}</p>}
               <div className="divide-y divide-slate-100">
                 {sessions.map((session) => (
                   <div key={session.id} className="flex items-center gap-4 p-4 hover:bg-slate-50/50">
@@ -699,15 +770,12 @@ const AiHrInterviewerPage = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2"><p className="text-sm font-semibold text-slate-900">{session.candidateName}</p>{statusBadge(session.status)}</div>
                       <p className="text-xs text-slate-500">{session.position} · {session.candidateEmail}</p>
-                      {session.result && (<div className="mt-1 flex items-center gap-2"><span className={`text-xs font-bold ${session.result.recommendation === "pass" ? "text-emerald-600" : session.result.recommendation === "borderline" ? "text-amber-600" : "text-rose-600"}`}>Score: {session.result.overallScore}/100</span>{session.result.emailSent && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600"><Mail className="h-3 w-3" /> Email sent</span>}</div>)}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {session.status === "in_progress" && (<Button size="sm" variant="outline" onClick={() => { setView("interview"); resetInterview(); setCandidateName(session.candidateName); setCandidateEmail(session.candidateEmail); setPosition(session.position); setShowSetup(false); }}><ChevronRight className="h-3.5 w-3.5" /> Resume</Button>)}
-                      {session.result && !session.result.emailSent && (<Button size="sm" className={session.result.recommendation === "pass" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"}><Mail className="h-3.5 w-3.5" /> Send {session.result.recommendation === "pass" ? "Pass" : "Fail"}</Button>)}
+                      {session.result && (<div className="mt-1 flex items-center gap-2"><span className={`text-xs font-bold ${session.result.recommendation === "pass" ? "text-emerald-600" : session.result.recommendation === "borderline" ? "text-amber-600" : "text-rose-600"}`}>AI advisory: {session.result.overallScore}/100 · suggests {session.result.recommendation}</span></div>)}
                     </div>
                   </div>
                 ))}
               </div>
+              {!sessionsError && sessions.length === 0 && <p className="p-5 text-sm text-slate-600">No completed AI interview sessions are recorded for this agency yet.</p>}
             </div>
           </div>
         )}

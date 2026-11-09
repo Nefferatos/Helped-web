@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { fetchPublicAtsApplicationSummary, fetchPublicAtsDataSubjectRequests, fetchPublicAtsProfileWorkflow, submitPublicAtsDataSubjectRequest, updatePublicAtsProfileWorkflow, type PublicAtsDataSubjectRequest, type PublicAtsProfileWorkflow } from "@/lib/ats";
-import { CheckCircle2, Clock3, FileCheck2, LoaderCircle, Mail, MessageSquareText, ShieldCheck } from "lucide-react";
+import { Bot, Check, CheckCircle2, Clock3, Copy, FileCheck2, LoaderCircle, Mail, MessageSquareText, Send, ShieldCheck, Star, UserRound } from "lucide-react";
 
 const formatDate = (value?: string) => {
   if (!value) return "N/A";
@@ -16,12 +16,14 @@ const formatDate = (value?: string) => {
 
 const ProfileAssistantPanel = ({ applicationId, token }: { applicationId: string; token: string }) => {
   const [message, setMessage] = useState("");
+  const [chatMessages, setChatMessages] = useState<Array<{ role: "assistant" | "user"; content: string }>>([]);
   const [preferredLanguage, setPreferredLanguage] = useState("English");
   const [processingConsent, setProcessingConsent] = useState(false);
   const [publicationConsent, setPublicationConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [workflow, setWorkflow] = useState<PublicAtsProfileWorkflow | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const workflowQuery = useQuery({
     queryKey: ["public-ats-profile-agent", applicationId, token],
@@ -35,22 +37,39 @@ const ProfileAssistantPanel = ({ applicationId, token }: { applicationId: string
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!message.trim()) return;
-    setBusy(true); setError("");
+    const submittedMessage = message.trim();
+    if (!submittedMessage || busy) return;
+    setBusy(true); setError(""); setMessage("");
+    setChatMessages((current) => [...current, { role: "user", content: submittedMessage }]);
     try {
       const result = await updatePublicAtsProfileWorkflow(applicationId, {
-        token, action: "chat", message: message.trim(), preferredLanguage,
+        token, action: "chat", message: submittedMessage, preferredLanguage,
         ...(workflow?.processingConsent ? {} : {
           consentToAiProcessing: processingConsent,
           consentSource: "Applicant checked the profile assistant consent on the application status page.",
         }),
       });
       setWorkflow(result.workflow ?? null);
-      setMessage("");
+      const reply = result.workflow?.reply?.trim();
+      if (reply) setChatMessages((current) => [...current, { role: "assistant", content: reply }]);
       await workflowQuery.refetch();
-    } catch (submitError) { setError(submitError instanceof Error ? submitError.message : "The profile assistant could not respond"); }
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "The profile assistant could not respond");
+      setChatMessages((current) => [...current, { role: "assistant", content: "I couldn’t process that message just now. Please try sending it again." }]);
+      setMessage(submittedMessage);
+    }
     finally { setBusy(false); }
   };
+
+  useEffect(() => {
+    if (workflow?.reply?.trim()) {
+      setChatMessages((current) => current.length ? current : [{ role: "assistant", content: workflow.reply }]);
+    }
+  }, [workflow?.reply]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [chatMessages, busy]);
 
   const runAction = async (payload: Record<string, unknown>) => {
     setBusy(true); setError("");
@@ -66,18 +85,58 @@ const ProfileAssistantPanel = ({ applicationId, token }: { applicationId: string
   const prettyField = (key: string) => key.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
   return <Card className="rounded-[2rem] border-slate-200 bg-white p-6">
-    <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3">
       <div className="rounded-2xl bg-violet-100 p-3 text-violet-700"><MessageSquareText className="h-5 w-5" /></div>
-      <div><h2 className="text-2xl font-black text-slate-950">Complete or clarify your profile</h2><p className="text-sm text-slate-600">You can continue with staff if you prefer not to use the assistant.</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-700">Optional profile chatbot</p><h2 className="text-2xl font-black text-slate-950">Complete or clarify your profile</h2><p className="text-sm text-slate-600">Tell the assistant about your experience, languages, availability, and other application details. It identifies information you provide, asks about missing or unclear answers, and prepares your details for you to review and confirm. It does not make hiring decisions.</p></div>
     </div>
     {workflowQuery.isLoading && <p className="mt-4 text-sm text-slate-600">Loading profile assistant…</p>}
     {workflowQuery.isError && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{workflowQuery.error instanceof Error ? workflowQuery.error.message : "Profile assistant is currently unavailable."}</p>}
     {workflowQuery.data && !workflowQuery.data.agents.collectorConfigured && <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">The profile assistant is not configured yet. Your submitted application remains available to recruitment staff.</p>}
-    {workflow?.reply && <div className="mt-5 rounded-2xl bg-slate-50 p-4"><p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">{workflow.reply}</p></div>}
+    <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-violet-100 text-violet-700"><Bot className="h-5 w-5" /></span>
+          <div><p className="text-sm font-bold text-slate-900">Application assistant</p><p className="text-xs text-slate-500">Here to help clarify your application</p></div>
+        </div>
+        <span className={`flex items-center gap-1.5 text-xs font-medium ${workflowQuery.isLoading ? "text-slate-500" : workflowQuery.data?.agents.collectorConfigured ? "text-emerald-700" : "text-amber-700"}`}><span className={`h-2 w-2 rounded-full ${workflowQuery.isLoading ? "bg-slate-400" : workflowQuery.data?.agents.collectorConfigured ? "bg-emerald-500" : "bg-amber-500"}`} />{workflowQuery.isLoading ? "Connecting" : workflowQuery.data?.agents.collectorConfigured ? "Ready" : "Unavailable"}</span>
+      </div>
+      <div className="max-h-[26rem] min-h-64 space-y-4 overflow-y-auto p-4 sm:p-6" aria-live="polite" aria-label="Chat messages">
+        {chatMessages.length === 0 && <div className="flex items-end gap-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-100 text-violet-700"><Bot className="h-4 w-4" /></span>
+          <div className="max-w-[85%] rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm leading-6 text-slate-800">Hello! I can help you complete or clarify your application. What would you like to update?</p>
+            <p className="mt-2 text-[11px] text-slate-400">Application assistant</p>
+          </div>
+        </div>}
+        {chatMessages.map((chatMessage, index) => <div key={`${index}-${chatMessage.role}`} className={`flex items-end gap-2.5 ${chatMessage.role === "user" ? "justify-end" : ""}`}>
+          {chatMessage.role === "assistant" && <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-100 text-violet-700"><Bot className="h-4 w-4" /></span>}
+          <div className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${chatMessage.role === "user" ? "rounded-br-md bg-violet-700 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800"}`}>
+            <p className="whitespace-pre-wrap text-sm leading-6">{chatMessage.content}</p>
+            <p className={`mt-2 text-[11px] ${chatMessage.role === "user" ? "text-violet-200" : "text-slate-400"}`}>{chatMessage.role === "user" ? "You" : "Application assistant"}</p>
+          </div>
+          {chatMessage.role === "user" && <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-200 text-slate-600"><UserRound className="h-4 w-4" /></span>}
+        </div>)}
+        {busy && <div className="flex items-end gap-2.5"><span className="grid h-8 w-8 place-items-center rounded-full bg-violet-100 text-violet-700"><Bot className="h-4 w-4" /></span><div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" />Assistant is typing…</div></div>}
+        <div ref={chatEndRef} />
+      </div>
+      {!workflow?.applicantConfirmed && <form onSubmit={(event) => void submit(event)} className="border-t border-slate-200 bg-white p-3 sm:p-4">
+        {!workflow?.processingConsent && <label className="mb-3 flex items-start gap-2.5 rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs leading-5 text-slate-700"><input type="checkbox" checked={processingConsent} onChange={(event) => setProcessingConsent(event.target.checked)} className="mt-0.5" /><span>I agree to share selected application details with At The Agency’s Make.com assistant to clarify my answers. I can continue with staff instead.</span></label>}
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <label htmlFor="profile-chat-language" className="text-xs font-semibold text-slate-600">Reply language</label>
+          <select id="profile-chat-language" value={preferredLanguage} onChange={(event) => setPreferredLanguage(event.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700"><option>English</option><option>Nepali</option><option>Bahasa Indonesia</option><option>Tagalog</option><option>Hindi</option><option>Burmese</option><option>Sinhala</option><option>Tamil</option></select>
+        </div>
+        <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100">
+          <textarea aria-label="Your message" value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (message.trim() && !busy) event.currentTarget.form?.requestSubmit(); } }} maxLength={2000} rows={2} placeholder="Type your message… (Enter to send)" className="max-h-32 min-h-12 flex-1 resize-y border-0 bg-transparent px-2 py-2 text-sm outline-none ring-0 placeholder:text-slate-400 focus:ring-0" />
+          <Button type="submit" size="icon" aria-label="Send message" className="mb-0.5 h-10 w-10 shrink-0 rounded-xl bg-violet-700 text-white hover:bg-violet-800" disabled={busy || !message.trim() || !workflowQuery.data?.agents.collectorConfigured || (!workflow?.processingConsent && !processingConsent)}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-400"><span>Do not send identity document numbers or medical details.</span><span>{message.length}/2000</span></div>
+      </form>}
+    </div>
+    {workflow?.processingConsent && <p className="mt-3 flex items-start gap-2 text-xs text-slate-500"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />The assistant receives only selected recruitment details and your latest message. It does not receive identity-document contents, medical records, contact details, or your address.</p>}
+    {workflow?.applicantConfirmed && <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">Chat is closed because you confirmed your profile. Contact agency staff if you need to make a correction.</p>}
+    {workflowQuery.data?.agents.collectorConfigured && chatMessages.length === 0 && !workflow?.applicantConfirmed && <div className="mt-3 flex flex-wrap gap-2">{["What information is still missing?", "I want to update my experience", "Can you help me add my languages?"] .map((suggestion) => <button key={suggestion} type="button" onClick={() => setMessage(suggestion)} className="rounded-full border border-violet-200 bg-white px-3 py-1.5 text-xs font-medium text-violet-800 transition hover:bg-violet-50">{suggestion}</button>)}</div>}
     {Object.keys(fields).length > 0 && <div className="mt-4 grid gap-2 sm:grid-cols-2">{Object.entries(fields).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-semibold uppercase text-slate-500">{prettyField(key)}</p><p className="mt-1 text-sm text-slate-900">{Array.isArray(value) ? value.join(", ") || "Not provided" : value == null || value === "" ? "Not provided" : String(value)}</p></div>)}</div>}
     {workflow?.missingFields.length ? <p className="mt-3 text-sm text-slate-600">Still to clarify: {workflow.missingFields.map(prettyField).join(", ")}</p> : null}
-    {!workflow?.processingConsent && <label className="mt-5 flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-slate-800"><input type="checkbox" checked={processingConsent} onChange={(event) => setProcessingConsent(event.target.checked)} className="mt-1" /><span>I agree that my application details may be shared with At The Agency’s Make.com profile assistant to help collect or clarify my answers. I can continue with staff instead.</span></label>}
-    {workflow?.processingConsent && <p className="mt-4 flex items-start gap-2 text-xs text-slate-500"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />The assistant receives only selected recruitment details and your latest message. It does not receive identity-document contents, medical records, contact details, or your address.</p>}
     {workflow?.readyForConfirmation && !workflow.applicantConfirmed && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="font-bold text-slate-900">Please confirm your details</p><p className="mt-2 text-sm text-slate-700">{workflow.confirmationSummary || "Review the profile information above. Confirm only if it is accurate."}</p><Button className="mt-3 bg-emerald-700 text-white hover:bg-emerald-800" disabled={busy} onClick={() => void runAction({ action: "confirm_profile", confirmed: true })}>I confirm these details</Button></div>}
     {workflow?.applicantConfirmed && <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">You confirmed these details. Contact agency staff if you need to correct anything.</p>}
     {workflow?.applicantConfirmed && workflow.draftStatus !== "pending_staff_review" && workflow.draftStatus !== "approved" && <div className="mt-4 rounded-xl border border-slate-200 p-4"><label className="flex items-start gap-3 text-sm text-slate-800"><input type="checkbox" checked={publicationConsent} onChange={(event) => setPublicationConsent(event.target.checked)} className="mt-1" /><span>I give permission for the agency to prepare a profile from these confirmed details for potential employers to review. Staff approval is still required before publication.</span></label><Button className="mt-3" disabled={busy || !publicationConsent || !workflowQuery.data?.agents.profileBuilderConfigured} onClick={() => void runAction({ action: "create_public_profile_draft", publicationConsent, publicationConsentSource: "Applicant checked the profile preparation permission on the application status page." })}>{busy ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}Prepare profile draft</Button>{!workflowQuery.data?.agents.profileBuilderConfigured && <p className="mt-2 text-xs text-slate-500">The profile drafting agent is not configured yet.</p>}</div>}
@@ -86,7 +145,6 @@ const ProfileAssistantPanel = ({ applicationId, token }: { applicationId: string
     {workflow?.draftStatus === "pending_staff_review" && <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">Your profile draft is waiting for staff review. It has not been published.</p>}
     {workflow?.publicationConsent && ["pending_staff_review", "approved", "rejected"].includes(workflow.draftStatus) && <Button variant="outline" className="mt-3" disabled={busy} onClick={() => void runAction({ action: "withdraw_publication_consent" })}>Withdraw profile preparation permission</Button>}
     {workflow?.processingConsent && <Button variant="ghost" size="sm" className="mt-3 text-slate-600" disabled={busy} onClick={() => void runAction({ action: "withdraw_processing_consent" })}>Stop using the profile assistant</Button>}
-    {!workflow?.applicantConfirmed && <form onSubmit={(event) => void submit(event)} className="mt-5 space-y-3"><label className="block text-sm font-semibold text-slate-800">Preferred language<select value={preferredLanguage} onChange={(event) => setPreferredLanguage(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"><option>English</option><option>Nepali</option><option>Bahasa Indonesia</option><option>Tagalog</option><option>Hindi</option><option>Burmese</option><option>Sinhala</option><option>Tamil</option></select></label><label className="block text-sm font-semibold text-slate-800">Your message<textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={2000} rows={3} placeholder="Ask a question or clarify one of your answers" className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 text-sm" /></label><Button type="submit" disabled={busy || !message.trim() || !workflowQuery.data?.agents.collectorConfigured || (!workflow?.processingConsent && !processingConsent)}>{busy ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}Send message</Button></form>}
     {error && <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error}</p>}
   </Card>;
 };
@@ -161,6 +219,7 @@ const ApplicantDataRightsPanel = ({ applicationId, token }: { applicationId: str
 const PublicMaidApplicationStatusPage = () => {
   const { applicationId = "" } = useParams();
   const [searchParams] = useSearchParams();
+  const [trackingLinkCopied, setTrackingLinkCopied] = useState(false);
   const token = searchParams.get("token") ?? "";
 
   const summaryQuery = useQuery({
@@ -170,10 +229,19 @@ const PublicMaidApplicationStatusPage = () => {
   });
 
   const summary = summaryQuery.data;
+  const copyTrackingLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setTrackingLinkCopied(true);
+      window.setTimeout(() => setTrackingLinkCopied(false), 2500);
+    } catch {
+      window.prompt("Copy and save your private application tracking link:", window.location.href);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,_#f8fafc_0%,_#ecfdf5_100%)] px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6">
         <section className="rounded-[2rem] border border-emerald-200 bg-white p-6 shadow-[0_22px_70px_-32px_rgba(16,185,129,0.35)] sm:p-8">
           <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Application Status</Badge>
           <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
@@ -196,6 +264,16 @@ const PublicMaidApplicationStatusPage = () => {
               <p className="mt-2 text-base font-semibold text-slate-950">{formatDate(summary?.application.appliedAt)}</p>
             </Card>
           </div>
+          {summary && <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold text-emerald-950">Save your private tracking link</p>
+              <p className="mt-1 text-sm text-emerald-900">Use it to return to your application, chatbot, documents, and interview updates. Anyone with this link can view your application.</p>
+            </div>
+            <Button type="button" variant="outline" className="shrink-0 border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-100" onClick={() => void copyTrackingLink()}>
+              {trackingLinkCopied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+              {trackingLinkCopied ? "Link copied" : "Copy private link"}
+            </Button>
+          </div>}
         </section>
 
         {summary && <TelegramApplicantInvite />}
@@ -214,10 +292,13 @@ const PublicMaidApplicationStatusPage = () => {
           </Card>
         ) : null}
 
+        {summary && <section aria-label="Applicant profile chatbot">
+          <ProfileAssistantPanel applicationId={applicationId} token={token} />
+        </section>}
+
         {summary ? (
-          <div className="grid items-start gap-6 xl:grid-cols-2">
-            <div className="space-y-6">
-              <ProfileAssistantPanel applicationId={applicationId} token={token} />
+          <div className="grid items-start gap-5 xl:grid-cols-12">
+            <div className="space-y-6 xl:col-span-7">
               <Card className="rounded-[2rem] border-slate-200 bg-white p-6">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
@@ -244,6 +325,27 @@ const PublicMaidApplicationStatusPage = () => {
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Available Date</p>
                     <p className="mt-2 text-sm font-medium text-slate-900">{summary.profile?.availableDate || "Not provided"}</p>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Formal FDW experience</p>
+                  <p className="mt-2 text-sm font-medium text-slate-900">{summary.profile?.yearsOfExperience ?? 0} years</p>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Care and skill ratings <span className="font-normal normal-case tracking-normal">(stars out of 5)</span></p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {([
+                      ["Childcare", summary.profile?.skillRatings?.childcare],
+                      ["Newborn care", summary.profile?.skillRatings?.newbornCare],
+                      ["Elderly care", summary.profile?.skillRatings?.elderlyCare],
+                      ["Disability care", summary.profile?.skillRatings?.disabledCare],
+                      ["Housekeeping", summary.profile?.skillRatings?.housekeeping],
+                      ["Pet care", summary.profile?.skillRatings?.petCare],
+                    ] as const).map(([label, rawRating]) => {
+                      const rating = Math.max(0, Math.min(5, Math.round(Number(rawRating) || 0)));
+                      return <div key={label} aria-label={`${label}: ${rating} out of 5 stars`} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-2"><span className="text-sm font-semibold text-slate-800">{label}</span><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums text-slate-800">{rating}/5</span></div>
+                        <div className="mt-2 flex items-center gap-1" aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <Star key={index} className={`h-4 w-4 ${index < rating ? "fill-amber-400 text-amber-400" : "text-slate-300"}`} />)}</div>
+                      </div>;
+                    })}
                   </div>
                 </div>
               </Card>
@@ -277,11 +379,12 @@ const PublicMaidApplicationStatusPage = () => {
                   ))}
                 </div>
               </Card>
-            </div>
 
-            <div className="space-y-6">
               <ApplicantInterviewConfirmation applicationId={applicationId} token={token} />
               <ApplicantDataRightsPanel applicationId={applicationId} token={token} />
+            </div>
+
+            <div className="space-y-6 xl:col-span-5">
               <Card className="rounded-[2rem] border-slate-200 bg-white p-6">
                 <div className="flex items-center gap-3">
                   <div className="rounded-2xl bg-sky-100 p-3 text-sky-700">

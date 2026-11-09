@@ -6,6 +6,8 @@ import { getAuthenticatedAgencyAdmin, getRequestAgencyId } from '../auth'
 import {
   bulkUpdateApplications,
   createPublicAtsApplication,
+  DuplicatePublicAtsApplicantError,
+  deletePublicAtsApplications,
   ensureApplicationForMaid,
   getAtsApplication,
   getAtsDashboard,
@@ -619,8 +621,30 @@ export const createPublicAtsApplicationController = async (req: Request, res: Re
 
     res.status(201).json(created)
   } catch (error) {
+    if (error instanceof DuplicatePublicAtsApplicantError) {
+      return res.status(409).json({ error: error.message })
+    }
     console.error('Error creating public ATS application:', error)
     res.status(500).json({ error: 'Failed to submit application' })
+  }
+}
+
+export const deletePublicAtsApplicationsController = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const rawIds = req.body?.applicationIds
+    const applicationIds = Array.isArray(rawIds)
+      ? [...new Set(rawIds.filter((id: unknown): id is string => typeof id === 'string' && id.trim().length > 0))]
+      : []
+    if (applicationIds.length === 0) return res.status(400).json({ error: 'Select at least one applicant to delete' })
+    if (applicationIds.length > 100) return res.status(400).json({ error: 'Delete up to 100 applicants at a time' })
+
+    const deleted = await deletePublicAtsApplications(agencyId, applicationIds)
+    if (deleted === 0) return res.status(404).json({ error: 'No selected applicants were found for this agency' })
+    return res.status(200).json({ deleted })
+  } catch (error) {
+    console.error('Error deleting public ATS applications:', error)
+    return res.status(500).json({ error: 'Failed to delete applicants. Please try again.' })
   }
 }
 

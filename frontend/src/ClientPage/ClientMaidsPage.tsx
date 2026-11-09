@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   ChevronDown,
@@ -261,6 +261,89 @@ const getRequestHighlights = (d: Filters) =>
    d.dutyCareElderlyDisabled?"Elderly / disabled":"", d.dutyCooking?"Cooking":"",
    d.dutyGeneralHousekeeping?"Housekeeping":"", getSelectedLanguageFromDraft(d),
    getSelectedAgeFromDraft(d), d.withVideo?"Video available":""].filter(Boolean).slice(0,6);
+
+export const RequestForm = ({ prefillFilters, onBack }: { prefillFilters: Filters; onBack: () => void }) => {
+  const client = useMemo(() => getStoredClient(), []);
+  const [busy, setBusy] = useState(false);
+  const [canSubmit, setCanSubmit] = useState(Boolean(getClientToken()));
+  const [form, setForm] = useState({
+    name: client?.name ?? "", email: client?.email ?? "", phone: client?.phone ?? "",
+    nationality: prefillFilters.natFilipino ? "Filipino" : prefillFilters.natIndonesian ? "Indonesian" : prefillFilters.natIndian ? "Indian" : "No Preference",
+    duty: prefillFilters.dutyCareInfant ? "Infant Care" : prefillFilters.dutyCareYoungChildren ? "Kid Care" : prefillFilters.dutyCareElderlyDisabled ? "Elderly Care" : prefillFilters.dutyCooking ? "Cooking" : prefillFilters.dutyGeneralHousekeeping ? "Housekeeping" : "No Preference",
+    age: "No Preference", language: getSelectedLanguageFromDraft(prefillFilters), notes: "",
+  });
+  const [requirements, setRequirements] = useState<RequirementsState>({ ...defaultRequirements, hasChildren: prefillFilters.hasChildren, newMaid: prefillFilters.maidType === "New Maid", transferMaid: prefillFilters.maidType === "Transfer Maid", exSingaporeMaid: prefillFilters.maidType === "Ex-Singapore Maid" });
+  const highlights = useMemo(() => getRequestHighlights(prefillFilters), [prefillFilters]);
+  useEffect(() => {
+    let active = true;
+    void refreshClientToken().then((token) => { if (active) setCanSubmit(Boolean(token)); }).catch(() => { if (active) setCanSubmit(false); });
+    return () => { active = false; };
+  }, []);
+  const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canSubmit) { toast.error("Please sign in to send a request."); return; }
+    setBusy(true);
+    try {
+      const selected = Object.entries(requirements).filter(([, active]) => active).map(([key]) => key.replace(/([A-Z])/g, " $1").toLowerCase());
+      const response = await fetch("/api/requests", {
+        method: "POST", headers: { "Content-Type": "application/json", ...getClientAuthHeaders() },
+        body: JSON.stringify({ ...(client?.id != null && { clientId: client.id }), agencyId: 1, type: "general", details: { clientName: form.name.trim(), clientEmail: form.email.trim(), clientPhone: form.phone.trim(), nationality: form.nationality, primaryDuty: form.duty, ageGroup: form.age, language: form.language, ...(form.notes.trim() && { otherRequirements: form.notes.trim() }), ...(selected.length && { requirements: selected.join(", ") }) } }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; message?: string };
+      if (!response.ok) throw new Error(result.error || result.message || "Your request could not be sent.");
+      toast.success("Your request has been sent to the agency.");
+      onBack();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Your request could not be sent."); }
+    finally { setBusy(false); }
+  };
+  return <section className="cm-request w-full" aria-label="Request agency help">
+    <style>{`
+      .cm-request .cm-request-header{padding:1.2rem 1.5rem}
+      .cm-request .cm-req-sub{max-width:680px;font-size:.8rem!important;line-height:1.4}
+      .cm-request .cm-req-title{max-width:calc(100% - 5.5rem);font-size:clamp(1.1rem,2.2vw,1.35rem)}
+      .cm-request .cm-req-eyebrow,.cm-request .cm-req-back{font-size:.72rem!important}
+      .cm-request form p{font-size:.75rem!important;line-height:1.35}
+      .cm-request .cm-lbl{font-size:.75rem!important;letter-spacing:0!important;text-transform:none!important;color:#334155!important;margin-bottom:0}
+      .cm-request .cm-req-star{font-size:.68rem!important;color:#b45309!important}
+      .cm-request .cm-form-input,.cm-request .cm-form-select,.cm-request .cm-form-textarea{background:#fff!important;color:#0f172a!important;font-size:.82rem!important;letter-spacing:normal!important;text-transform:none!important;padding-top:.48rem!important;padding-bottom:.48rem!important}
+      .cm-request form > .grid > div{padding:12px!important}
+      .cm-request form .grid label.flex{min-height:36px;padding:.4rem .55rem;font-size:.8rem;line-height:1.2}
+      .cm-request .cm-form-textarea{min-height:3.5rem!important}
+      .cm-request .cm-btn-submit,.cm-request .cm-btn-cancel,.cm-request form a{font-size:.8rem!important;padding-top:.55rem;padding-bottom:.55rem}
+      .cm-request .cm-form-input:focus,.cm-request .cm-form-select:focus,.cm-request .cm-form-textarea:focus{border-color:#0e7490!important;box-shadow:0 0 0 3px rgba(14,116,144,.12)!important}
+      @media(max-width:480px){.cm-request .cm-request-header{padding:1rem}.cm-request-header .cm-req-title{max-width:100%;padding-top:1.5rem}.cm-request-header .cm-req-back{top:.6rem;right:.6rem}}
+    `}</style>
+    <div className="cm-request-header">
+      <button type="button" className="cm-req-back" onClick={onBack} aria-label="Close request form"><X size={17}/><span className="hidden sm:inline">Close</span></button>
+      <div className="cm-req-eyebrow"><Sparkles size={11}/> Personalised agency matching</div>
+      <h2 className="cm-req-title">Tell us what kind of helper you need</h2>
+      <p className="cm-req-sub">Share your contact details and preferences. Our agency team will review your request and follow up with suitable profiles.</p>
+      {highlights.length > 0 && <div className="cm-req-prefill"><p className="cm-req-prefill-lbl">We added these preferences from your search</p><div className="cm-req-prefill-pills">{highlights.map((item) => <span key={item} className="cm-req-prefill-pill">{item}</span>)}</div></div>}
+    </div>
+    <form onSubmit={(event) => void submit(event)} className="space-y-4 p-4 sm:p-5">
+      {!canSubmit && <div role="status" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"><span>Sign in to submit your request and keep track of the agency’s response.</span><Link to="/employer-login" className="inline-flex min-h-10 items-center justify-center rounded-lg bg-teal-800 px-4 font-bold text-white hover:bg-teal-900">Employer sign in</Link></div>}
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <div className="mb-4 flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-teal-50 text-sm font-bold text-teal-800">1</span><div><h3 className="text-sm font-bold text-slate-900">Your contact details</h3><p className="text-xs text-slate-500">So the team knows how to reach you</p></div></div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="cm-lbl">Full name <span className="cm-req-star">Required</span><input autoComplete="name" className="cm-form-input mt-1.5" required maxLength={120} value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="Your name" /></label>
+          <label className="cm-lbl">Email address <span className="cm-req-star">Required</span><input autoComplete="email" className="cm-form-input mt-1.5" required type="email" maxLength={254} value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="you@example.com" /></label>
+          <label className="cm-lbl sm:col-span-2">Phone number <span className="cm-req-star">Required</span><PhoneNumberInput className="cm-form-input mt-1.5" required value={form.phone} onChange={(value) => update("phone", value)} /></label>
+        </div>
+        <label className="cm-lbl mt-4 block">Additional notes <span className="font-normal normal-case tracking-normal text-slate-400">(optional)</span><textarea className="cm-form-textarea mt-1.5 min-h-20" rows={2} maxLength={1500} value={form.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Tell us about your household, preferred start date, or anything else that may help us find a suitable match." /><span className="mt-1 block text-right text-[11px] font-normal normal-case tracking-normal text-slate-400">{form.notes.length}/1500</span></label>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <div className="mb-4 flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-teal-50 text-sm font-bold text-teal-800">2</span><div><h3 className="text-sm font-bold text-slate-900">Helper preferences</h3><p className="text-xs text-slate-500">Choose what matters to your household</p></div></div>
+        <div className="grid gap-4 sm:grid-cols-2">{([ ["nationality", "Nationality", ["No Preference", ...NATIONALITY_OPTIONS.slice(1)]], ["duty", "Main responsibility", PRIMARY_DUTY_OPTIONS], ["age", "Age range", AGE_GROUP_OPTIONS], ["language", "Preferred language", LANGUAGE_OPTIONS] ] as const).map(([key, label, options]) => <label className="cm-lbl" key={key}>{label}<select className="cm-form-select mt-1.5" value={form[key]} onChange={(event) => update(key, event.target.value)}>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>)}</div>
+        <p className="mb-2 mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">Other preferences</p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{([ ["noOffDay", "No off-day preference"], ["hasChildren", "Has children"], ["married", "Married"], ["newMaid", "New maid"], ["transferMaid", "Transfer maid"], ["exSingaporeMaid", "Ex-Singapore maid"] ] as const).map(([key, label]) => <label key={key} className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 transition hover:border-teal-300 hover:bg-teal-50"><input className="h-4 w-4 accent-teal-700" type="checkbox" checked={requirements[key]} onChange={() => setRequirements((current) => ({ ...current, [key]: !current[key] }))}/>{label}</label>)}</div>
+      </div>
+      </div>
+      <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-slate-500">Your details will be sent securely to the agency team for follow-up.</p><div className="flex gap-2"><button type="button" className="cm-btn-cancel" onClick={onBack} disabled={busy}>Cancel</button><button type="submit" className="cm-btn-submit" disabled={busy || !canSubmit}>{busy ? "Sending…" : "Send request"}</button></div></div>
+    </form>
+  </section>;
+};
 const getPublicProfilePath = (m: MaidProfile) =>
   m.refCode ? `/maids/${encodeURIComponent(m.refCode)}` : null;
 
@@ -1564,233 +1647,7 @@ const SearchResults = ({ maids, isLoggedIn, isLoading, onLoginClick, onViewProfi
 /* ═══════════════════════════════════════════════════════════════════════════
    REQUEST FORM
 ═══════════════════════════════════════════════════════════════════════════ */
-export const RequestForm = ({ prefillFilters, onBack }:{ prefillFilters:Filters; onBack:()=>void }) => {
-  const storedClient = useMemo(()=>getStoredClient(),[]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [agencyOptions, setAgencyOptions] = useState<PublicAgencyOption[]>([]);
 
-  const deriveNat = () => {
-    if(prefillFilters.natFilipino)     return "Filipino";
-    if(prefillFilters.natIndonesian)   return "Indonesian";
-    if(prefillFilters.natIndian)       return "Indian";
-    if(prefillFilters.natSriLankan)    return "Sri Lankan";
-    if(prefillFilters.natMyanmar)      return "Myanmar";
-    if(prefillFilters.natCambodian)    return "Cambodian";
-    if(prefillFilters.natBangladeshi)  return "Bangladeshi";
-    return "No Preference";
-  };
-  const deriveDuty = () => {
-    if(prefillFilters.dutyCareInfant)           return "Infant Care";
-    if(prefillFilters.dutyCareYoungChildren)    return "Kid Care";
-    if(prefillFilters.dutyCareElderlyDisabled)  return "Elderly Care";
-    if(prefillFilters.dutyCooking)              return "Cooking";
-    if(prefillFilters.dutyGeneralHousekeeping)  return "Housekeeping";
-    return "No Preference";
-  };
-  const deriveAge = () => {
-    if(prefillFilters.age21to25)  return "18–25";
-    if(prefillFilters.age26to30||prefillFilters.age31to35) return "26–35";
-    if(prefillFilters.age36to40)  return "36–45";
-    if(prefillFilters.age41above) return "46+";
-    return "No Preference";
-  };
-  const deriveLang = () => {
-    if(prefillFilters.langEnglish)         return "English";
-    if(prefillFilters.langMandarin)        return "Mandarin";
-    if(prefillFilters.langBahasaIndonesia) return "Bahasa Indonesia";
-    if(prefillFilters.langTamil)           return "Tamil";
-    return "No Preference";
-  };
-
-  const [form, setForm] = useState({
-    name: storedClient?.name||"", email: storedClient?.email||"",
-    phone: storedClient?.phone||"", agencyId:"",
-    nationality: deriveNat(), primaryDuty: deriveDuty(),
-    ageGroup: deriveAge(), language: deriveLang(), otherRequirements:"",
-  });
-  const [req, setReq] = useState<RequirementsState>({
-    ...defaultRequirements,
-    hasChildren: prefillFilters.hasChildren, married: prefillFilters.marMarried,
-    newMaid: prefillFilters.maidType==="New Maid",
-    transferMaid: prefillFilters.maidType==="Transfer Maid",
-    exSingaporeMaid: prefillFilters.maidType==="Ex-Singapore Maid",
-  });
-  const highlights = useMemo(()=>getRequestHighlights(prefillFilters),[prefillFilters]);
-
-  useEffect(()=>{ void fetchAgencyOptions().then(setAgencyOptions).catch(()=>setAgencyOptions([])); },[]);
-
-  const handleSubmit = async(e:React.FormEvent)=>{
-    e.preventDefault();
-    if(!form.name.trim()||!form.email.trim()||!form.phone.trim()){
-      toast.error("Please fill in your name, email, and phone number."); return;
-    }
-    const reqList=[
-      req.noOffDay?"No Off-day":null, req.hasChildren?"Has child(ren)":null,
-      req.married?"Married":null, req.newMaid?"New Maid":null,
-      req.transferMaid?"Transfer Maid":null, req.exSingaporeMaid?"Ex-Singapore Maid":null,
-    ].filter(Boolean) as string[];
-    try {
-      setIsSubmitting(true);
-      const payload={
-        ...(storedClient?.id!=null&&{clientId:storedClient.id}),
-        agencyId: form.agencyId?Number(form.agencyId):1,
-        type:"general",
-        details:{
-          clientName:form.name.trim(), clientEmail:form.email.trim(), clientPhone:form.phone.trim(),
-          nationality:form.nationality, primaryDuty:form.primaryDuty,
-          ageGroup:form.ageGroup, language:form.language,
-          ...(form.otherRequirements.trim()&&{otherRequirements:form.otherRequirements.trim()}),
-          ...(reqList.length>0&&{requirements:reqList.join(", ")}),
-        },
-      };
-      const response=await fetch("/api/requests",{
-        method:"POST",
-        headers:{"Content-Type":"application/json",...getClientAuthHeaders()},
-        body:JSON.stringify(payload),
-      });
-      const data=(await response.json().catch(()=>({}))) as {error?:string;message?:string};
-      if(!response.ok) throw new Error(data.error||data.message||`Request failed (${response.status})`);
-      toast.success("Your request has been sent to the agency!");
-      setReq(defaultRequirements);
-      setForm(p=>({...p,agencyId:"",nationality:deriveNat(),primaryDuty:deriveDuty(),
-        ageGroup:deriveAge(),language:deriveLang(),otherRequirements:""}));
-    } catch(err){
-      toast.error(err instanceof Error?err.message:"Failed to submit. Please try again.");
-    } finally { setIsSubmitting(false); }
-  };
-
-  const selectWrapper = (content:React.ReactNode) => (
-    <div style={{position:"relative"}}>{content}
-      <div className="cm-select-arrow"><ChevronDown size={14}/></div>
-    </div>
-  );
-
-  return (
-    <div className="cm-request">
-      <div className="cm-request-header">
-        <div className="cm-request-header-blob"/>
-        <button type="button" className="cm-req-back" onClick={onBack}>
-          <X size={17} aria-hidden="true" />
-        </button>
-        <div className="cm-req-eyebrow"><Sparkles size={10}/> Agency Matching</div>
-        <h2 className="cm-req-title">Request Agency Help</h2>
-        <p className="cm-req-sub">Send your requirements and our team will personally match the best candidates for you.</p>
-        {highlights.length>0&&(
-          <div className="cm-req-prefill">
-            <p className="cm-req-prefill-lbl">Pre-filled from your filters</p>
-            <div className="cm-req-prefill-pills">
-              {highlights.map(h=><span key={h} className="cm-req-prefill-pill">{h}</span>)}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <form onSubmit={e=>void handleSubmit(e)}>
-        {/* Step 1 */}
-        <div className="cm-form-section">
-          <div className="cm-form-step">
-            <span className="cm-step-num">1</span>
-            <span className="cm-step-label">Your Contact Details</span>
-          </div>
-          <div className="cm-form-grid">
-            <div>
-              <label className="cm-lbl">Full Name <span className="cm-req-star">*</span></label>
-              <input className="cm-form-input" placeholder="e.g. Sarah Tan" value={form.name}
-                onChange={e=>setForm(p=>({...p,name:e.target.value}))} required/>
-            </div>
-            <div>
-              <label className="cm-lbl">Email Address <span className="cm-req-star">*</span></label>
-              <input type="email" className="cm-form-input" placeholder="you@example.com" value={form.email}
-                onChange={e=>setForm(p=>({...p,email:e.target.value}))} required/>
-            </div>
-            <div>
-              <label className="cm-lbl">Phone Number <span className="cm-req-star">*</span></label>
-              <PhoneNumberInput className="cm-form-input" value={form.phone}
-                onChange={v=>setForm(p=>({...p,phone:v}))} required
-                style={{ "--phone-input-focus-border": "var(--teal-3)", "--phone-input-focus-ring": "rgba(14,78,94,0.1)" } as React.CSSProperties}/>
-            </div>
-            {/*
-              Agency selection is temporarily disabled. Requests continue to use
-              the default agency (ID 1) in the submission payload.
-            <div>
-              <label className="cm-lbl">Agency <span className="cm-req-star">*</span></label>
-              {selectWrapper(
-                <select className="cm-form-select" value={form.agencyId}
-                  onChange={e=>setForm(p=>({...p,agencyId:e.target.value}))} required>
-                  <option value="">Choose an agency</option>
-                  {agencyOptions.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
-              )}
-            </div>
-            */}
-          </div>
-        </div>
-
-        {/* Step 2 */}
-        <div className="cm-form-section">
-          <div className="cm-form-step">
-            <span className="cm-step-num">2</span>
-            <span className="cm-step-label">Maid Preferences</span>
-          </div>
-          <div className="cm-form-grid">
-            {([
-              {label:"Nationality",   key:"nationality",  opts:NATIONALITY_OPTIONS},
-              {label:"Primary Duty",  key:"primaryDuty",  opts:PRIMARY_DUTY_OPTIONS},
-              {label:"Age Group",     key:"ageGroup",     opts:AGE_GROUP_OPTIONS},
-              {label:"Language",      key:"language",     opts:LANGUAGE_OPTIONS},
-            ] as {label:string;key:string;opts:readonly string[]}[]).map(({label,key,opts})=>(
-              <div key={key}>
-                <label className="cm-lbl">{label}</label>
-                {selectWrapper(
-                  <select className="cm-form-select"
-                    value={form[key as keyof typeof form] as string}
-                    onChange={e=>setForm(p=>({...p,[key]:e.target.value}))}>
-                    {opts.map(o=><option key={o} value={o}>{o}</option>)}
-                  </select>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Step 3 */}
-        <div className="cm-form-section">
-          <div className="cm-form-step">
-            <span className="cm-step-num">3</span>
-            <span className="cm-step-label">Special Requirements</span>
-          </div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:"0.5rem",marginBottom:"1rem"}}>
-            {([
-              {key:"noOffDay",label:"No Off-day"},{key:"hasChildren",label:"Has child(ren)"},
-              {key:"married",label:"Maid is Married"},{key:"newMaid",label:"New Maid"},
-              {key:"transferMaid",label:"Transfer Maid"},{key:"exSingaporeMaid",label:"Ex-Singapore Maid"},
-            ] as {key:keyof RequirementsState;label:string}[]).map(item=>(
-              <Chip key={item.key} label={item.label} checked={req[item.key]}
-                onChange={()=>setReq(p=>({...p,[item.key]:!p[item.key]}))}/>
-            ))}
-          </div>
-          <div>
-            <label className="cm-lbl">Additional Notes</label>
-            <textarea className="cm-form-textarea" rows={3}
-              placeholder="Any specific requirements, household details, or special needs…"
-              value={form.otherRequirements}
-              onChange={e=>setForm(p=>({...p,otherRequirements:e.target.value}))}/>
-          </div>
-        </div>
-
-        <div className="cm-form-footer">
-          <button type="button" className="cm-btn-cancel" onClick={onBack}>Cancel</button>
-          <button type="submit" className="cm-btn-submit" disabled={isSubmitting}>
-            {isSubmitting
-              ? <><span className="cm-btn-spinner"/>Submitting…</>
-              : <><Zap size={14}/>Submit Request</>
-            }
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-};
 
 /* ═══════════════════════════════════════════════════════════════════════════
    FOOTER
@@ -1938,8 +1795,7 @@ const ClientMaidsPage = ({
   },[searchParams]);
 
   useEffect(()=>{
-    if(!requestOpen) return;
-    requestRef.current?.scrollIntoView({behavior:"smooth",block:"start"});
+    if(requestOpen) requestRef.current?.scrollIntoView({behavior:"smooth",block:"start"});
   },[requestOpen]);
 
   const activeFilterCount = useMemo(()=>{
@@ -1964,6 +1820,7 @@ const ClientMaidsPage = ({
   },[draft]);
 
   const requestHighlights = useMemo(()=>getRequestHighlights(draft),[draft]);
+
 
   const set    = (k:keyof Filters, v:boolean|string) => setDraft(p=>({...p,[k]:v}));
   const toggle = (k:keyof Filters) => setDraft(prev=>{
@@ -1994,16 +1851,15 @@ const ClientMaidsPage = ({
   };
 
   const clearAllFilters = () => {
-    setDraft(defaultFilters);setSearchedFilters(defaultFilters);
+    setDraft(defaultFilters);
+    setSearchedFilters(defaultFilters);
     setHasSearched(false);setSearchResults([]);
-    setSearchParams(new URLSearchParams([
-      ["filters",JSON.stringify(defaultFilters)],
-      ...(requestOpen?[["intent","request"]] as [string,string][]:[] as [string,string][]),
-    ]),{replace:true});
+    setSearchParams(new URLSearchParams([["filters",JSON.stringify(defaultFilters)], ...(requestOpen ? [["intent","request"] as [string,string]] : [])]),{replace:true});
   };
 
   const handleSearch = async()=>{
-    setRequestOpen(false);setSearchedFilters(draft);setHasSearched(true);setIsSearching(true);
+    setRequestOpen(false);setSearchedFilters(draft);
+    setHasSearched(true);setIsSearching(true);
     const params=buildSearchParamsFromFilters(draft);
     navigate(`${resultsPath}?${params.toString()}`);
     try {
@@ -2039,12 +1895,8 @@ const ClientMaidsPage = ({
     if(!p){toast.error("Profile link is unavailable for this maid.");return;}
     navigate(p);
   };
-  const handleOpenRequest=()=>{ setSearchedFilters(draft);setRequestOpen(true);
-    const n=new URLSearchParams(); n.set("filters",JSON.stringify(draft)); n.set("intent","request");
-    setSearchParams(n,{replace:true}); };
-  const handleCloseRequest=()=>{ setRequestOpen(false);
-    const n=new URLSearchParams(); n.set("filters",JSON.stringify(draft));
-    setSearchParams(n,{replace:true}); window.scrollTo({top:0,behavior:"smooth"}); };
+  const handleOpenRequest=()=>{setSearchedFilters(draft);setRequestOpen(true);const next=new URLSearchParams();next.set("filters",JSON.stringify(draft));next.set("intent","request");setSearchParams(next,{replace:true});};
+  const handleCloseRequest=()=>{setRequestOpen(false);const next=new URLSearchParams();next.set("filters",JSON.stringify(draft));setSearchParams(next,{replace:true});window.scrollTo({top:0,behavior:"smooth"});};
   const handleLoginClick=()=>navigate(loginPath);
 
   return (
@@ -2305,9 +2157,7 @@ const ClientMaidsPage = ({
                     </span>
                   )}
                 </button>
-                {!isPublicSearchPage && <button type="button" className="cm-btn-request" onClick={handleOpenRequest}>
-                  <Sparkles size={14} style={{color:T.amber}}/> Request Agency Help
-                </button>}
+                {!isPublicSearchPage && <button type="button" className="cm-btn-request" onClick={handleOpenRequest}><Sparkles size={14} style={{color:T.amber}}/> Request Agency Help</button>}
                 {activeFilterCount>0&&(
                   <button type="button" className="cm-btn-clear" onClick={clearAllFilters}>
                     <X size={11}/> Clear
@@ -2337,41 +2187,18 @@ const ClientMaidsPage = ({
                 </div>
                 <h2 className="cm-cta-title">Let the agency shortlist for you.</h2>
                 <p className="cm-cta-sub">
-                  Skip browsing — send your requirements and get curated, expert-matched candidates within 48 hours.
+                  Send your requirements and get curated candidate suggestions from our team.
                 </p>
-                <div className="cm-cta-features">
-                  {["Free service","Expert matching","48 hr turnaround"].map(f=>(
-                    <span key={f} className="cm-cta-feat">
-                      <CheckCircle2 size={11} style={{color:"rgba(252,211,77,0.7)"}}/>{f}
-                    </span>
-                  ))}
-                </div>
+                <div className="cm-cta-features">{["Free service","Expert matching","Personal support"].map((item)=><span key={item} className="cm-cta-feat"><CheckCircle2 size={11} style={{color:"rgba(252,211,77,0.7)"}}/>{item}</span>)}</div>
               </div>
               <div>
-                {requestHighlights.length>0&&(
-                  <div className="cm-cta-filter-preview">
-                    <p className="cm-cta-filter-lbl">Your current filters</p>
-                    <div className="cm-cta-filter-pills">
-                      {requestHighlights.slice(0,4).map(h=>(
-                        <span key={h} className="cm-cta-filter-pill">{h}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <button type="button" className="cm-cta-btn" onClick={handleOpenRequest}>
-                  Open Request Form <ChevronRight size={15}/>
-                </button>
+                {requestHighlights.length>0&&<div className="cm-cta-filter-preview"><p className="cm-cta-filter-lbl">Your current filters</p><div className="cm-cta-filter-pills">{requestHighlights.slice(0,4).map((item)=><span key={item} className="cm-cta-filter-pill">{item}</span>)}</div></div>}
+                <button type="button" className="cm-cta-btn" onClick={handleOpenRequest}>Open Request Form <ChevronRight size={15}/></button>
               </div>
             </div>
           </div>
         )}
-
-        {/* ── Request form ── */}
-        {!isPublicSearchPage&&requestOpen&&(
-          <div ref={requestRef}>
-            <RequestForm prefillFilters={searchedFilters} onBack={handleCloseRequest}/>
-          </div>
-        )}
+        {!isPublicSearchPage&&requestOpen&&<div ref={requestRef}><RequestForm prefillFilters={searchedFilters} onBack={handleCloseRequest}/></div>}
       </div>
 
       {/* ── Footer ── */}

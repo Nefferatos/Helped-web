@@ -3590,6 +3590,12 @@ const safeApi =
       if (/helped_ats_applicant_workflows/i.test(message) && /PGRST205|schema cache|could not find the table/i.test(message)) {
         return jsonError("Applicant profile workflow storage is not installed yet. Apply supabase/20261031_ats_agent_workflows.sql, then retry.", 503);
       }
+      if (/ats_data_subject_requests/i.test(message) && /PGRST205|PGRST204|schema cache|could not find the table|column .* does not exist/i.test(message)) {
+        return jsonError("Applicant privacy request storage is not installed or is out of date. Apply the applicant privacy request section from supabase/helped_full_production_schema.sql, then retry.", 503);
+      }
+      if (/helped_ats_(applications|profiles|scores|history|documents|notifications)/i.test(message) && /PGRST205|PGRST204|schema cache|could not find the table|column .* does not exist/i.test(message)) {
+        return jsonError("Applicant tracking storage is not installed or is out of date. Apply supabase/normalized_project_setup.sql to the Supabase project used by this Worker, then retry.", 503);
+      }
       if (/consents/i.test(message) && /PGRST205|schema cache|could not find the table/i.test(message)) {
         return jsonError("Marketing consent storage is not installed yet. Apply supabase/20261116_marketing_consents.sql, then retry.", 503);
       }
@@ -4317,14 +4323,16 @@ const buildAtsScore = (
   documents: AtsDocumentRecord[],
 ): AtsScoreRecord => {
   const experience = Math.min(profile.yearsOfExperience * 12, 100);
-  const skillMatch = Math.min(
-    profile.childcareExperience * 12 +
-      profile.newbornCareExperience * 12 +
-      profile.elderlyCareExperience * 12 +
-      profile.disabledCareExperience * 12 +
-      profile.housekeepingExperience * 12 +
-      profile.petCareExperience * 10,
-    100,
+  const skillRatings = [
+    profile.childcareExperience,
+    profile.newbornCareExperience,
+    profile.elderlyCareExperience,
+    profile.disabledCareExperience,
+    profile.housekeepingExperience,
+    profile.petCareExperience,
+  ].map((rating) => Math.max(0, Math.min(5, Number(rating) || 0)));
+  const skillMatch = Math.round(
+    (skillRatings.reduce((total, rating) => total + rating, 0) / (skillRatings.length * 5)) * 100,
   );
   const certifications = Math.min(
     (profile.certifications.length + profile.trainingRecords.length) * 20,
@@ -4353,10 +4361,10 @@ const buildAtsScore = (
     profile.childcareExperience >= 4 ||
     profile.newbornCareExperience >= 4
   ) {
-    strengths.push("Strong childcare background");
+    strengths.push("High self-reported childcare skill rating");
   }
   if (profile.elderlyCareExperience >= 4) {
-    strengths.push("Elderly care ready");
+    strengths.push("High self-reported elderly-care skill rating");
   }
   if (profile.cookingSkills.length >= 2) {
     strengths.push("Cooking skills listed");
@@ -4707,6 +4715,15 @@ const buildPublicAtsSummary = (
       nationality: profile.nationality,
       availableDate: profile.availableDate,
       expectedSalary: profile.expectedSalary,
+      yearsOfExperience: profile.yearsOfExperience,
+      skillRatings: {
+        childcare: profile.childcareExperience,
+        newbornCare: profile.newbornCareExperience,
+        elderlyCare: profile.elderlyCareExperience,
+        disabledCare: profile.disabledCareExperience,
+        housekeeping: profile.housekeepingExperience,
+        petCare: profile.petCareExperience,
+      },
     },
     documents: data.ats.documents[applicationId] ?? [],
     history: (data.ats.history[applicationId] ?? []).map((item) => ({
@@ -10458,10 +10475,16 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
     const documentId = toTrimmedString(body.evidenceDocumentId);
     if (documentId && !/^[0-9a-f-]{36}$/i.test(documentId)) return c.json({ error: "Choose a valid evidence document" }, 400);
     if (documentId) {
-      const documents = await fetchSupabaseTableRows<{ id: string }>(config, "document_metadata", {
-        select: "id", filters: { id: documentId, agency_id: admin.agencyId, entity_type: "placement", entity_id: existing.placement_id }, limit: 1,
+      const documents = await fetchSupabaseTableRows<{ id: string; employer_visible: boolean }>(config, "document_metadata", {
+        select: "id,employer_visible", filters: { id: documentId, agency_id: admin.agencyId, entity_type: "placement", entity_id: existing.placement_id }, limit: 1,
       });
       if (!documents[0]) return c.json({ error: "Evidence document was not found for this placement" }, 404);
+      if (documents[0].employer_visible && [
+        "contract_generated", "contract_signature", "signed_contract_saved", "ipa_approval",
+        "insurance", "personal_accident_insurance", "security_bond", "work_permit_issuance",
+      ].includes(existing.task_key)) {
+        return c.json({ error: "This task requires private placement evidence. Make the document private before linking it." }, 409);
+      }
     }
     update.evidence_document_id = documentId || null;
   }
@@ -14173,16 +14196,42 @@ app.post(
   }),
 );
 
+app.get(
+  "/api/ai/hr-interview/candidates",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const data = await loadData(c.env, { readOnly: true });
+    const candidates = data.ats.applications
+      .filter((application) => application.agencyId === admin.agencyId)
+      .flatMap((application) => {
+        const profile = getAtsProfileByApplicationId(data, application.id);
+        const email = normalizeEmail(toTrimmedString(profile?.email));
+        const name = toTrimmedString(profile?.fullName);
+        if (!name || !EMAIL_PATTERN.test(email)) return [];
+        return [{
+          applicationId: application.id,
+          applicationCode: application.applicationCode,
+          name,
+          email,
+          position: toTrimmedString(profile?.employmentPreference) || "Domestic Worker",
+        }];
+      })
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .slice(0, 500);
+    return c.json({ candidates, count: candidates.length });
+  }),
+);
+
 app.post(
   "/api/ai/hr-interview/chat",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
     const openaiKey = c.env.OPENAI_API_KEY?.trim();
     const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim();
-    const makeInterviewUrl =
-      c.env.MAKE_AI_HR_INTERVIEWER_WEBHOOK_URL?.trim() ||
-      c.env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim() ||
-      c.env.MAKE_WEBHOOK_URL?.trim();
+    const dedicatedInterviewUrl = c.env.MAKE_AI_HR_INTERVIEWER_WEBHOOK_URL?.trim();
+    const makeAiEngineUrl = c.env.MAKE_AI_ENGINE_WEBHOOK_URL?.trim();
+    const makeInterviewUrl = dedicatedInterviewUrl || makeAiEngineUrl;
 
     // A Make AI Agent is a complete AI provider. Do not require a direct LLM
     // key when it is configured, otherwise the Make-first path is unreachable.
@@ -14197,8 +14246,27 @@ app.post(
       currentStage?: string;
     }>(c.req.raw);
 
-    if (!body?.candidateName || !body?.messages || body.messages.length === 0) {
+    if (
+      typeof body?.candidateName !== "string" ||
+      !body.candidateName.trim() ||
+      !Array.isArray(body.messages) ||
+      body.messages.length === 0 ||
+      body.messages.length > 30
+    ) {
       return c.json({ error: "candidateName and messages are required" }, 400);
+    }
+    if (
+        body.candidateName.length > 120 ||
+        (body.position !== undefined && typeof body.position !== "string") ||
+        (typeof body.position === "string" && body.position.length > 160) ||
+        body.messages.some((message) =>
+          !message ||
+          typeof message !== "object" ||
+          !["user", "assistant"].includes(message.role) ||
+          typeof message.content !== "string" ||
+          message.content.length > 4000,
+        )) {
+      return c.json({ error: "Interview details or messages exceed the allowed limits" }, 400);
     }
 
     const systemPrompt = `You are an AI HR Interviewer for a Singapore domestic helper (maid) placement agency. You conduct professional, structured interviews to assess candidates.
@@ -14217,6 +14285,8 @@ RULES:
 - Ask ONE question at a time
 - Adapt follow-up questions based on the candidate's answers
 - Be warm but professional
+- Ask only job-related questions about experience, skills, availability, and role requirements. Do not ask about protected or sensitive personal characteristics.
+- Provide advisory observations only; do not make a hiring decision or represent a score as a final decision.
 - After 8-12 meaningful exchanges, conclude the interview
 - Evaluate each response for detail, relevance, and quality
 
@@ -14255,16 +14325,36 @@ When concluding (isComplete=true), include:
       // 1) Make.com is the primary AI engine for the interview itself.
       if (makeInterviewUrl) {
         try {
+          const conversation = body.messages
+            .map((message) => `${message.role === "assistant" ? "Interviewer" : "Candidate"}: ${message.content}`)
+            .join("\n");
+          const userPrompt = [
+            `Current interview stage: ${body.currentStage || "introduction"}`,
+            "Use the conversation below to evaluate the candidate's latest response and provide the next interviewer turn.",
+            "Return only the JSON object required by the system prompt.",
+            "Conversation:",
+            conversation,
+          ].join("\n\n");
           const makeResponse = await fetch(makeInterviewUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            body: JSON.stringify(dedicatedInterviewUrl ? {
               scenario: "hr_interviewer",
               candidateName: body.candidateName,
               position: body.position || "Domestic Worker",
               currentStage: body.currentStage,
               systemPrompt,
               messages: body.messages,
+            } : {
+              type: "ai_engine",
+              scenario: "hr-interviewer",
+              systemPrompt,
+              userPrompt,
+              context: {
+                candidateName: body.candidateName,
+                position: body.position || "Domestic Worker",
+                currentStage: body.currentStage || "introduction",
+              },
             }),
             signal: AbortSignal.timeout(30_000),
           });
@@ -15340,6 +15430,47 @@ app.patch("/api/operations-board/interviews/:interviewId", requireAgencyAdminAut
   }
   return c.json({ interview, auditLogged: eventResponse.ok });
 }));
+
+app.get(
+  "/api/ai/hr-interview/sessions",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const data = await loadData(c.env, { readOnly: true });
+    const sessions = data.ats.applications
+      .filter((application) => application.agencyId === admin.agencyId)
+      .flatMap((application) => {
+        const profile = getAtsProfileByApplicationId(data, application.id);
+        if (!profile) return [];
+        return (data.ats.notifications[application.id] ?? [])
+          .filter((notification) => notification.event === "Interview Completed")
+          .map((notification) => {
+            const rating = notification.message.match(/Rating:\s*(\d{1,3})/i)?.[1];
+            const recommendation = notification.message.match(/Recommendation:\s*(pass|fail|borderline)/i)?.[1]?.toLowerCase();
+            return {
+              id: notification.id,
+              applicationId: application.id,
+              candidateName: profile.fullName,
+              candidateEmail: profile.email,
+              position: toTrimmedString(profile.employmentPreference) || "Domestic Worker",
+              status: "completed",
+              currentStage: "conclusion",
+              startedAt: notification.createdAt,
+              result: rating && recommendation ? {
+                overallScore: Math.min(100, Number(rating)),
+                recommendation,
+                summary: notification.message,
+                strengths: [],
+                weaknesses: [],
+              } : undefined,
+            };
+          });
+      })
+      .sort((left, right) => right.startedAt.localeCompare(left.startedAt))
+      .slice(0, 200);
+    return c.json({ sessions, count: sessions.length });
+  }),
+);
 
 app.post(
   "/api/ai/hr-interview/session",
@@ -19616,6 +19747,24 @@ const dispatchFdwApplicationCompleted = async (
   });
 };
 
+const sendApplicantTrackingLink = async (
+  env: Bindings,
+  requestUrl: string,
+  application: AtsApplicationRecord,
+  profile: AtsApplicationProfileRecord,
+) => {
+  const trackingUrl = new URL(`/apply-as-maid/status/${encodeURIComponent(application.id)}`, requestUrl);
+  trackingUrl.searchParams.set("token", application.applicantAccessToken);
+  const result = await sendEmailViaResend(
+    env,
+    profile.email,
+    `Application received: ${application.applicationCode}`,
+    `Hello ${profile.fullName},\n\nWe received your FDW application. You can return to your private application page to review your submission, use the optional profile chatbot, and check interview updates:\n\n${trackingUrl.toString()}\n\nKeep this link private. Anyone with it can view your application.\n\nApplication reference: ${application.applicationCode}\n\nAt The Agency`,
+    `ats-applicant-tracking:${application.id}`,
+  );
+  if (!result.ok) console.warn("Applicant tracking-link email was not sent", { applicationId: application.id, reason: result.error });
+};
+
 // Fired when a public maid referral is submitted.
 const dispatchFdwReferralCreated = async (
   env: Bindings,
@@ -19627,6 +19776,57 @@ const dispatchFdwReferralCreated = async (
     referral_id: referralId,
     ...referral,
   });
+};
+
+const normalizeApplicantNameForDuplicateCheck = (value: unknown) =>
+  String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+const normalizeApplicantPhoneForDuplicateCheck = (value: unknown) =>
+  String(value ?? "").replace(/\D/g, "").replace(/^0+/, "");
+
+const publicAtsDuplicateMessage =
+  "An application under this name or contact information is already on file. Please do not submit another one. Contact the agency if you need to update an existing application.";
+
+const findDuplicatePublicAtsApplicant = async (
+  env: Bindings,
+  agencyId: number,
+  identity: { fullName: string; email: string; contactNumber: string },
+) => {
+  const name = normalizeApplicantNameForDuplicateCheck(identity.fullName);
+  const email = normalizeEmail(identity.email);
+  const phone = normalizeApplicantPhoneForDuplicateCheck(identity.contactNumber);
+
+  const matches = (profile: { fullName?: unknown; email?: unknown; contactNumber?: unknown }) => {
+    const existingName = normalizeApplicantNameForDuplicateCheck(profile.fullName);
+    const existingEmail = normalizeEmail(String(profile.email ?? ""));
+    const existingPhone = normalizeApplicantPhoneForDuplicateCheck(profile.contactNumber);
+    return Boolean(
+      (name && existingName === name) ||
+      (email && existingEmail === email) ||
+      (phone && existingPhone && existingPhone === phone),
+    );
+  };
+
+  const supabase = getSupabaseAppDataConfig(env);
+  if (supabase && isNormalizedSupabaseEnabled(env)) {
+    const data = await loadDataFromSupabaseNormalized(supabase);
+    const agencyApplicationIds = new Set(
+      data.ats.applications.filter((application) => application.agencyId === agencyId).map((application) => application.id),
+    );
+    return data.ats.profiles.some((profile) => agencyApplicationIds.has(profile.applicationId) && matches(profile));
+  }
+
+  bustAppDataCache();
+  const data = await loadData(env, { readOnly: true });
+  const agencyApplicationIds = new Set(
+    data.ats.applications.filter((application) => application.agencyId === agencyId).map((application) => application.id),
+  );
+  return data.ats.profiles.some((profile) => agencyApplicationIds.has(profile.applicationId) && matches(profile));
 };
 
 // Public FDW application chatbot + event sink. Relays to Make; the web app is
@@ -19679,6 +19879,27 @@ app.post(
     } catch {
       return c.json({ error: "Multipart form data is required" }, 400);
     }
+    const agencyId = toNumericValue(formData.get("agencyId"), 0);
+    const applicantIdentity = {
+      fullName: toTrimmedString(formData.get("fullName")),
+      email: toTrimmedString(formData.get("email")),
+      contactNumber: toTrimmedString(formData.get("contactNumber")),
+    };
+    if (!agencyId || !applicantIdentity.fullName || !applicantIdentity.email || !applicantIdentity.contactNumber) {
+      return c.json({ error: "Full name, email, and phone number are required." }, 400);
+    }
+    let duplicateApplicant: boolean;
+    try {
+      duplicateApplicant = await findDuplicatePublicAtsApplicant(c.env, agencyId, applicantIdentity);
+    } catch {
+      return c.json(
+        { error: "We could not validate your application details right now. Please try again shortly." },
+        503,
+      );
+    }
+    if (duplicateApplicant) {
+      return c.json({ error: publicAtsDuplicateMessage }, 409);
+    }
     let parsed: Awaited<ReturnType<typeof parseAtsFormData>>;
     try {
       parsed = await parseAtsFormData(c.env, formData);
@@ -19692,6 +19913,7 @@ app.post(
       runChatBackgroundTask(c, recordApplicantCreatedEvent(c.env, parsed.application, parsed.profile));
       runChatBackgroundTask(c, dispatchApplicantIntakeToMake(c.env, parsed.application, parsed.profile));
       runChatBackgroundTask(c, dispatchFdwApplicationCompleted(c.env, parsed.application, parsed.profile));
+      runChatBackgroundTask(c, sendApplicantTrackingLink(c.env, c.req.url, parsed.application, parsed.profile));
       return c.json(
         {
           applicationId: parsed.application.id,
@@ -19716,6 +19938,7 @@ app.post(
     runChatBackgroundTask(c, recordApplicantCreatedEvent(c.env, parsed.application, parsed.profile));
     runChatBackgroundTask(c, dispatchApplicantIntakeToMake(c.env, parsed.application, parsed.profile));
     runChatBackgroundTask(c, dispatchFdwApplicationCompleted(c.env, parsed.application, parsed.profile));
+    runChatBackgroundTask(c, sendApplicantTrackingLink(c.env, c.req.url, parsed.application, parsed.profile));
 
     return c.json(
       {
@@ -20594,7 +20817,7 @@ app.get("/api/ats/public/applications/:applicationId/interview", safeApi(async (
   const found = await readPublicAtsApplication(c.env, applicationId, token);
   if (!found) return c.json({ error: "Application not found" }, 404);
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Interview confirmation requires normalized ATS storage" }, 503);
+  if (!config) return c.json({ error: "Interview confirmation requires Supabase storage" }, 503);
   const params = new URLSearchParams({
     select: "id,scheduled_at,duration_minutes,mode,meeting_url,status,applicant_confirmed_at",
     application_id: "eq." + applicationId, agency_id: "eq." + found.application.agencyId,
@@ -20616,7 +20839,7 @@ app.post("/api/ats/public/applications/:applicationId/interview/confirm", safeAp
   const found = await readPublicAtsApplication(c.env, applicationId, token);
   if (!found) return c.json({ error: "Application not found" }, 404);
   const config = getSupabaseAppDataConfig(c.env);
-  if (!config || !isNormalizedSupabaseEnabled(c.env)) return c.json({ error: "Interview confirmation requires normalized ATS storage" }, 503);
+  if (!config) return c.json({ error: "Interview confirmation requires Supabase storage" }, 503);
   const params = new URLSearchParams({
     select: "id,scheduled_at,status,employer_confirmed_at,applicant_confirmed_at",
     id: "eq." + interviewId, application_id: "eq." + applicationId, agency_id: "eq." + found.application.agencyId, limit: "1",
@@ -21298,7 +21521,7 @@ app.get("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, ca
   return c.json({ error: "Method not allowed" }, 405);
 });
 
-app.post("/api/ats/applications/delete", requireAgencyAdminAuth, canAdministerAgencyRecords, async (c) => {
+app.post("/api/ats/applications/delete", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const body = await parseBody<{ applicationIds?: string[] }>(c.req.raw);
   const applicationIds = Array.isArray(body?.applicationIds)
@@ -21310,10 +21533,82 @@ app.post("/api/ats/applications/delete", requireAgencyAdminAuth, canAdministerAg
   const data = await loadData(c.env);
   const removable = new Set(
     data.ats.applications
-      .filter((item) => item.agencyId === admin.agencyId && item.source === "resume_upload" && applicationIds.includes(item.id))
+      .filter((item) => item.agencyId === admin.agencyId && applicationIds.includes(item.id))
       .map((item) => item.id),
   );
   if (removable.size === 0) return c.json({ error: "No selected applicants were found for this agency" }, 404);
+
+  const supabase = getSupabaseAppDataConfig(c.env);
+  const ids = [...removable];
+  const idFilter = `in.(${ids.join(",")})`;
+  const deleteSupabaseRows = async (table: string, filters: Record<string, string>) => {
+    if (!supabase) return;
+    const query = new URLSearchParams(filters);
+    const response = await fetch(`${supabase.baseUrl}/rest/v1/${encodeURIComponent(table)}?${query}`, {
+      method: "DELETE",
+      headers: supabaseHeaders(supabase, { prefer: "return=minimal" }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      const details = await readSupabaseError(response);
+      if (response.status === 404 || /PGRST205|could not find the table|relation .* does not exist/i.test(details)) {
+        console.warn(`Applicant deletion skipped absent related table: ${table}`);
+        return;
+      }
+      throw new Error(`Unable to delete applicant records from ${table} (${response.status}): ${details}`);
+    }
+  };
+
+  if (supabase) {
+    await deleteSupabaseRows("ats_data_subject_requests", {
+      app_id: `eq.${supabase.rowId}`,
+      agency_id: `eq.${admin.agencyId}`,
+      application_id: idFilter,
+    });
+    await deleteSupabaseRows("helped_ats_applicant_workflows", {
+      app_id: `eq.${supabase.rowId}`,
+      agency_id: `eq.${admin.agencyId}`,
+      application_id: idFilter,
+    });
+    await deleteSupabaseRows("interviews", {
+      agency_id: `eq.${admin.agencyId}`,
+      application_id: idFilter,
+    });
+    await deleteSupabaseRows("workflow_events", {
+      entity_type: "eq.application",
+      entity_id: idFilter,
+    });
+    await deleteSupabaseRows("make_webhook_deliveries", {
+      event_id: `in.(${ids.flatMap((id) => [`candidate.created:${id}`, `fdw_application.completed:${id}`]).join(",")})`,
+      agency_id: `eq.${admin.agencyId}`,
+    });
+  }
+
+  const storagePaths = [...new Set(ids.flatMap((id) => data.ats.documents[id] ?? [])
+    .map((document) => document.storagePath)
+    .filter((storagePath): storagePath is string => Boolean(storagePath)))];
+  if (storagePaths.length > 0) {
+    const storage = getSupabaseStorageConfig(c.env);
+    if (!storage) throw new Error("Applicant file storage is not configured; uploaded files could not be deleted");
+    for (const storagePath of storagePaths) {
+      const belongsToSelectedApplication = ids.some((id) => storagePath.startsWith(`public-ats/${id}/`));
+      if (!belongsToSelectedApplication || storagePath.split("/").some((segment) => segment === "..")) {
+        throw new Error("Applicant file storage path failed validation");
+      }
+      const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
+      const response = await fetch(`${storage.baseUrl}/storage/v1/object/${encodeURIComponent(storage.bucket)}/${encodedPath}`, {
+        method: "DELETE",
+        headers: supabaseStorageHeaders(storage),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok && response.status !== 404) {
+        const details = await readSupabaseError(response);
+        if (!/not found|object does not exist/i.test(details)) {
+          throw new Error(`Unable to delete an applicant upload (${response.status}): ${details}`);
+        }
+      }
+    }
+  }
 
   data.ats.applications = data.ats.applications.filter((item) => !removable.has(item.id));
   data.ats.profiles = data.ats.profiles.filter((item) => !removable.has(item.applicationId));
@@ -21325,7 +21620,7 @@ app.post("/api/ats/applications/delete", requireAgencyAdminAuth, canAdministerAg
   }
   await saveData(c.env, data);
   return c.json({ deleted: removable.size });
-});
+}));
 
 app.patch("/api/ats/applications/:applicationId/stage", requireAgencyAdminAuth, canManageAgencyRecords, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;

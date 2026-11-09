@@ -253,6 +253,38 @@ const readImageDimensions = (file: File) => new Promise<{ width: number; height:
   image.src = url;
 });
 
+const cropAndResizePhoto = (file: File, width: number, height: number) => new Promise<File>((resolve, reject) => {
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  const cleanup = () => URL.revokeObjectURL(url);
+  image.onerror = () => { cleanup(); reject(new Error("This image could not be processed.")); };
+  image.onload = () => {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Image processing is unavailable in this browser.");
+      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+      const sourceWidth = width / scale;
+      const sourceHeight = height / scale;
+      const sourceX = (image.naturalWidth - sourceWidth) / 2;
+      const sourceY = (image.naturalHeight - sourceHeight) / 2;
+      context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        cleanup();
+        if (!blob) { reject(new Error("This image could not be processed.")); return; }
+        const name = `${file.name.replace(/\.[^.]+$/, "")}.jpg`;
+        resolve(new File([blob], name, { type: "image/jpeg", lastModified: Date.now() }));
+      }, "image/jpeg", 0.9);
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  };
+  image.src = url;
+});
+
 type PhotoUploadCardProps = {
   title: string;
   label: string;
@@ -261,10 +293,12 @@ type PhotoUploadCardProps = {
   minimumWidth: number;
   minimumHeight: number;
   file?: File;
+  validationMessage?: string;
+  isValidating?: boolean;
   onChange: (file: File | undefined) => void;
 };
 
-const PhotoUploadCard = ({ title, label, width, height, minimumWidth, minimumHeight, file, onChange }: PhotoUploadCardProps) => {
+const PhotoUploadCard = ({ title, label, width, height, minimumWidth, minimumHeight, file, validationMessage, isValidating, onChange }: PhotoUploadCardProps) => {
   const [previewUrl, setPreviewUrl] = useState("");
 
   useEffect(() => {
@@ -293,13 +327,14 @@ const PhotoUploadCard = ({ title, label, width, height, minimumWidth, minimumHei
           )}
         </div>
         <div className="flex min-w-[170px] flex-1 flex-col items-start gap-3">
-          <label className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-xl bg-amber-400 px-5 font-bold text-slate-950 transition hover:bg-amber-500">
+          <label className={`inline-flex min-h-12 items-center gap-2 rounded-xl bg-amber-400 px-5 font-bold text-slate-950 transition hover:bg-amber-500 ${isValidating ? "cursor-wait opacity-70" : "cursor-pointer"}`}>
             <Upload className="h-4 w-4" />
             {file ? "Change photo" : "Upload photo"}
             <input
               className="sr-only"
               type="file"
               accept="image/jpeg,image/png"
+              disabled={isValidating}
               onChange={(event) => {
                 onChange(event.currentTarget.files?.[0]);
                 event.currentTarget.value = "";
@@ -307,7 +342,9 @@ const PhotoUploadCard = ({ title, label, width, height, minimumWidth, minimumHei
             />
           </label>
           <p className="text-sm text-slate-500">{width} × {height} px · JPG/PNG</p>
-          <p className="text-xs font-semibold text-slate-600">Required. Photo is cropped and resized to the specified dimensions.</p>
+          <p className={`text-xs font-semibold ${validationMessage || (!file && !isValidating) ? "text-rose-700" : file ? "text-emerald-700" : "text-slate-600"}`} role={validationMessage || (!file && !isValidating) ? "alert" : "status"}>
+            {isValidating ? "Checking image…" : validationMessage || (file ? "✓ Image validated and ready to submit" : "Required · JPG/PNG, max 5 MB · Image dimensions are checked on selection")}
+          </p>
           {file && <p className="max-w-full break-all text-xs font-medium text-emerald-700">{file.name}</p>}
         </div>
       </div>
@@ -814,6 +851,8 @@ const PublicMaidApplicationPage = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState<ApplicantFormState>(initialState);
   const [files, setFiles] = useState<Record<string, File[]>>({});
+  const [photoValidation, setPhotoValidation] = useState<Record<string, { checking?: boolean; error?: string }>>({});
+  const photoSectionRef = useRef<HTMLDivElement>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsAlert, setShowTermsAlert] = useState(false);
@@ -825,7 +864,6 @@ const PublicMaidApplicationPage = () => {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [hasDraft, setHasDraft] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const formChanged = useRef(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -995,7 +1033,6 @@ const PublicMaidApplicationPage = () => {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      setSubmitting(true);
       const formData = new FormData();
       const referralCode = searchParams.get("ref")?.trim();
       if (referralCode) formData.set("referralCode", referralCode);
@@ -1010,14 +1047,17 @@ const PublicMaidApplicationPage = () => {
       return submitPublicAtsApplication(formData);
     },
     onSuccess: (data) => {
-      localStorage.removeItem(DRAFT_KEY);
-      toast.success(`Application submitted. Reference: ${data.applicationCode}`);
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch (error) {
+        console.warn("Application submitted, but the local draft could not be cleared", error);
+      }
       navigate(
         `/apply-as-maid/status/${encodeURIComponent(data.applicationId)}?token=${encodeURIComponent(data.applicantAccessToken)}`,
       );
+      toast.success(`Application submitted. Reference: ${data.applicationCode}`);
     },
     onError: (error) => {
-      setSubmitting(false);
       toast.error(error instanceof Error ? error.message : "Failed to submit application");
     },
   });
@@ -1081,26 +1121,41 @@ const PublicMaidApplicationPage = () => {
     const photoConfig = photoUploadConfig.find((photo) => photo.key === field);
     if (photoConfig && next[0]) {
       const photo = next[0];
+      setPhotoValidation((current) => ({ ...current, [field]: { checking: true } }));
       const isJpegOrPng =
         ["image/jpeg", "image/png"].includes(photo.type) ||
         /\.(jpe?g|png)$/i.test(photo.name);
       if (!isJpegOrPng || photo.size > 5 * 1024 * 1024) {
-        toast.error("Photos must be JPG or PNG files no larger than 5 MB.");
+        const error = "Choose a JPG or PNG image no larger than 5 MB.";
+        setPhotoValidation((current) => ({ ...current, [field]: { error } }));
+        toast.error(error);
         return;
       }
       try {
         const dimensions = await readImageDimensions(photo);
         const minimum = photoMinimumDimensions[field];
         if (dimensions.width < minimum.width || dimensions.height < minimum.height) {
-          toast.error(`${photoConfig.label} must be at least ${minimum.width} × ${minimum.height} pixels. This image is ${dimensions.width} × ${dimensions.height} pixels.`);
+          const error = `Image is ${dimensions.width} × ${dimensions.height}px; minimum is ${minimum.width} × ${minimum.height}px.`;
+          setPhotoValidation((current) => ({ ...current, [field]: { error } }));
+          toast.error(error);
           return;
         }
       } catch {
-        toast.error("This file could not be opened as an image. Please choose a valid JPG or PNG photo.");
+        const error = "This file could not be opened. Choose a valid JPG or PNG image.";
+        setPhotoValidation((current) => ({ ...current, [field]: { error } }));
+        toast.error(error);
         return;
       }
-      setFiles((current) => ({ ...current, [field]: [photo] }));
-      markChanged();
+      try {
+        const processedPhoto = await cropAndResizePhoto(photo, photoConfig.width, photoConfig.height);
+        setFiles((current) => ({ ...current, [field]: [processedPhoto] }));
+        setPhotoValidation((current) => ({ ...current, [field]: {} }));
+        markChanged();
+      } catch {
+        const error = "We couldn't prepare this photo. Please try another JPG or PNG image.";
+        setPhotoValidation((current) => ({ ...current, [field]: { error } }));
+        toast.error(error);
+      }
       return;
     }
 
@@ -1334,7 +1389,7 @@ const PublicMaidApplicationPage = () => {
       )}
 
       {/* Full-page submitting overlay */}
-      {submitting && (
+      {submitMutation.isPending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-4 rounded-2xl bg-white p-8 shadow-2xl">
             <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
@@ -1355,10 +1410,13 @@ const PublicMaidApplicationPage = () => {
             if (!isReviewStep) { goNext(); return; }
             const missingPhoto = photoUploadConfig.find((photo) => !files[photo.key]?.length);
             if (missingPhoto) {
-              toast.error(`${missingPhoto.label} is required. Please upload both photos.`);
+              setPhotoValidation((current) => ({
+                ...current,
+                ...Object.fromEntries(photoUploadConfig.filter((photo) => !files[photo.key]?.length).map((photo) => [photo.key, { error: `${photo.label} is required.` }])) as Record<string, { error: string }>,
+              }));
               const documentsStep = stepItems.findIndex((step) => step.id === "documents");
-              if (documentsStep >= 0) setActiveStep(documentsStep);
-              scrollToTop();
+              if (documentsStep >= 0 && activeStep !== documentsStep) setActiveStep(documentsStep);
+              window.setTimeout(() => photoSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
               return;
             }
             if (requiresWorkPermitCard(form) && !files.workPermit?.length) {
@@ -1915,10 +1973,10 @@ const PublicMaidApplicationPage = () => {
                   <div className="grid gap-4 sm:grid-cols-2">
 
                     {/* Core experience */}
-                    <CollapsibleSection title="Core experience" description="Years of experience, skill ratings, and languages" defaultOpen>
+                    <CollapsibleSection title="Core experience" description="Formal FDW experience, related care experience, skill ratings, and languages" defaultOpen>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <label className="space-y-1.5">
-                          <FieldLabel>Years of experience</FieldLabel>
+                          <FieldLabel>Formal FDW experience (years)</FieldLabel>
                           <Input className={fieldCls} type="number" min="0" value={form.yearsOfExperience} onChange={(e) => updateField("yearsOfExperience", e.target.value)} />
                         </label>
                         <label className="space-y-1.5">
@@ -2198,7 +2256,7 @@ const PublicMaidApplicationPage = () => {
                     </label>
                   </div>
 
-                  <div className="mt-6 space-y-4">
+                  <div ref={photoSectionRef} className="mt-6 space-y-4 scroll-mt-24">
                     <div>
                       <p className="text-sm font-bold text-slate-900">Required applicant photos</p>
                       <p className="mt-0.5 text-xs text-slate-500">Both clear photos are required to submit your application.</p>
@@ -2213,6 +2271,8 @@ const PublicMaidApplicationPage = () => {
                         minimumWidth={photoMinimumDimensions[photo.key].width}
                         minimumHeight={photoMinimumDimensions[photo.key].height}
                         file={files[photo.key]?.[0]}
+                        validationMessage={photoValidation[photo.key]?.error}
+                        isValidating={photoValidation[photo.key]?.checking}
                         onChange={(file) => {
                           void handleFileChange(photo.key, file ? [file] : null);
                         }}

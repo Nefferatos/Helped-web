@@ -26,6 +26,7 @@ import {
   Settings2,
   CalendarDays,
   Send,
+  Bot,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -104,6 +105,16 @@ const navItems = [
     label: "Maid Interviews",
     path: adminPath("/maid-interviews"),
     icon: CalendarDays,
+    iconBg: "linear-gradient(145deg, #C4B5FD, #7C3AED)",
+    iconShadow: "0 4px 0 #6D28D9, 0 6px 12px rgba(124,58,237,0.35)",
+    iconShadowActive: "0 2px 0 #6D28D9, 0 3px 8px rgba(124,58,237,0.3)",
+    iconColor: "#fff",
+    badgeKey: null,
+  },
+  {
+    label: "AI HR Interviewer",
+    path: adminPath("/ai-hr-interviewer"),
+    icon: Bot,
     iconBg: "linear-gradient(145deg, #C4B5FD, #7C3AED)",
     iconShadow: "0 4px 0 #6D28D9, 0 6px 12px rgba(124,58,237,0.35)",
     iconShadowActive: "0 2px 0 #6D28D9, 0 3px 8px rgba(124,58,237,0.3)",
