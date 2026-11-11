@@ -4,7 +4,7 @@ Importable blueprints that wire the marketing → application → recruiter → 
 
 | File | Diagram half | Trigger |
 |------|-------------|---------|
-| `helped-telegram-broadcast.blueprint.json` | Webhook → registered subscriber iterator → Telegram text/image/document → delivery callback | Custom Webhook (from Worker) |
+| `helped-telegram-broadcast.blueprint.json` | Webhook → registered subscriber iterator → Telegram text/image/video/document → delivery callback (staged by Telegram file ID; no R2) | Custom Webhook (from Worker) |
 | `helped-telegram-chatbot.blueprint.json` | Webhook → Make AI Agent → reply/profile/handover callbacks | Custom Webhook (from Worker) |
 | `helped-content-engine.blueprint.json` | Scheduler → Claude → social channels | Schedule (time-based) |
 | `helped-applicant-intake.blueprint.json` | Application form → Supabase → recruiter | Poll Supabase every 15 min |

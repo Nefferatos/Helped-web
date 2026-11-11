@@ -295,6 +295,12 @@ const RequestsPageContent = () => {
   const pageInfo: RequestsPageInfo | null = requestsQuery.data?.pageInfo ?? null;
 
   useEffect(() => {
+    if (!selectedRequest) return;
+    const latest = requests.find((request) => request.id === selectedRequest.id);
+    if (latest && latest.updatedAt !== selectedRequest.updatedAt) setSelectedRequest(latest);
+  }, [requests, selectedRequest]);
+
+  useEffect(() => {
     const unsubscribe = subscribeToRequestsChanged(() => {
       void requestsQuery.refetch();
     });
@@ -412,6 +418,10 @@ const RequestsPageContent = () => {
     });
     setConfirmingBulkDelete(false);
   };
+
+  const clientInterviewReferences = selectedRequest && Array.isArray(selectedRequest.details?.interviewCandidateReferences)
+    ? selectedRequest.details.interviewCandidateReferences.filter((reference): reference is string => typeof reference === "string" && selectedRequest.maidReferences.includes(reference))
+    : [];
 
   return (
     <>
@@ -689,6 +699,7 @@ const RequestsPageContent = () => {
                     )}
                   </div>
                 </div>
+                {selectedRequest.maidReferences.length > 0 && <div className="rounded-xl border border-violet-200 bg-violet-50 p-4"><p className="text-sm font-bold text-violet-950">Interview selection</p><p className="mt-1 text-xs text-violet-900">Request shortlist: {selectedRequest.maidReferences.join(", ")}</p>{clientInterviewReferences.length > 0 ? <><p className="mt-1 text-xs font-semibold text-violet-950">Client selected: {clientInterviewReferences.join(", ")}</p><Button type="button" className="mt-3 bg-violet-700 text-white hover:bg-violet-800" onClick={() => { const params = new URLSearchParams({ references: clientInterviewReferences.join(","), requestId: selectedRequest.id }); setSheetOpen(false); navigate(`/agencyadmin/maid-interviews?${params.toString()}`); }}>Coordinate selected interviews</Button></> : <p className="mt-2 text-xs text-slate-700">Waiting for the client to choose one to five shortlist profiles for interview in their request portal.</p>}{typeof selectedRequest.details?.finalCandidateReference === "string" && <div className="mt-3 rounded-lg border border-emerald-200 bg-white p-3"><p className="text-xs font-semibold text-emerald-900">Client's preferred helper after interviews: {selectedRequest.details.finalCandidateReference}. Confirm the interview outcome and employer record before creating a placement.</p><Button type="button" variant="outline" className="mt-2 border-emerald-300 text-emerald-950" onClick={() => { const params = new URLSearchParams({ preferredCandidate: String(selectedRequest.details.finalCandidateReference), requestId: selectedRequest.id }); setSheetOpen(false); navigate(`/agencyadmin/operations-center?${params.toString()}`); }}>Review placement handoff</Button></div>}</div>}
 
               </div>
             )}

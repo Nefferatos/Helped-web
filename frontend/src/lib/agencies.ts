@@ -209,6 +209,11 @@ export const submitHiringRequest = async (
     throw new Error("Please log in as a client before submitting a hiring request");
   }
 
+  const shortlist = typeof formData.selectedCandidateReferences === "string"
+    ? formData.selectedCandidateReferences.split(",").map((value) => value.trim()).filter(Boolean)
+    : [];
+  const maidReferences = [...new Set([maidRefCode, ...shortlist])];
+
   const response = await fetch("/api/requests", {
     method: "POST",
     headers: {
@@ -219,7 +224,7 @@ export const submitHiringRequest = async (
       clientId: client.id,
       type: "direct",
       ...(typeof agencyId === "number" ? { agencyId } : {}),
-      maidReferences: [maidRefCode],
+      maidReferences,
       details: formData,
     }),
   });

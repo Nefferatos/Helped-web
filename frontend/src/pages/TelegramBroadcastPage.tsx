@@ -18,9 +18,9 @@ export default function TelegramBroadcastPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [section, setSection] = useState<"broadcast" | "subscribers" | "conversations" | "history">("broadcast");
-  const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState("");
   const [subscriberSearch, setSubscriberSearch] = useState("");
   const [sending, setSending] = useState(false);
   const [conversationReplies, setConversationReplies] = useState<Record<string, string>>({});
@@ -44,22 +44,31 @@ export default function TelegramBroadcastPage() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  useEffect(() => {
+    if (!mediaFile) { setMediaPreviewUrl(""); return; }
+    const previewUrl = URL.createObjectURL(mediaFile);
+    setMediaPreviewUrl(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [mediaFile]);
+
   const sendBroadcast = async () => {
     if (!message.trim()) { toast.error("Write a message first."); return; }
     setSending(true);
     try {
-      let mediaUrl: string | undefined;
+      let mediaFileId: string | undefined;
+      let mediaType: string | undefined;
       if (mediaFile) {
         const form = new FormData(); form.set("file", mediaFile);
         const upload = await fetch("/api/telegram/media", { method: "POST", headers: getAgencyAdminAuthHeaders(), body: form });
         const uploaded = await upload.json();
         if (!upload.ok) throw new Error(uploaded.error || "Could not upload media.");
-        mediaUrl = uploaded.mediaUrl;
+        mediaFileId = uploaded.mediaFileId;
+        mediaType = uploaded.mediaType;
       }
-      const response = await fetch("/api/telegram/broadcasts", { method: "POST", headers: headers(), body: JSON.stringify({ title, message: message.trim(), mediaUrl, filters: {}, idempotencyKey: broadcastRequestKey }) });
+      const response = await fetch("/api/telegram/broadcasts", { method: "POST", headers: headers(), body: JSON.stringify({ message: message.trim(), mediaFileId, mediaType, filters: {}, idempotencyKey: broadcastRequestKey }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Broadcast could not be queued.");
-      setLastBroadcast(`Queued for ${result.recipientCount} active Telegram subscribers.`); setTitle(""); setMessage(""); setMediaFile(null); setBroadcastRequestKey(crypto.randomUUID());
+      setLastBroadcast(`Queued for ${result.recipientCount} active Telegram subscribers.`); setMessage(""); setMediaFile(null); setBroadcastRequestKey(crypto.randomUUID());
       toast.success(`Telegram broadcast queued for ${result.recipientCount} subscribers.`); await refresh();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Broadcast could not be queued."); }
     finally { setSending(false); }
@@ -90,8 +99,8 @@ export default function TelegramBroadcastPage() {
 
   const tabs = [{ id: "broadcast", label: "Broadcasting", icon: Send }, { id: "subscribers", label: "Subscribers", icon: Users }, { id: "conversations", label: "AI conversations", icon: MessageCircle }, { id: "history", label: "Broadcast history", icon: Activity }] as const;
   return <main className="mx-auto w-full max-w-7xl space-y-6 p-4 text-slate-900 md:p-8">
-    <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border bg-white p-6 shadow-sm md:p-8">
-      <div><p className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-sky-700"><Send className="h-4 w-4" /> Telegram · Applicant communications</p><h1 className="text-3xl font-black md:text-5xl">Telegram command center</h1><p className="mt-3 max-w-2xl text-slate-600">Broadcast to applicants who started the bot, and review incoming applicant conversations.</p></div>
+    <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-6 text-black shadow-sm md:p-8">
+      <div><p className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-sky-700"><Send className="h-4 w-4" /> Telegram · Applicant communications</p><h1 className="text-3xl font-black text-black md:text-5xl">Telegram command center</h1><p className="mt-3 max-w-2xl text-slate-700">Broadcast to applicants who started the bot, and review incoming applicant conversations.</p></div>
       <Button variant="outline" onClick={() => void refresh()}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
     </header>
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -100,13 +109,12 @@ export default function TelegramBroadcastPage() {
     <p className="text-sm text-slate-600">Registered Telegram subscribers: <strong>{status?.totalSubscribers ?? "—"}</strong></p>
     <section className="flex flex-wrap gap-2" role="tablist">{tabs.map(({ id, label, icon: Icon }) => <Button key={id} role="tab" aria-selected={section === id} variant={section === id ? "default" : "outline"} onClick={() => setSection(id)}><Icon className="mr-2 h-4 w-4" />{label}</Button>)}</section>
     {section === "broadcast" && <div className="grid gap-6 xl:grid-cols-2">
-      <Card><CardHeader><CardTitle className="flex items-center gap-2"><Radio className="h-5 w-5 text-sky-600" />Compose broadcast</CardTitle></CardHeader><CardContent className="space-y-4">
-        <label className="block text-sm font-semibold">Title<input className="mt-1 w-full rounded-lg border px-3 py-2" value={title} onChange={e => setTitle(e.target.value)} maxLength={160} /></label>
-        <label className="block text-sm font-semibold">Message<textarea className="mt-1 w-full rounded-lg border p-3" value={message} onChange={e => setMessage(e.target.value.slice(0, 4096))} rows={7} maxLength={4096} placeholder="Write a recruitment update for Telegram applicants" /></label>
-        <label className="block text-sm font-semibold">Image or document (optional)<input className="mt-1 block w-full text-sm" type="file" accept="image/*,.pdf,.doc,.docx" onChange={e => setMediaFile(e.target.files?.[0] || null)} /><span className="mt-1 block text-xs font-normal text-slate-500">Images, PDF, or Word documents up to 10 MB. Requires the Telegram media R2 bucket.</span></label>
-        {mediaFile && <p className="text-sm text-slate-600">Attachment: {mediaFile.name} ({Math.ceil(mediaFile.size / 1024)} KB)</p>}
-        <p className="text-sm text-slate-600">Preview</p><div className="whitespace-pre-wrap rounded-2xl bg-sky-50 p-4 text-sm">{message || "Your Telegram message preview will appear here."}</div>
-        <div className="flex items-center justify-between gap-3"><span className="text-sm text-slate-500">Eligible now: {status?.activeSubscribers ?? 0}</span><Button onClick={() => void sendBroadcast()} disabled={sending || !status?.configured || !status.activeSubscribers}><Send className="mr-2 h-4 w-4" />{sending ? "Queueing…" : "Queue broadcast"}</Button></div>
+      <Card className="border-slate-200"><CardHeader><CardTitle className="flex items-center gap-2 text-black"><Radio className="h-5 w-5 text-sky-700" />Compose broadcast</CardTitle><p className="text-sm text-slate-700">Write the message your Telegram subscribers will receive. Add a photo, video, or document if needed.</p></CardHeader><CardContent className="space-y-5 text-black">
+        <label className="block text-sm font-semibold text-black">Message<textarea aria-label="Broadcast message" className="mt-2 min-h-40 w-full rounded-xl border border-slate-300 bg-white p-3 text-black placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-700" value={message} onChange={e => setMessage(e.target.value.slice(0, 4096))} rows={7} maxLength={4096} placeholder="Write a recruitment update for Telegram applicants" /><span className="mt-1 block text-right text-xs font-normal text-slate-600">{message.length}/4,096</span></label>
+        <label className="block text-sm font-semibold text-black">Attachment <span className="font-normal text-slate-600">(optional)</span><input className="mt-2 block w-full cursor-pointer rounded-xl border border-slate-300 bg-white p-2 text-sm text-black file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-semibold file:text-black" type="file" accept="image/*,video/*,.pdf,.doc,.docx" onChange={e => setMediaFile(e.target.files?.[0] || null)} /><span className="mt-2 block text-xs font-normal text-slate-700">Photos, videos, PDF, or Word documents up to 10 MB. Files are staged in your private Telegram chat.</span></label>
+        {mediaFile && <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-black"><span className="min-w-0 break-all">Selected: {mediaFile.name} <span className="text-slate-600">({Math.ceil(mediaFile.size / 1024)} KB)</span></span><button type="button" className="shrink-0 font-semibold text-sky-800 underline" onClick={() => setMediaFile(null)}>Remove</button></div>}
+        <div><p className="mb-2 text-sm font-semibold text-black">Message preview</p><div className="max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 text-black shadow-sm"><div className="space-y-3 p-4"><p className="whitespace-pre-wrap break-words text-sm">{message || <span className="text-slate-600">Your message will appear here.</span>}</p>{mediaFile && mediaPreviewUrl && (mediaFile.type.startsWith("image/") ? <img src={mediaPreviewUrl} alt={`Preview of ${mediaFile.name}`} className="max-h-72 w-full rounded-xl object-contain" /> : mediaFile.type.startsWith("video/") ? <video src={mediaPreviewUrl} controls className="max-h-72 w-full rounded-xl bg-black" /> : <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium text-black">📎 {mediaFile.name}</div>)}</div></div></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4"><span className="text-sm text-slate-700">Eligible subscribers: <strong className="text-black">{status?.activeSubscribers ?? 0}</strong></span><Button onClick={() => void sendBroadcast()} disabled={sending || !message.trim() || !status?.configured || !status.activeSubscribers}><Send className="mr-2 h-4 w-4" />{sending ? "Queueing…" : "Queue broadcast"}</Button></div>
         {lastBroadcast && <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{lastBroadcast}</p>}
         {!status?.configured && <p className="text-sm text-amber-700">Configure MAKE_TELEGRAM_BROADCAST_WEBHOOK_URL to enable delivery.</p>}
       </CardContent></Card>

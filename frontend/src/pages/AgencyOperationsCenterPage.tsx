@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowRight, BookOpen, CheckCircle2, ExternalLink, FileAudio, FolderSync, Search, ShieldCheck, Sparkles, UsersRound, Plane, Stethoscope, HeartHandshake, ClipboardList, Trash2 } from 'lucide-react'
-import { getAgencyAdminAuthHeaders } from '@/lib/agencyAdminAuth'
+import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from '@/lib/agencyAdminAuth'
 import { adminPath } from '@/lib/routes'
 import ContractorTasksPage from '@/pages/ContractorTasksPage'
 
@@ -10,6 +10,7 @@ type KnowledgeSnippet = { id: string; title: string; category: string; content: 
 type Requirements = { service_type?: string; location?: string; household_size?: number | null; children_count?: number | null; elderly_count?: number | null; cooking_requirements?: string; preferred_start_date?: string | null; max_monthly_salary?: number; availability?: string; preferred_nationalities?: string[]; preferred_languages?: string[]; minimum_experience_years?: number; notes?: string }
 type MatchCandidate = { maidId: number; maidReferenceCode: string; maidName: string; score: number; reasons: string[]; manual?: boolean; photoDataUrl?: string }
 type ManualMaidOption = { id: number; referenceCode: string; fullName: string; nationality?: string; status?: string; photoDataUrl?: string }
+type EmployerChoice = { id: string; refCode: string; name: string; company?: string; email: string }
 type MatchResponse = { data?: { matches?: MatchCandidate[]; aiUsed?: boolean; fallbackUsed?: boolean } }
 type TranscriptResult = { fileName: string; transcript: string }
 
@@ -137,12 +138,18 @@ const placementSignal = (placement: Placement) => {
 }
 
 export default function AgencyOperationsCenterPage({ embedded = false }: { embedded?: boolean } = {}) {
-  const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const [searchParams] = useSearchParams()
+  const preferredCandidateReference = searchParams.get('preferredCandidate')?.trim() ?? ''
+  const sourceRequestId = searchParams.get('requestId')?.trim() ?? ''
+  const [activeTab, setActiveTab] = useState<TabKey>(preferredCandidateReference ? 'matching' : 'overview')
   const [placements, setPlacements] = useState<Placement[]>([])
   const [operationsSummary, setOperationsSummary] = useState<OperationsSummary | null>(null)
   const [removingPlacementId, setRemovingPlacementId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const [employerId, setEmployerId] = useState('')
+  const [requestEmployerChoices, setRequestEmployerChoices] = useState<EmployerChoice[]>([])
+  const [requestClientLabel, setRequestClientLabel] = useState('')
+  const [requestEmployerResolution, setRequestEmployerResolution] = useState('')
   const [requirements, setRequirements] = useState<Requirements>({ preferred_nationalities: [], preferred_languages: [] })
   const [matches, setMatches] = useState<MatchCandidate[] | null>(null)
   const [manualMaids, setManualMaids] = useState<ManualMaidOption[]>([])
@@ -189,6 +196,49 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
     }
   }
   useEffect(() => { void loadPlacements() }, [])
+
+  useEffect(() => {
+    if (!preferredCandidateReference) return
+    let cancelled = false
+    setActiveTab('matching')
+    void Promise.all([
+      api<{ maid?: ManualMaidOption & { agencyId?: number; isPublic?: boolean; status?: string } }>(`/api/maids/${encodeURIComponent(preferredCandidateReference)}`),
+      api<{ data?: { id: string; agencyId: number; status: string; details: Record<string, unknown>; client?: { name?: string; email?: string } | null } }>(`/api/requests/${encodeURIComponent(sourceRequestId)}`),
+      api<{ employers?: EmployerChoice[] }>('/api/operations-board/employers'),
+    ])
+      .then(([{ maid }, { data: request }, { employers }]) => {
+        if (cancelled) return
+        if (!maid?.id || maid.referenceCode !== preferredCandidateReference || maid.agencyId !== getStoredAgencyAdmin()?.agencyId || maid.isPublic !== true) {
+          setNotice('The preferred helper is no longer available in this agency. Refresh the request and confirm the current shortlist.')
+          return
+        }
+        if (!request || request.id !== sourceRequestId || request.agencyId !== getStoredAgencyAdmin()?.agencyId || request.status !== 'interested' || request.details?.finalCandidateReference !== preferredCandidateReference) {
+          setNotice('The request does not confirm this preferred helper for your agency. Refresh the request before starting placement steps.')
+          return
+        }
+        const clientEmail = request.client?.email?.trim().toLowerCase() ?? ''
+        setRequestClientLabel(request.client?.name || 'Client on request')
+        const emailMatches = (employers ?? []).filter((employer) => clientEmail && employer.email.trim().toLowerCase() === clientEmail)
+        setRequestEmployerChoices(emailMatches)
+        if (emailMatches.length === 1) {
+          setEmployerId(emailMatches[0].id)
+          setRequestEmployerResolution(`One employer record matches the request's verified account email. Confirm this employer record before creating the placement.`)
+        } else if (emailMatches.length > 1) {
+          setRequestEmployerResolution('Several employer records match this email. Select the correct employer record explicitly; no account was chosen automatically.')
+        } else {
+          setRequestEmployerResolution('No exact email match was found. Choose the employer record manually after confirming the account with the client.')
+        }
+        const candidate: MatchCandidate = {
+          maidId: maid.id, maidReferenceCode: maid.referenceCode, maidName: maid.fullName,
+          score: 0, reasons: ["Client's preferred helper"], manual: true, photoDataUrl: maid.photoDataUrl,
+        }
+        setMatches([candidate])
+        setPlacementCandidate(candidate)
+        setNotice(`Preferred helper ${maid.referenceCode}${sourceRequestId ? ` from request ${sourceRequestId.slice(0, 8)}` : ''} loaded. Confirm the employer account and helper choice before starting placement steps.`)
+      })
+      .catch((error) => { if (!cancelled) setNotice(error instanceof Error ? error.message : 'Unable to load the preferred helper') })
+    return () => { cancelled = true }
+  }, [preferredCandidateReference, sourceRequestId])
 
   const removePlacement = async (placement: Placement) => {
     const reference = placement.maid_reference_code || placement.id
@@ -298,7 +348,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
       const result = await api<{ checklist?: { ready: boolean; taskCount: number } }>('/api/operations-board/placements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maidId: candidate.maidId, employerId: numericEmployerId }),
+        body: JSON.stringify({ maidId: candidate.maidId, employerId: numericEmployerId, ...(sourceRequestId && candidate.maidReferenceCode === preferredCandidateReference ? { sourceRequestId } : {}) }),
       })
       await loadPlacements()
       setPlacementCandidate(null)
@@ -491,6 +541,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
         {activeTab === 'matching' ? (
           <Card icon={UsersRound} title="Find a helper for an employer" description="Save the employer's needs, then generate a shortlist for staff review.">
             <form onSubmit={saveRequirements} className="space-y-4">
+              {preferredCandidateReference && <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm"><p className="font-semibold text-violet-950">Request handoff · {sourceRequestId.slice(0, 8)}</p><p className="mt-1 text-violet-900">Client: {requestClientLabel || "Loading request details…"}. Preferred helper: {preferredCandidateReference}.</p>{requestEmployerResolution && <p className="mt-2 text-xs font-medium text-violet-900">{requestEmployerResolution}</p>}</div>}
               <div className="grid gap-2 rounded-2xl bg-muted p-4 text-sm sm:grid-cols-3">
                 <p className="flex gap-2 text-black"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span><span><b className="block text-black">Choose employer</b>Enter their numeric ID.</span></p>
                 <p className="flex gap-2 text-black"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span><span><b className="block text-black">Save needs</b>Add preferences below.</span></p>
@@ -500,6 +551,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
                 <div className="flex-1">
                   <Field label="Employer number">
                     <input value={employerId} onChange={(e) => { setEmployerId(e.target.value); setMatches(null); setPlacementCandidate(null) }} className={fieldClass} inputMode="numeric" pattern="[0-9]*" placeholder="For example: 1042" />
+                    {requestEmployerChoices.length > 0 && <select value={employerId} onChange={(event) => setEmployerId(event.target.value)} className={`${fieldClass} mt-2`} aria-label="Employer records matching the request email"><option value="">Select matching employer record</option>{requestEmployerChoices.map((employer) => <option key={employer.id} value={employer.id}>{employer.refCode} · {employer.name}{employer.company ? ` · ${employer.company}` : ""} · {employer.email}</option>)}</select>}
                   </Field>
                 </div>
                 <button type="button" onClick={loadRequirements} className={`${secondaryButton} shrink-0`}>

@@ -101,6 +101,32 @@ export const getUserFacingError = (error: unknown): UserFacingErrorMessage => {
   }
 
   if (
+    normalized.includes("documented opt-in") ||
+    normalized.includes("opt-in before enabling consent")
+  ) {
+    return {
+      kind: "validation",
+      title: "Opt-in source required",
+      description: "Enter where and when the contact opted in, using the actual documented source, before recording consent.",
+      actionLabel: "Close",
+      icon: <AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden="true" />,
+    };
+  }
+
+  if (normalized.includes("marketing consent") || normalized.includes("consent service") || normalized.includes("update consent")) {
+    const migrationMissing = normalized.includes("not installed") || normalized.includes("migration") || normalized.includes("storage is not configured");
+    return {
+      kind: "database",
+      title: migrationMissing ? "Consent storage needs setup" : "Could not save marketing consent",
+      description: migrationMissing
+        ? "Ask an administrator to apply supabase/20261116_marketing_consents.sql to the Supabase project used by this app, then try again."
+        : "The consent change was not saved. Refresh the page and try again; if it continues, ask an administrator to check the consent storage configuration.",
+      actionLabel: migrationMissing ? "Close" : "Retry",
+      icon: <CircleAlert className="h-5 w-5 text-red-600" aria-hidden="true" />,
+    };
+  }
+
+  if (
     normalized.includes("failed to fetch") ||
     normalized.includes("network") ||
     normalized.includes("connection") ||

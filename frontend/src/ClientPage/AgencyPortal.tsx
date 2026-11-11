@@ -842,7 +842,7 @@ export default function AgencyPortalPage({ embedded = false }: AgencyPortalPageP
 
         /* Calm, document-led agency portal styling */
         .ap-root { background: #f3f6f6; }
-        .ap-outer { padding-top: 1.75rem; padding-bottom: 2.5rem; }
+        .ap-outer { align-items: flex-start; padding-top: 1rem; padding-bottom: 2rem; }
         .ap-card {
           max-width: 1180px;
           border-radius: 12px;

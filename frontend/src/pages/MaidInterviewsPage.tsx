@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CalendarDays, Clock3, LoaderCircle, Mail, RefreshCw, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
@@ -36,6 +37,7 @@ type InterviewDraft = {
   employerEmail: string;
   employerContactVerified: boolean;
 };
+type CoordinationDraft = { employerMessage: string; applicantMessage: string; checklist: string[]; knowledgeSources: string[]; requiresStaffReview: true };
 
 const interviewStatuses = ["SCHEDULED", "CONFIRMED", "COMPLETED", "PASSED", "FAILED", "SECOND_INTERVIEW", "CANCELLED", "NO_SHOW"];
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -69,6 +71,9 @@ const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
 
 const MaidInterviewsPage = () => {
   const admin = getStoredAgencyAdmin();
+  const [searchParams] = useSearchParams();
+  const requestedCandidateReferences = useMemo(() => [...new Set((searchParams.get("references") ?? "").split(",").map((reference) => reference.trim()).filter(Boolean))].slice(0, 5), [searchParams]);
+  const hiringRequestId = searchParams.get("requestId") ?? "";
   const [maids, setMaids] = useState<MaidProfile[]>([]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [drafts, setDrafts] = useState<Record<string, InterviewDraft>>({});
@@ -86,6 +91,9 @@ const MaidInterviewsPage = () => {
   const [creating, setCreating] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [coordinationGuidance, setCoordinationGuidance] = useState<Record<string, string>>({});
+  const [coordinationDrafts, setCoordinationDrafts] = useState<Record<string, CoordinationDraft>>({});
+  const [coordinationLoadingId, setCoordinationLoadingId] = useState<string | null>(null);
 
   const maidByReference = useMemo(
     () => new Map(maids.map((maid) => [maid.referenceCode, maid])),
@@ -118,13 +126,17 @@ const MaidInterviewsPage = () => {
         employerEmail: interview.employer_email ?? "",
         employerContactVerified: Boolean(interview.employer_contact_verified_at),
       }])));
-      setSelectedMaid((current) => current || maidRows[0]?.referenceCode || "");
+      setSelectedMaid((current) => {
+        if (current && requestedCandidateReferences.includes(current) && maidRows.some((maid) => maid.referenceCode === current)) return current;
+        const firstRequested = requestedCandidateReferences.find((reference) => maidRows.some((maid) => maid.referenceCode === reference));
+        return firstRequested || current || maidRows[0]?.referenceCode || "";
+      });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load maid interviews");
     } finally {
       setLoading(false);
     }
-  }, [admin?.agencyId]);
+  }, [admin?.agencyId, requestedCandidateReferences]);
 
   useEffect(() => { void loadPage(); }, [loadPage]);
 
@@ -252,6 +264,28 @@ const MaidInterviewsPage = () => {
     }
   };
 
+  const prepareCoordinationDraft = async (interview: Interview) => {
+    setCoordinationLoadingId(interview.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await api<{ draft: CoordinationDraft; aiUsed: boolean; knowledgeRetrieved: boolean }>(
+        `/api/operations-board/maid-interviews/${encodeURIComponent(interview.id)}/coordination-draft`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ availabilityAndGuidance: coordinationGuidance[interview.id] || "" }),
+        },
+      );
+      setCoordinationDrafts((current) => ({ ...current, [interview.id]: result.draft }));
+      setNotice(`${result.aiUsed ? "Coordination drafts are ready" : "Template coordination drafts are ready"} for staff review.${result.knowledgeRetrieved ? " Approved agency guidance was retrieved." : " No matching approved guidance was found."}`);
+    } catch (draftError) {
+      setError(draftError instanceof Error ? draftError.message : "Could not prepare interview coordination drafts");
+    } finally {
+      setCoordinationLoadingId(null);
+    }
+  };
+
   return (
     <main className="space-y-6 p-4 text-slate-950 md:p-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -276,6 +310,7 @@ const MaidInterviewsPage = () => {
             <p className="text-sm text-slate-600">Choose a maid profile from the public list. Email is entered here because Add Maid profiles do not store an email address.</p>
           </div>
         </div>
+        {requestedCandidateReferences.length > 0 && <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50 p-3"><p className="text-sm font-semibold text-violet-950">Shortlist loaded from hiring request{hiringRequestId ? ` · ${hiringRequestId.slice(0, 8)}` : ""}</p><p className="mt-1 text-xs text-violet-900">Choose each requested profile below to schedule it. Confirm the time and contact details with the employer and candidate before sending any invitation.</p><div className="mt-2 flex flex-wrap gap-2">{requestedCandidateReferences.map((reference) => { const available = maids.some((maid) => maid.referenceCode === reference); return <button key={reference} type="button" disabled={!available} onClick={() => setSelectedMaid(reference)} className={`rounded-full border px-3 py-1 text-xs font-semibold ${selectedMaid === reference ? "border-violet-700 bg-violet-700 text-white" : available ? "border-violet-300 bg-white text-violet-950" : "border-slate-300 bg-slate-100 text-slate-500"}`}>{reference}{!available ? " · unavailable" : ""}</button>; })}</div></div>}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <label className="text-sm font-semibold">Maid profile
             <select value={selectedMaid} onChange={(event) => setSelectedMaid(event.target.value)} className="mt-1 block h-11 w-full rounded-lg border border-slate-300 bg-white px-3 font-normal" disabled={loading || maids.length === 0}>
@@ -389,6 +424,28 @@ const MaidInterviewsPage = () => {
                     <textarea value={draft.notes} onChange={(event) => updateDraft(interview.id, { notes: event.target.value })} maxLength={4000} rows={2} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 font-normal" />
                   </label>
                 </div>
+                <section className="mt-4 rounded-xl border border-violet-200 bg-violet-50/60 p-4" aria-label="AI interview coordination assistant">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-semibold text-violet-950">Agent 4 · Interview coordination</h4>
+                      <p className="mt-1 text-xs text-violet-900">Prepare reviewable drafts and a staff checklist. Nothing is sent and the interview status is not changed.</p>
+                    </div>
+                    <Button type="button" variant="outline" disabled={coordinationLoadingId === interview.id || savingId === interview.id} onClick={() => void prepareCoordinationDraft(interview)}>
+                      {coordinationLoadingId === interview.id ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                      Prepare coordination drafts
+                    </Button>
+                  </div>
+                  <label className="mt-3 block text-xs font-semibold text-violet-950">Availability and approved agency guidance <span className="font-normal">(optional; don’t include contact details)</span>
+                    <textarea maxLength={2000} rows={2} value={coordinationGuidance[interview.id] || ""} onChange={(event) => setCoordinationGuidance((current) => ({ ...current, [interview.id]: event.target.value }))} placeholder="Add confirmed availability windows or approved interview instructions" className="mt-1 w-full rounded-lg border border-violet-200 bg-white p-2 text-sm font-normal text-slate-900" />
+                  </label>
+                  {coordinationDrafts[interview.id] && <div className="mt-3 space-y-3">
+                    <p role="status" className="text-xs font-semibold text-violet-900">Staff review required before sending.</p>
+                    <label className="block text-xs font-semibold text-violet-950">Employer draft<textarea readOnly rows={3} value={coordinationDrafts[interview.id].employerMessage} className="mt-1 w-full rounded-lg border border-violet-200 bg-white p-2 text-sm font-normal text-slate-900" /></label>
+                    <label className="block text-xs font-semibold text-violet-950">Applicant draft<textarea readOnly rows={3} value={coordinationDrafts[interview.id].applicantMessage} className="mt-1 w-full rounded-lg border border-violet-200 bg-white p-2 text-sm font-normal text-slate-900" /></label>
+                    {coordinationDrafts[interview.id].knowledgeSources.length > 0 && <p className="text-xs text-violet-900">Grounded in: {coordinationDrafts[interview.id].knowledgeSources.join(", ")}</p>}
+                    <div className="text-xs text-violet-950"><p className="font-semibold">Staff checklist</p><ul className="mt-1 list-disc pl-5">{coordinationDrafts[interview.id].checklist.map((item, index) => <li key={`${interview.id}-coord-${index}`}>{item}</li>)}</ul></div>
+                  </div>}
+                </section>
                 {interview.employer_email && <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
                   <p className="font-semibold">Employer participant: {interview.employer_name || "Employer"} · {interview.employer_email}</p>
                   <p className="mt-1 text-xs text-slate-600">

@@ -18,8 +18,6 @@ binding = "ASSETS"
 binding = "APP_DATA"
 id = "62a5ada5801547b5b0895fec94ab0b12"
 
-# Optional: Telegram broadcast attachments require Cloudflare R2. Add the
-# TELEGRAM_MEDIA R2 binding after creating the helped-telegram-media bucket.
 [vars]
 # Keep the legacy app_data/blob path active until the normalized Supabase tables
 # have been migrated. Enabling the normalized mode before migration can lock

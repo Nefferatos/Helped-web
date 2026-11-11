@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
-import { getClientToken, getStoredClient } from "@/lib/clientAuth";
+import { getClientAuthHeaders, getClientToken, getStoredClient } from "@/lib/clientAuth";
 import { submitHiringRequest } from "@/lib/agencies";
 import { getMaidAge, getPrimaryPhoto, getPublicIntro, type MaidProfile } from "@/lib/maids";
 import "../ClientPage/ClientTheme.css";
@@ -32,13 +32,15 @@ type HiringFormData = Record<string, string> & {
 
 type CandidateProfile = {
   id: string;
+  referenceCode: string;
   name: string;
-  age: number;
+  age: number | null;
   experience: string;
-  skills: string[];
+  languages: string[];
   availability: string;
-  note: string;
-  isActualProfile: boolean;
+  photoUrl: string;
+  score: number;
+  reasons: string[];
 };
 
 const stepTitles = [
@@ -52,72 +54,13 @@ const stepTitles = [
   "Support",
 ] as const;
 
-const mockNames = [
-  "Ana Santos",
-  "Lina Devi",
-  "Maya Putri",
-  "Siti Rahma",
-  "Rina Aulia",
-  "Priya Nair",
-  "Mariam Yusuf",
-  "Dewi Kartika",
-  "Nora Salim",
-  "Asha Kumari",
-  "Fatin Zahra",
-  "Kusum Lata",
-  "Vina Lestari",
-  "Shanti Devi",
-  "Rosa Mae",
-  "Nur Azizah",
-  "Jaya Lakshmi",
-  "Indah Permata",
-  "Rekha Bai",
-  "Farah Hana",
-  "Mei Lin",
-  "Grace Ann",
-  "Citra Ayu",
-  "Laila Noor",
-];
-
-const defaultMockSkills = [
-  "Cleaning",
-  "Cooking",
-  "Childcare",
-  "Elderly care",
-  "General housekeeping",
-  "Infant care",
-  "Pet care",
-  "Laundry",
-];
-
-const getRequestedSkills = (duties: string, fallbackSkills: string[]) => {
-  const normalizedDuties = duties
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  if (normalizedDuties.length > 0) {
-    return normalizedDuties.slice(0, 4);
-  }
-
-  return fallbackSkills.slice(0, 4);
-};
-
-const getMaidSkills = (maid: MaidProfile) => {
-  const areaSkills = Object.entries(maid.workAreas || {})
-    .filter(([, value]) => {
-      const config = value as { willing?: boolean; experience?: boolean };
-      return Boolean(config.willing || config.experience);
-    })
-    .map(([key]) => key);
-
-  return Array.from(new Set([...areaSkills, maid.type, maid.nationality].filter(Boolean))).slice(0, 5);
-};
-
 const HiringProcessPage = () => {
   const { refCode } = useParams<{ refCode: string }>();
   const navigate = useNavigate();
   const [maid, setMaid] = useState<MaidProfile | null>(null);
+  const [candidateProfiles, setCandidateProfiles] = useState<CandidateProfile[]>([]);
+  const [matchingCandidates, setMatchingCandidates] = useState(false);
+  const [matchMode, setMatchMode] = useState<"ai" | "rules" | null>(null);
   const [formData, setFormData] = useState<HiringFormData>({
     serviceType: "",
     duties: "",
@@ -180,50 +123,13 @@ const HiringProcessPage = () => {
 
   const client = getStoredClient();
 
-  const candidateProfiles = useMemo(() => {
-    if (!maid) return [];
-
-    const maidAge = getMaidAge(maid) ?? 31;
-    const maidSkills = getMaidSkills(maid);
-    const requestedSkills = getRequestedSkills(formData.duties, maidSkills.length > 0 ? maidSkills : defaultMockSkills);
-    const startDateLabel = formData.scheduleStart || "Immediate";
-
-    const primaryProfile: CandidateProfile = {
-      id: maid.referenceCode,
-      name: maid.fullName,
-      age: maidAge,
-      experience: `${Math.max(2, Math.min(12, maidAge - 21))} years`,
-      skills: requestedSkills.length > 0 ? requestedSkills : maidSkills,
-      availability: startDateLabel,
-      note: "Current profile in the system",
-      isActualProfile: true,
-    };
-
-    const mockProfiles = mockNames.map((name, index) => ({
-      id: `mock-${index + 1}`,
-      name,
-      age: 24 + (index % 16),
-      experience: `${2 + (index % 9)} years`,
-      skills: [
-        requestedSkills[index % Math.max(1, requestedSkills.length)] || defaultMockSkills[index % defaultMockSkills.length],
-        defaultMockSkills[(index + 2) % defaultMockSkills.length],
-        defaultMockSkills[(index + 4) % defaultMockSkills.length],
-      ],
-      availability: index % 3 === 0 ? startDateLabel : `Within ${3 + (index % 5)} days`,
-      note: "Sample matched profile",
-      isActualProfile: false,
-    }));
-
-    return [primaryProfile, ...mockProfiles].slice(0, 25);
-  }, [maid, formData.duties, formData.scheduleStart]);
-
   const selectedCandidates = useMemo(
     () => candidateProfiles.filter((candidate) => selectedCandidateIds.includes(candidate.id)),
     [candidateProfiles, selectedCandidateIds],
   );
 
   const chosenCandidate =
-    candidateProfiles.find((candidate) => candidate.id === formData.chosenCandidateId) ?? candidateProfiles[0] ?? null;
+    candidateProfiles.find((candidate) => candidate.id === formData.chosenCandidateId && selectedCandidateIds.includes(candidate.id)) ?? selectedCandidates[0] ?? null;
 
   const missingSummaryDetails = useMemo(() => {
     const missing: string[] = [];
@@ -236,13 +142,83 @@ const HiringProcessPage = () => {
   }, [formData]);
 
   const handleInputChange = (field: keyof HiringFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    const invalidatesShortlist = ["serviceType", "duties", "qualifications", "scheduleStart", "salaryOffer"].includes(field);
+    setFormData((prev) => ({ ...prev, [field]: value, ...(invalidatesShortlist ? { chosenCandidateId: "" } : {}) }));
+    if (invalidatesShortlist) {
+      setCandidateProfiles([]);
+      setMatchMode(null);
+      setSelectedCandidateIds([]);
+    }
   };
 
   const toggleCandidateSelection = (candidateId: string) => {
     setSelectedCandidateIds((prev) =>
       prev.includes(candidateId) ? prev.filter((item) => item !== candidateId) : [...prev, candidateId],
     );
+  };
+
+  const findCandidateMatches = async () => {
+    if (!maid) return;
+    setMatchingCandidates(true);
+    setCandidateProfiles([]);
+    setMatchMode(null);
+    try {
+      const response = await fetch("/api/public/hiring/matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getClientAuthHeaders() },
+        body: JSON.stringify({
+          agencyId: maid.agencyId,
+          serviceType: formData.serviceType,
+          duties: formData.duties,
+          qualifications: formData.qualifications,
+          preferredStartDate: formData.scheduleStart,
+          budget: formData.salaryOffer,
+          location: formData.address,
+        }),
+      });
+      const result = await response.json().catch(() => ({})) as {
+        error?: string;
+        aiUsed?: boolean;
+        matches?: Array<{ maidReferenceCode: string; maidName: string; score: number; reasons: string[] }>;
+      };
+      if (!response.ok) throw new Error(result.error || "Could not find matching profiles");
+
+      const profiles = await Promise.all((result.matches ?? []).map(async (match) => {
+        const profileResponse = await fetch(`/api/maids/${encodeURIComponent(match.maidReferenceCode)}`);
+        if (!profileResponse.ok) return null;
+        const profileResult = await profileResponse.json().catch(() => ({})) as { maid?: MaidProfile };
+        const profile = profileResult.maid;
+        if (!profile || !profile.isPublic || profile.agencyId !== maid.agencyId) return null;
+        const experienceCount = profile.experienceCount ?? profile.employmentHistory?.length ?? 0;
+        return {
+          id: profile.referenceCode,
+          referenceCode: profile.referenceCode,
+          name: profile.fullName || match.maidName,
+          age: getMaidAge(profile),
+          experience: experienceCount > 0 ? `${experienceCount} recorded work history item${experienceCount === 1 ? "" : "s"}` : "Experience not provided",
+          languages: Object.entries(profile.languageSkills || {})
+            .filter(([, level]) => Boolean(level.trim()) && level.toLowerCase() !== "zero")
+            .map(([language]) => language)
+            .slice(0, 6),
+          availability: "To be confirmed by the agency",
+          photoUrl: getPrimaryPhoto(profile),
+          score: match.score,
+          reasons: Array.isArray(match.reasons) ? match.reasons : [],
+        } satisfies CandidateProfile;
+      }));
+
+      const validProfiles = profiles.filter((profile): profile is CandidateProfile => profile !== null);
+      setCandidateProfiles(validProfiles);
+      setMatchMode(result.aiUsed ? "ai" : "rules");
+      const initialCandidate = validProfiles.find((profile) => profile.referenceCode === refCode) ?? validProfiles[0];
+      setSelectedCandidateIds(initialCandidate ? [initialCandidate.id] : []);
+      if (initialCandidate) handleInputChange("chosenCandidateId", initialCandidate.id);
+      else setFormData((previous) => ({ ...previous, chosenCandidateId: "" }));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not find matching profiles");
+    } finally {
+      setMatchingCandidates(false);
+    }
   };
 
   const canContinueFromStep = (step: number) => {
@@ -258,11 +234,11 @@ const HiringProcessPage = () => {
       case 2:
         return missingSummaryDetails.length === 0;
       case 3:
-        return candidateProfiles.length === 25;
+        return candidateProfiles.length > 0 && !matchingCandidates;
       case 4:
         return selectedCandidateIds.length > 0 && Boolean(formData.interviewOption);
       case 5:
-        return Boolean(formData.chosenCandidateId);
+        return selectedCandidateIds.length > 0;
       case 6:
         return true;
       case 7:
@@ -290,16 +266,20 @@ const HiringProcessPage = () => {
   };
 
   const handleSubmit = async () => {
-    if (!refCode || !maid || !chosenCandidate) return;
+    const preferredCandidate = chosenCandidate ?? selectedCandidates[0];
+    if (!refCode || !maid || !preferredCandidate || selectedCandidates.length === 0) return;
 
     try {
       setIsSubmitting(true);
-      await submitHiringRequest(refCode, maid.agencyId, {
+      await submitHiringRequest(preferredCandidate.referenceCode, maid.agencyId, {
         ...formData,
         selectedCandidates: selectedCandidates.map((candidate) => candidate.name).join(", "),
-        chosenCandidateName: chosenCandidate.name,
-        chosenCandidateAvailability: chosenCandidate.availability,
-        matchMode: "simulated",
+        chosenCandidateName: preferredCandidate.name,
+        chosenCandidateReference: preferredCandidate.referenceCode,
+        preferredCandidateReference: preferredCandidate.referenceCode,
+        selectedCandidateReferences: selectedCandidates.map((candidate) => candidate.referenceCode).join(", "),
+        chosenCandidateAvailability: preferredCandidate.availability,
+        matchMode: matchMode ?? "rules",
       });
       setIsSubmitted(true);
       toast.success("Hiring request submitted. The agency can now prepare the next steps.");
@@ -393,8 +373,7 @@ const HiringProcessPage = () => {
                   </div>
                   <h3 className="mb-2 text-2xl font-bold">Request Submitted</h3>
                   <p className="mb-6 text-muted-foreground">
-                    Your hiring request has been sent. The agency can now review the selected profile, prepare contract steps,
-                    and follow up on payment and deployment.
+                    Your request and interview shortlist have been sent to the agency. The agency will coordinate interviews and confirm availability before you make a final selection.
                   </p>
                   <div className="flex flex-wrap justify-center gap-3">
                     <Button asChild>
@@ -504,31 +483,35 @@ const HiringProcessPage = () => {
                   {currentStep === 3 ? (
                     <div className="space-y-6">
                       <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
-                        Matching candidates will be provided below. These are simulated sample profiles based on your
-                        request and the current system profile.
+                        Agent 3 ranks up to five public, available profiles from this agency against your requirements. The shortlist is a suggestion; the agency will confirm profile details and availability.
                       </div>
+
+                      <Button type="button" onClick={() => void findCandidateMatches()} disabled={matchingCandidates}>
+                        {matchingCandidates ? "Finding matches…" : candidateProfiles.length ? "Refresh shortlist" : "Find up to 5 matches"}
+                      </Button>
+                      {matchMode && <p className="text-xs text-muted-foreground">{matchMode === "ai" ? "AI-assisted ranking" : "Evidence-based fallback ranking"} · agency confirmation required</p>}
 
                       <div className="space-y-4">
                         {candidateProfiles.map((candidate) => (
                           <div key={candidate.id} className="rounded-xl border p-4">
-                            <div className="flex items-start justify-between gap-4">
-                              <div>
-                                <p className="font-semibold">{candidate.name}</p>
-                                <p className="text-sm text-muted-foreground">{candidate.note}</p>
+                            <div className="flex items-start gap-4">
+                              {candidate.photoUrl ? <img src={candidate.photoUrl} alt="" className="h-20 w-16 rounded-lg object-cover" /> : null}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div><p className="font-semibold">{candidate.name}</p><p className="text-xs text-muted-foreground">{candidate.referenceCode}</p></div>
+                                  <span className="rounded-full bg-muted px-3 py-1 text-xs">Match score {candidate.score}</span>
+                                </div>
+                                <p className="mt-2 text-sm text-muted-foreground">{candidate.age == null ? "Age not provided" : `${candidate.age} years old`} · {candidate.experience}</p>
+                                {candidate.languages.length > 0 && <p className="mt-1 text-sm text-muted-foreground">Languages listed: {candidate.languages.join(", ")}</p>}
+                                {candidate.reasons.length > 0 && <ul className="mt-2 list-disc pl-5 text-sm text-muted-foreground">{candidate.reasons.map((reason, index) => <li key={`${candidate.id}-reason-${index}`}>{reason}</li>)}</ul>}
+                                <p className="mt-2 text-xs text-amber-800">Availability: {candidate.availability}</p>
+                                <Link className="mt-2 inline-block text-sm font-medium text-primary underline" to={`/maids/${encodeURIComponent(candidate.referenceCode)}`}>View public profile</Link>
                               </div>
-                              <span className="rounded-full bg-muted px-3 py-1 text-xs">
-                                {candidate.isActualProfile ? "Current profile" : "Sample"}
-                              </span>
-                            </div>
-                            <div className="mt-3 grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
-                              <p>Age: {candidate.age}</p>
-                              <p>Experience: {candidate.experience}</p>
-                              <p>Skills: {candidate.skills.join(", ")}</p>
-                              <p>Availability: {candidate.availability}</p>
                             </div>
                           </div>
                         ))}
                       </div>
+                      {!matchingCandidates && matchMode && candidateProfiles.length === 0 && <p className="text-sm text-muted-foreground">No public available profiles matched. Adjust your requirements or contact the agency for help.</p>}
                     </div>
                   ) : null}
 
@@ -553,7 +536,7 @@ const HiringProcessPage = () => {
                               <div className="text-sm">
                                 <p className="font-medium text-foreground">{candidate.name}</p>
                                 <p className="text-muted-foreground">
-                                  {candidate.age} years old • {candidate.experience} • {candidate.availability}
+                                  {candidate.age == null ? "Age not provided" : `${candidate.age} years old`} • {candidate.experience} • Availability to be confirmed
                                 </p>
                               </div>
                             </label>
@@ -580,7 +563,7 @@ const HiringProcessPage = () => {
                   {currentStep === 5 ? (
                     <div className="space-y-6">
                       <p className="text-sm text-muted-foreground">
-                        Please confirm the candidate you want to move forward with. Availability is shown for quick review.
+                        Review the candidates you selected for interview. You may mark a preferred profile, but this is not a final hiring decision; the agency will coordinate interviews and confirm availability first.
                       </p>
 
                       <div className="space-y-3">
@@ -593,20 +576,21 @@ const HiringProcessPage = () => {
                               formData.chosenCandidateId === candidate.id ? "border-primary bg-primary/5" : "hover:bg-muted/20"
                             }`}
                           >
-                            <p className="font-semibold">{candidate.name}</p>
+                            <p className="font-semibold">{candidate.name}{formData.chosenCandidateId === candidate.id ? " · Preferred" : ""}</p>
                             <p className="mt-1 text-sm text-muted-foreground">
-                              Experience: {candidate.experience} • Skills: {candidate.skills.join(", ")}
+                              Experience: {candidate.experience}{candidate.languages.length ? ` • Languages: ${candidate.languages.join(", ")}` : ""}
                             </p>
-                            <p className="mt-1 text-sm text-muted-foreground">Availability: {candidate.availability}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">Availability: to be confirmed by the agency</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{formData.chosenCandidateId === candidate.id ? "Preferred profile (optional)" : "Click to mark as preferred (optional)"}</p>
                           </button>
                         ))}
                       </div>
 
                       {chosenCandidate ? (
                         <div className="rounded-xl border bg-muted/20 p-4 text-sm">
-                          <p className="font-medium text-foreground">Selected Candidate</p>
+                          <p className="font-medium text-foreground">Optional preference</p>
                           <p className="mt-2 text-muted-foreground">
-                            {chosenCandidate.name} is marked with availability: {chosenCandidate.availability}
+                            {chosenCandidate.name} is your preferred profile for now. Final selection follows interviews and agency availability confirmation.
                           </p>
                         </div>
                       ) : null}
@@ -703,7 +687,8 @@ const HiringProcessPage = () => {
                       <div className="rounded-xl border p-4 text-sm">
                         <p className="font-medium text-foreground">Next Steps</p>
                         <ul className="mt-3 space-y-2 text-muted-foreground">
-                          <li>Chosen candidate: {chosenCandidate?.name || "Not selected"}</li>
+                          <li>Interview shortlist: {selectedCandidates.map((candidate) => candidate.name).join(", ") || "Not selected"}</li>
+                          <li>Optional preferred profile: {chosenCandidate?.name || "Not selected"}</li>
                           <li>Interview option: {formData.interviewOption || "Not selected"}</li>
                           <li>Start date: {formData.scheduleStart || "Not set"}</li>
                           <li>Budget: SGD {formData.salaryOffer || "Not set"}</li>
@@ -719,7 +704,7 @@ const HiringProcessPage = () => {
                     </Button>
 
                     {isFinalStep ? (
-                      <Button type="button" onClick={handleSubmit} disabled={isSubmitting || !chosenCandidate}>
+                      <Button type="button" onClick={handleSubmit} disabled={isSubmitting || selectedCandidates.length === 0}>
                         {isSubmitting ? "Submitting..." : "Submit Hiring Request"}
                       </Button>
                     ) : (

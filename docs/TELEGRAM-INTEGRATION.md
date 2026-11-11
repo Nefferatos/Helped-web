@@ -10,20 +10,14 @@ a Telegram recipient.
 1. Apply `supabase/20261113_ats_referral_leads.sql`,
    `supabase/20261118_telegram_communications.sql`, and
    `supabase/20261119_ats_referral_telegram_invites.sql` to the production
-   Supabase project and local database.
-   Create an R2 bucket named `helped-telegram-media` and add this binding to
-   `wrangler.toml` in environments that accept broadcast attachments:
-
-   ```toml
-   [[r2_buckets]]
-   binding = "TELEGRAM_MEDIA"
-   bucket_name = "helped-telegram-media"
-   ```
+   Supabase project and local database. Telegram attachments are staged in a
+   private Telegram chat and reused by Telegram file ID; R2 is not required.
 2. Create/use the agency Telegram bot in BotFather and configure these Worker
    secrets (the token must never be placed in a `VITE_*` variable):
 
    ```sh
    npx wrangler secret put TELEGRAM_BOT_TOKEN
+   npx wrangler secret put TELEGRAM_MEDIA_CHAT_ID
    npx wrangler secret put TELEGRAM_BOT_USERNAME
    npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
    npx wrangler secret put TELEGRAM_AUTOMATION_SECRET
@@ -34,7 +28,11 @@ a Telegram recipient.
    Use a random webhook secret (1–256 characters, Telegram's allowed
    characters only) for `TELEGRAM_WEBHOOK_SECRET`; use a separate random
    secret for Make callbacks. The configured Make URLs must be HTTPS custom
-   webhook URLs.
+   webhook URLs. `TELEGRAM_MEDIA_CHAT_ID` is a private Telegram chat/group
+   where the bot can stage uploads. For a private chat, press Start on the bot
+   and obtain the numeric ID from a Telegram `getUpdates` response before
+   enabling the webhook (or briefly remove and restore the webhook to retrieve
+   a setup message). Keep this ID as a Worker secret.
 3. Point Telegram updates at the deployed site's `/api/telegram/webhook`.
    Telegram must send the same `TELEGRAM_WEBHOOK_SECRET` as its
    `secret_token` header. Example (substitute values locally; do not commit
@@ -49,9 +47,11 @@ a Telegram recipient.
 4. Import `make/helped-telegram-broadcast.blueprint.json` and
    `make/helped-telegram-chatbot.blueprint.json` as separate scenarios. Configure
    the broadcast scenario to accept `scenario`,
-   `broadcastId`, `agencyId`, `message`, `mediaUrl`, and the server-selected
-   `recipients` array. The broadcast starter iterates recipients and sends
-   text, images, or documents through Telegram. Honor Telegram 429
+   `broadcastId`, `agencyId`, `message`, `mediaFileId`, `mediaType`, and the
+   server-selected `recipients` array. The broadcast starter iterates
+   recipients and sends text, images, videos, or documents through Telegram.
+   Attachments are staged in the private chat and reused by Telegram file ID.
+   Honor Telegram 429
    `retry_after`, apply bounded exponential retries, and call
    `POST /api/telegram/automation/delivery-result` after each recipient with
    `x-telegram-automation-secret`. Never send to recipients other than the

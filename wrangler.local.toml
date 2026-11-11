@@ -16,10 +16,6 @@ binding = "APP_DATA"
 id = "62a5ada5801547b5b0895fec94ab0b12"
 preview_id = "595830971f4f4125975ddcdeb627de67"
 
-[[r2_buckets]]
-binding = "TELEGRAM_MEDIA"
-bucket_name = "helped-telegram-media-local"
-
 [vars]
 # Match the deployed app_data storage mode until the normalized Supabase tables
 # are fully migrated. Using the normalized path before migration can lock admin

@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getStoredClient } from "@/lib/clientAuth";
+import { getClientAuthHeaders, getStoredClient } from "@/lib/clientAuth";
 import { fetchAgencyOptions } from "@/lib/agencies";
 import {
   createRequestMessage,
@@ -573,6 +573,9 @@ const ClientRequestsPage = () => {
   const queryClient = useQueryClient();
   const storedClient = useMemo(() => getStoredClient(), []);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [interviewCandidateReferencesByRequest, setInterviewCandidateReferencesByRequest] = useState<Record<string, string[]>>({});
+  const [savingInterviewSelection, setSavingInterviewSelection] = useState(false);
+  const [savingFinalCandidateReference, setSavingFinalCandidateReference] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
   const [requirements, setRequirements] = useState<RequirementsState>(defaultRequirements);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -717,6 +720,56 @@ const ClientRequestsPage = () => {
   }, [messagesQuery.data]);
 
   const selectedRequest = requests.find((r) => r.id === selectedRequestId) ?? requests[0] ?? null;
+  useEffect(() => {
+    if (!selectedRequest || selectedRequest.status !== "interested") return;
+    setInterviewCandidateReferencesByRequest((current) => {
+      if (Object.prototype.hasOwnProperty.call(current, selectedRequest.id)) return current;
+      const saved = selectedRequest.details?.interviewCandidateReferences;
+      return { ...current, [selectedRequest.id]: Array.isArray(saved) ? saved.map(String).filter((reference) => selectedRequest.maidReferences.includes(reference)) : [] };
+    });
+  }, [selectedRequest]);
+  const selectedInterviewReferences = selectedRequest ? interviewCandidateReferencesByRequest[selectedRequest.id] ?? [] : [];
+  const toggleInterviewCandidate = (reference: string) => {
+    if (!selectedRequest) return;
+    setInterviewCandidateReferencesByRequest((current) => {
+      const selected = current[selectedRequest.id] ?? [];
+      if (selected.includes(reference)) return { ...current, [selectedRequest.id]: selected.filter((item) => item !== reference) };
+      if (selected.length >= 5) { toast.error("Choose up to five candidates for interview."); return current; }
+      return { ...current, [selectedRequest.id]: [...selected, reference] };
+    });
+  };
+  const saveInterviewSelection = async () => {
+    if (!selectedRequest) return;
+    if (selectedInterviewReferences.length < 1 || selectedInterviewReferences.length > 5) { toast.error("Choose between one and five candidates for interview."); return; }
+    setSavingInterviewSelection(true);
+    try {
+      const response = await fetch(`/api/requests/${encodeURIComponent(selectedRequest.id)}/interview-selection`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...getClientAuthHeaders() },
+        body: JSON.stringify({ maidReferences: selectedInterviewReferences }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error || `Request failed (${response.status})`);
+      void queryClient.invalidateQueries({ queryKey: ["client-requests", storedClient?.id] });
+      toast.success("Your interview choices were sent to the agency.");
+    } catch (saveError) { toast.error(saveError instanceof Error ? saveError.message : "Unable to send interview choices"); }
+    finally { setSavingInterviewSelection(false); }
+  };
+  const chooseFinalCandidate = async (reference: string) => {
+    if (!selectedRequest || !selectedInterviewReferences.includes(reference)) return;
+    if (!window.confirm("Have you completed the interviews you requested? This records your preferred candidate for the agency to confirm; it does not start a placement.")) return;
+    setSavingFinalCandidateReference(reference);
+    try {
+      const response = await fetch(`/api/requests/${encodeURIComponent(selectedRequest.id)}/final-candidate-selection`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...getClientAuthHeaders() },
+        body: JSON.stringify({ maidReference: reference }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(result.error || `Request failed (${response.status})`);
+      void queryClient.invalidateQueries({ queryKey: ["client-requests", storedClient?.id] });
+      toast.success("Your preferred candidate was sent to the agency for confirmation.");
+    } catch (saveError) { toast.error(saveError instanceof Error ? saveError.message : "Unable to save your preferred candidate"); }
+    finally { setSavingFinalCandidateReference(null); }
+  };
 
   const timeline = selectedRequest
     ? [
@@ -1293,7 +1346,7 @@ const ClientRequestsPage = () => {
                           <div>
                             <p className="text-xs font-black uppercase tracking-widest" style={{ color: C.amberDeep }}>Suggested helpers</p>
                             <p className="text-[10px]" style={{ color: "#92600A" }}>
-                              {selectedRequest.maids.length} candidate{selectedRequest.maids.length !== 1 ? "s" : ""} shortlisted
+                              {selectedRequest.maids.length} candidate{selectedRequest.maids.length !== 1 ? "s" : ""} shortlisted · choose 1–5 for interview
                             </p>
                           </div>
                         </div>
@@ -1361,10 +1414,13 @@ const ClientRequestsPage = () => {
                                   <ExternalLink className="h-2.5 w-2.5" />
                                   View Profile
                                 </button>
+                                <button type="button" aria-pressed={selectedInterviewReferences.includes(maid.referenceCode)} onClick={() => toggleInterviewCandidate(maid.referenceCode)} className="mt-1.5 w-full rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wide" style={{ border: `1.5px solid ${selectedInterviewReferences.includes(maid.referenceCode) ? C.teal : C.border}`, background: selectedInterviewReferences.includes(maid.referenceCode) ? C.tealPale : C.white, color: selectedInterviewReferences.includes(maid.referenceCode) ? C.teal : C.text, cursor: "pointer" }}>{selectedInterviewReferences.includes(maid.referenceCode) ? "✓ Selected for interview" : "Select for interview"}</button>
+                                {selectedInterviewReferences.includes(maid.referenceCode) && <button type="button" disabled={savingFinalCandidateReference !== null} onClick={() => void chooseFinalCandidate(maid.referenceCode)} className="mt-1.5 w-full rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wide disabled:opacity-60" style={{ border: `1.5px solid ${selectedRequest.details?.finalCandidateReference === maid.referenceCode ? C.teal : C.amberBorder}`, background: selectedRequest.details?.finalCandidateReference === maid.referenceCode ? C.teal : C.amberPale, color: selectedRequest.details?.finalCandidateReference === maid.referenceCode ? C.white : C.amberDeep, cursor: "pointer" }}>{savingFinalCandidateReference === maid.referenceCode ? "Saving…" : selectedRequest.details?.finalCandidateReference === maid.referenceCode ? "Preferred candidate" : "Choose after interviews"}</button>}
                               </div>
                             </div>
                           ))}
                         </div>
+                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl p-3" style={{ border: `1px solid ${C.tealBorder}`, background: C.tealPale }}><p className="text-xs" style={{ color: C.teal }}>Selected: {selectedInterviewReferences.length}/5. This asks the agency to coordinate interviews; it does not book or send invitations.</p><button type="button" disabled={savingInterviewSelection || selectedInterviewReferences.length < 1 || selectedInterviewReferences.length > 5} onClick={() => void saveInterviewSelection()} className="rounded-full px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50" style={{ background: C.teal }}>{savingInterviewSelection ? "Sending…" : Array.isArray(selectedRequest.details?.interviewCandidateReferences) ? "Update interview choices" : "Request these interviews"}</button></div>
                       </div>
                     )}
 

@@ -51,6 +51,13 @@
 .dash-automation-filters button:hover { border-color:#9bcfc1; }
 .dash-automation-filters button.is-selected { border-color:#78b9a8; color:#105d50; background:#e6f5ef; }
 .dash-automation-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.make-delivery-list { max-height:480px; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:2px 6px 2px 0; }
+.make-delivery-list:focus-visible { outline:3px solid #0d806d55; outline-offset:3px; border-radius:10px; }
+.make-delivery-list::-webkit-scrollbar { width:10px; }
+.make-delivery-list::-webkit-scrollbar-track { border-radius:99px; background:#e9f1ef; }
+.make-delivery-list::-webkit-scrollbar-thumb { border:2px solid #e9f1ef; border-radius:99px; background:#95b9af; }
+.make-delivery-list { scrollbar-color:#95b9af #e9f1ef; scrollbar-width:thin; }
+.make-delivery-name { overflow-wrap:anywhere; word-break:break-word; }
 .dash-automation-item { display:flex; align-items:flex-start; gap:12px; min-width:0; padding:13px 14px; border:1px solid #e0e9e7; border-radius:13px; background:#ffffffd9; transition:transform .16s,border-color .16s,box-shadow .16s; }
 .dash-automation-item:hover { transform:translateY(-1px); border-color:#badbd2; box-shadow:0 5px 14px #183f330c; }
 .dash-automation-indicator { width:9px; height:9px; flex:none; margin-top:5px; border-radius:50%; }

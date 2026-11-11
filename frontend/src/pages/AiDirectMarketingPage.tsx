@@ -420,7 +420,7 @@ function PillSelect<T extends string>({
 
 // ─── Message card ─────────────────────────────────────────────────────────────
 
-const MessageCard = ({ msg, campaignId }: { msg: MarketingMessage; campaignId: string }) => {
+const MessageCard = ({ msg, campaignId, maidList = [] }: { msg: MarketingMessage; campaignId: string; maidList?: MarketingMaidRef[] }) => {
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -533,6 +533,33 @@ const MessageCard = ({ msg, campaignId }: { msg: MarketingMessage; campaignId: s
           <p className="text-xs leading-relaxed text-foreground whitespace-pre-wrap">
             {msg.message}
           </p>
+          {maidList.length > 0 && (
+            <div className="mt-3 border-t border-border/70 pt-3">
+              <p className="mb-2 text-xs font-semibold text-foreground">Featured helpers and public profiles</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {maidList.map((maid) => (
+                  <a
+                    key={maid.referenceCode}
+                    href={maid.profileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-w-0 items-center gap-3 rounded-lg border bg-card p-2 transition hover:border-emerald-300 hover:bg-emerald-50/50"
+                  >
+                    {maid.photoUrl ? (
+                      <img src={maid.photoUrl} alt={`${maid.fullName} profile`} loading="lazy" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+                    ) : (
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800" aria-hidden="true"><Users className="h-5 w-5" /></span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-semibold text-foreground">{maid.fullName}</span>
+                      <span className="block text-[11px] text-muted-foreground">{maid.referenceCode}</span>
+                      <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">View maid profile <ExternalLink className="h-3 w-3" /></span>
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
             <span>
               {msg.charCount} characters
@@ -659,7 +686,7 @@ const OpportunityCard = ({
           {expanded && (
             <div className="space-y-2 px-5 pb-5">
               {generatedCampaign.messages.map((msg) => (
-                <MessageCard key={msg.contactId} msg={msg} campaignId={generatedCampaign.id} />
+                <MessageCard key={msg.contactId} msg={msg} campaignId={generatedCampaign.id} maidList={generatedCampaign.maidList} />
               ))}
             </div>
           )}
@@ -791,8 +818,13 @@ export default function AiDirectMarketingPage() {
         headers: { 'Content-Type': 'application/json', ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify({ audienceType, contactId: contact.id, channel, consented, source: consentSource.trim() }),
       });
-      const data = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(data.error || 'Could not update consent');
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        const message = data.error || (response.status >= 500
+          ? 'The consent service could not save this change. Check that the marketing consent migration is applied, then try again.'
+          : 'Could not update consent. Check the contact details and try again.');
+        throw new Error(message);
+      }
       toast.success(consented ? `${channel === 'whatsapp' ? 'WhatsApp' : 'Email'} consent recorded` : 'Marketing consent withdrawn');
       await loadContacts(audienceType);
     } catch (error) {
@@ -1210,7 +1242,8 @@ export default function AiDirectMarketingPage() {
                       <div className="mt-3 space-y-3 border-t border-emerald-200 pt-3">
                         <label className="block text-xs font-semibold text-emerald-950">
                           Source of the recorded opt-in
-                          <input value={consentSource} onChange={(event) => setConsentSource(event.target.value)} placeholder="e.g. WhatsApp opt-in recorded 12 Oct 2026" className="mt-1 h-9 w-full rounded-lg border border-emerald-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-300" />
+                          <input value={consentSource} onChange={(event) => setConsentSource(event.target.value)} placeholder="e.g. WhatsApp opt-in recorded 12 Oct 2026" aria-describedby="marketing-consent-source-help" className="mt-1 h-9 w-full rounded-lg border border-emerald-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-300" />
+                          <span id="marketing-consent-source-help" className="mt-1 block font-normal text-emerald-800">Enter where and when the contact opted in (at least 5 characters). Use the actual documented source.</span>
                         </label>
                         <input value={consentSearch} onChange={(event) => setConsentSearch(event.target.value)} placeholder="Find a contact by name, phone, or email" className="h-9 w-full rounded-lg border border-emerald-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-300" />
                         <div className="max-h-64 space-y-2 overflow-y-auto">
@@ -1222,7 +1255,8 @@ export default function AiDirectMarketingPage() {
                                   const allowed = channel === 'whatsapp' ? contact.whatsappConsent : contact.emailConsent;
                                   const hasAddress = channel === 'whatsapp' ? Boolean(contact.phone) : Boolean(contact.email);
                                   const busy = consentBusyId === `${contact.id}-${channel}`;
-                                  return <button key={channel} type="button" disabled={!hasAddress || busy} onClick={() => void setContactConsent(contact, channel, !allowed)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${allowed ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-rose-50 hover:text-rose-800' : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50'}`}>
+                                  const missingSource = !allowed && consentSource.trim().length < 5;
+                                  return <button key={channel} type="button" disabled={!hasAddress || busy || missingSource} title={missingSource ? 'Enter the documented opt-in source above first' : undefined} onClick={() => void setContactConsent(contact, channel, !allowed)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${allowed ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-rose-50 hover:text-rose-800' : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50'}`}>
                                     {busy ? 'Saving…' : `${channel === 'whatsapp' ? 'WhatsApp' : 'Email'}: ${allowed ? 'opted in' : hasAddress ? 'record opt-in' : 'no address'}`}
                                   </button>;
                                 })}
@@ -1445,9 +1479,31 @@ export default function AiDirectMarketingPage() {
                       </div>
                     ))}
                   </div>
+                  {manualCampaign.maidList && manualCampaign.maidList.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 border-b bg-emerald-50/60 px-5 py-3">
+                      <span className="text-xs font-semibold text-emerald-900">Featured helpers:</span>
+                      {manualCampaign.maidList.map((maid) => (
+                        <a
+                          key={maid.referenceCode}
+                          href={maid.profileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-medium text-emerald-900 transition hover:bg-emerald-50"
+                        >
+                          {maid.photoUrl ? (
+                            <img src={maid.photoUrl} alt={maid.fullName} loading="lazy" className="h-7 w-7 rounded-full object-cover" />
+                          ) : (
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100" aria-hidden="true"><Users className="h-3.5 w-3.5" /></span>
+                          )}
+                          <span>{maid.fullName}<span className="ml-1 text-emerald-700">View profile</span></span>
+                          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   <div className="p-5 space-y-2">
                     {manualCampaign.messages.map((msg) => (
-                      <MessageCard key={msg.contactId} msg={msg} campaignId={manualCampaign.id} />
+                      <MessageCard key={msg.contactId} msg={msg} campaignId={manualCampaign.id} maidList={manualCampaign.maidList} />
                     ))}
                   </div>
                 </div>
