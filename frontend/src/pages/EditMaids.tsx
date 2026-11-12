@@ -694,6 +694,7 @@ const EditMaids = () => {
   const [totalMaids, setTotalMaids] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [visibilitySelected, setVisibilitySelected] = useState<Set<string>>(new Set());
+  const [bringToTopSelected, setBringToTopSelected] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -702,6 +703,7 @@ const EditMaids = () => {
     completed: 0, failed: 0, stage: "",
   });
   const [page, setPage] = useState(1);
+  const [isMovingMaidToTop, setIsMovingMaidToTop] = useState(false);
   const [maidToSendThroughAgency, setMaidToSendThroughAgency] = useState<MaidProfile | null>(null);
   const [maidToDirectHire, setMaidToDirectHire] = useState<MaidProfile | null>(null);
   const [maidToReject, setMaidToReject] = useState<MaidProfile | null>(null);
@@ -1093,7 +1095,12 @@ const EditMaids = () => {
     return () => controller.abort();
   }, [applyMaidPage, debouncedSearch, hydrateMissingMaidDetails, listRefreshKey, loadMaidPage, page, visibility]);
 
-  useEffect(() => { setPage(1); setSelected(new Set()); setVisibilitySelected(new Set()); }, [search, view]);
+  useEffect(() => {
+    setPage(1);
+    setSelected(new Set());
+    setVisibilitySelected(new Set());
+    setBringToTopSelected([]);
+  }, [search, view]);
 
   const totalPages = Math.max(1, Math.ceil(totalMaids / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -1119,12 +1126,43 @@ const EditMaids = () => {
     });
   };
 
+  const toggleBringToTopSelection = (ref: string) => {
+    setBringToTopSelected((prev) => {
+      return prev.includes(ref) ? prev.filter((item) => item !== ref) : [...prev, ref];
+    });
+  };
+
+  const moveSelectedMaidsToTop = async () => {
+    if (bringToTopSelected.length === 0 || isMovingMaidToTop) return;
+    setIsMovingMaidToTop(true);
+    try {
+      const response = await fetch("/api/maids/bring-to-top", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+        body: JSON.stringify({ referenceCodes: [...bringToTopSelected].reverse() }),
+      });
+      const data = await readSafeJson<{ error?: string; maids?: MaidProfile[] }>(response);
+      if (!response.ok || !data.maids) throw new Error(data.error || "Could not move the selected maids");
+
+      clearMaidPageCache();
+      setBringToTopSelected([]);
+      setPage(1);
+      setListRefreshKey((value) => value + 1);
+      toast.success(`${data.maids.length} maid${data.maids.length === 1 ? "" : "s"} moved to the top`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not move the selected maids");
+    } finally {
+      setIsMovingMaidToTop(false);
+    }
+  };
+
   const removeLocal = (referenceCode: string) => {
     clearMaidPageCache();
     setMaids((prev) => prev.filter((m) => m.referenceCode !== referenceCode));
     setTotalMaids((prev) => Math.max(0, prev - 1));
     setSelected((prev) => { const next = new Set(prev); next.delete(referenceCode); return next; });
     setVisibilitySelected((prev) => { const next = new Set(prev); next.delete(referenceCode); return next; });
+    setBringToTopSelected((prev) => prev.filter((reference) => reference !== referenceCode));
   };
 
   const removeManyLocal = (referenceCodes: Set<string>) => {
@@ -1133,6 +1171,7 @@ const EditMaids = () => {
     setTotalMaids((prev) => Math.max(0, prev - referenceCodes.size));
     setSelected(new Set());
     setVisibilitySelected(new Set());
+    setBringToTopSelected([]);
   };
 
   const deleteMaid = async (referenceCode: string) => {
@@ -2222,6 +2261,20 @@ const EditMaids = () => {
           </div>
         )}
 
+        {!isLoading && bringToTopSelected.length > 0 && (
+          <section aria-label="Maid bring-to-top selection order" className="mx-auto mb-4 w-full max-w-[980px] rounded-xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-950">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p><strong>Top order:</strong> last selected goes to the first position. Remove any mistaken selection below.</p>
+            </div>
+            <ol className="mt-2 flex flex-wrap gap-2">
+              {[...bringToTopSelected].reverse().map((referenceCode, index) => {
+                const selectedMaid = maids.find((maid) => maid.referenceCode === referenceCode);
+                return <li key={referenceCode}><button type="button" disabled={isMovingMaidToTop} onClick={() => toggleBringToTopSelection(referenceCode)} className="rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-semibold text-violet-900 hover:bg-violet-100" aria-label={`Remove ${selectedMaid?.fullName || referenceCode} from top order`}>{index + 1}. {selectedMaid?.fullName || referenceCode} ×</button></li>;
+              })}
+            </ol>
+          </section>
+        )}
+
         {/* Grid */}
         {isLoading ? (
           <div className="mx-auto grid max-w-[980px] grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -2341,6 +2394,19 @@ const EditMaids = () => {
                           </>
                         )}
                       </button>
+                      <button
+                        type="button"
+                        title={bringToTopSelected.includes(maid.referenceCode) ? "Unselect maid to bring to top" : "Select maid to bring to top"}
+                        aria-label={bringToTopSelected.includes(maid.referenceCode) ? "Unselect maid to bring to top" : "Select maid to bring to top"}
+                        className={`inline-flex basis-full items-center justify-center gap-0.5 font-semibold transition-colors ${
+                          bringToTopSelected.includes(maid.referenceCode) ? "text-violet-700" : "text-slate-700 hover:text-violet-700"
+                        }`}
+                        disabled={isInFlight || isMovingMaidToTop}
+                        onClick={() => toggleBringToTopSelection(maid.referenceCode)}
+                      >
+                        <span>{bringToTopSelected.includes(maid.referenceCode) ? `Selected #${bringToTopSelected.length - bringToTopSelected.indexOf(maid.referenceCode)} for Top` : "Select to Bring to Top"}</span>
+                        {bringToTopSelected.includes(maid.referenceCode) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      </button>
                     </div>
                     <div className="w-full text-[10.5px] font-semibold leading-tight text-slate-900">
                       <p className="flex min-w-0 flex-wrap items-center justify-center gap-x-1">
@@ -2373,6 +2439,15 @@ const EditMaids = () => {
 
         {!isLoading && maids.length > 0 && (
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Button
+              type="button"
+              disabled={bringToTopSelected.length === 0 || isMovingMaidToTop}
+              onClick={() => void moveSelectedMaidsToTop()}
+              className="editmaids-white-text bg-violet-600 px-4 text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isMovingMaidToTop ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Bring the selected maids to top
+            </Button>
             <Button
               type="button"
               disabled={selected.size === 0}

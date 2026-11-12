@@ -10,7 +10,7 @@ type KnowledgeSnippet = { id: string; title: string; category: string; content: 
 type Requirements = { service_type?: string; location?: string; household_size?: number | null; children_count?: number | null; elderly_count?: number | null; cooking_requirements?: string; preferred_start_date?: string | null; max_monthly_salary?: number; availability?: string; preferred_nationalities?: string[]; preferred_languages?: string[]; minimum_experience_years?: number; notes?: string }
 type MatchCandidate = { maidId: number; maidReferenceCode: string; maidName: string; score: number; reasons: string[]; manual?: boolean; photoDataUrl?: string }
 type ManualMaidOption = { id: number; referenceCode: string; fullName: string; nationality?: string; status?: string; photoDataUrl?: string }
-type EmployerChoice = { id: string; refCode: string; name: string; company?: string; email: string }
+type EmployerLoginAccount = { id: string; supabaseUserId: string; loginType: string; email: string; name: string; company: string; phone: string; linkedEmployers: Array<{ id: string; refCode: string; name: string }> }
 type MatchResponse = { data?: { matches?: MatchCandidate[]; aiUsed?: boolean; fallbackUsed?: boolean } }
 type TranscriptResult = { fileName: string; transcript: string }
 
@@ -147,7 +147,11 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [removingPlacementId, setRemovingPlacementId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const [employerId, setEmployerId] = useState('')
-  const [requestEmployerChoices, setRequestEmployerChoices] = useState<EmployerChoice[]>([])
+  const [employerLoginAccounts, setEmployerLoginAccounts] = useState<EmployerLoginAccount[]>([])
+  const [selectedLoginAccountId, setSelectedLoginAccountId] = useState('')
+  const [employerSearch, setEmployerSearch] = useState('')
+  const [creatingEmployerRecord, setCreatingEmployerRecord] = useState(false)
+  const [requestEmployerChoices, setRequestEmployerChoices] = useState<EmployerLoginAccount[]>([])
   const [requestClientLabel, setRequestClientLabel] = useState('')
   const [requestEmployerResolution, setRequestEmployerResolution] = useState('')
   const [requirements, setRequirements] = useState<Requirements>({ preferred_nationalities: [], preferred_languages: [] })
@@ -198,16 +202,61 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   useEffect(() => { void loadPlacements() }, [])
 
   useEffect(() => {
+    let cancelled = false
+    void api<{ loginAccounts?: EmployerLoginAccount[] }>('/api/operations-board/employer-login-accounts')
+      .then(({ loginAccounts }) => {
+        if (cancelled) return
+        setEmployerLoginAccounts(loginAccounts ?? [])
+      })
+      .catch((error) => { if (!cancelled) setNotice(error instanceof Error ? error.message : 'Unable to load employer accounts') })
+    return () => { cancelled = true }
+  }, [])
+
+  const selectedLoginAccount = employerLoginAccounts.find((account) => account.id === selectedLoginAccountId)
+  const filteredEmployerAccounts = employerLoginAccounts.filter((account) =>
+    `${account.name} ${account.company} ${account.email} ${account.phone}`.toLowerCase().includes(employerSearch.trim().toLowerCase()),
+  )
+
+  const chooseEmployerAccount = async (accountId: string) => {
+    setSelectedLoginAccountId(accountId)
+    setMatches(null)
+    setPlacementCandidate(null)
+    if (!accountId) { setEmployerId(''); return }
+    const account = employerLoginAccounts.find((item) => item.id === accountId)
+    setEmployerId('')
+    if (!account || creatingEmployerRecord) return
+    if (account.linkedEmployers.length > 1) return setNotice('This employer has more than one record. Please resolve the duplicate before continuing.')
+    if (account.linkedEmployers.length === 1) {
+      setEmployerId(account.linkedEmployers[0].id)
+      setNotice('Employer selected.')
+      return
+    }
+    setCreatingEmployerRecord(true)
+    try {
+      const result = await api<{ employer: { id: string; refCode: string; name: string; email: string } }>(`/api/operations-board/employer-login-accounts/${encodeURIComponent(account.id)}/employer-record`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmEmployerAccount: true }),
+      })
+      const { loginAccounts } = await api<{ loginAccounts?: EmployerLoginAccount[] }>('/api/operations-board/employer-login-accounts')
+      setEmployerLoginAccounts(loginAccounts ?? [])
+      setEmployerId(result.employer.id)
+      setNotice('Employer selected.')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to link employer login')
+    } finally { setCreatingEmployerRecord(false) }
+  }
+
+  useEffect(() => {
     if (!preferredCandidateReference) return
     let cancelled = false
     setActiveTab('matching')
     void Promise.all([
       api<{ maid?: ManualMaidOption & { agencyId?: number; isPublic?: boolean; status?: string } }>(`/api/maids/${encodeURIComponent(preferredCandidateReference)}`),
       api<{ data?: { id: string; agencyId: number; status: string; details: Record<string, unknown>; client?: { name?: string; email?: string } | null } }>(`/api/requests/${encodeURIComponent(sourceRequestId)}`),
-      api<{ employers?: EmployerChoice[] }>('/api/operations-board/employers'),
+      api<{ loginAccounts?: EmployerLoginAccount[] }>('/api/operations-board/employer-login-accounts'),
     ])
-      .then(([{ maid }, { data: request }, { employers }]) => {
+      .then(([{ maid }, { data: request }, { loginAccounts }]) => {
         if (cancelled) return
+        setEmployerLoginAccounts(loginAccounts ?? [])
         if (!maid?.id || maid.referenceCode !== preferredCandidateReference || maid.agencyId !== getStoredAgencyAdmin()?.agencyId || maid.isPublic !== true) {
           setNotice('The preferred helper is no longer available in this agency. Refresh the request and confirm the current shortlist.')
           return
@@ -218,15 +267,14 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
         }
         const clientEmail = request.client?.email?.trim().toLowerCase() ?? ''
         setRequestClientLabel(request.client?.name || 'Client on request')
-        const emailMatches = (employers ?? []).filter((employer) => clientEmail && employer.email.trim().toLowerCase() === clientEmail)
+        const emailMatches = (loginAccounts ?? []).filter((employer) => clientEmail && employer.email.trim().toLowerCase() === clientEmail)
         setRequestEmployerChoices(emailMatches)
         if (emailMatches.length === 1) {
-          setEmployerId(emailMatches[0].id)
-          setRequestEmployerResolution(`One employer record matches the request's verified account email. Confirm this employer record before creating the placement.`)
+          setRequestEmployerResolution(`One employer account matches the request email. Select it from the Employer list.`)
         } else if (emailMatches.length > 1) {
-          setRequestEmployerResolution('Several employer records match this email. Select the correct employer record explicitly; no account was chosen automatically.')
+          setRequestEmployerResolution('Several employer accounts match this email. Select the correct account from the Employer list.')
         } else {
-          setRequestEmployerResolution('No exact email match was found. Choose the employer record manually after confirming the account with the client.')
+          setRequestEmployerResolution('No account matches this email. Choose the correct employer from the list.')
         }
         const candidate: MatchCandidate = {
           maidId: maid.id, maidReferenceCode: maid.referenceCode, maidName: maid.fullName,
@@ -543,23 +591,28 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
             <form onSubmit={saveRequirements} className="space-y-4">
               {preferredCandidateReference && <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm"><p className="font-semibold text-violet-950">Request handoff · {sourceRequestId.slice(0, 8)}</p><p className="mt-1 text-violet-900">Client: {requestClientLabel || "Loading request details…"}. Preferred helper: {preferredCandidateReference}.</p>{requestEmployerResolution && <p className="mt-2 text-xs font-medium text-violet-900">{requestEmployerResolution}</p>}</div>}
               <div className="grid gap-2 rounded-2xl bg-muted p-4 text-sm sm:grid-cols-3">
-                <p className="flex gap-2 text-black"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span><span><b className="block text-black">Choose employer</b>Enter their numeric ID.</span></p>
+                <p className="flex gap-2 text-black"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span><span><b className="block text-black">Choose employer</b>Confirm their name and account details.</span></p>
                 <p className="flex gap-2 text-black"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span><span><b className="block text-black">Save needs</b>Add preferences below.</span></p>
                 <p className="flex gap-2 text-black"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span><span><b className="block text-black">Review profiles</b>Check availability before sharing.</span></p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="flex-1">
-                  <Field label="Employer number">
-                    <input value={employerId} onChange={(e) => { setEmployerId(e.target.value); setMatches(null); setPlacementCandidate(null) }} className={fieldClass} inputMode="numeric" pattern="[0-9]*" placeholder="For example: 1042" />
-                    {requestEmployerChoices.length > 0 && <select value={employerId} onChange={(event) => setEmployerId(event.target.value)} className={`${fieldClass} mt-2`} aria-label="Employer records matching the request email"><option value="">Select matching employer record</option>{requestEmployerChoices.map((employer) => <option key={employer.id} value={employer.id}>{employer.refCode} · {employer.name}{employer.company ? ` · ${employer.company}` : ""} · {employer.email}</option>)}</select>}
+                  <Field label="Employer">
+                    <input value={employerSearch} onChange={(event) => setEmployerSearch(event.target.value)} className={`${fieldClass} mb-2`} placeholder="Search employer by name, email, or phone" aria-label="Search employers" />
+                    <select value={selectedLoginAccountId} disabled={creatingEmployerRecord} onChange={(event) => void chooseEmployerAccount(event.target.value)} className={fieldClass} aria-label="Choose employer">
+                      <option value="">Select employer</option>
+                      {filteredEmployerAccounts.map((account) => <option key={account.id} value={account.id}>{account.name || "Name not set"}{account.company ? ` · ${account.company}` : ""} · {account.email}{account.phone ? ` · ${account.phone}` : ""}</option>)}
+                    </select>
+                    {employerSearch && filteredEmployerAccounts.length === 0 && <p className="mt-1 text-xs text-slate-600">No employers match that search.</p>}
+                    {creatingEmployerRecord && <p className="mt-1 text-xs text-black">Selecting employer…</p>}
+                    {selectedLoginAccount && <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-black"><b>{selectedLoginAccount.name || "Name not set"}</b>{selectedLoginAccount.company ? ` · ${selectedLoginAccount.company}` : ""}<br />{selectedLoginAccount.email}{selectedLoginAccount.phone ? ` · ${selectedLoginAccount.phone}` : ""}</p>}
+                    {requestEmployerChoices.length > 0 && <p className="mt-2 text-xs text-black">Request matches: {requestEmployerChoices.map((employer) => `${employer.name} (${employer.email})`).join(" · ")}</p>}
                   </Field>
                 </div>
                 <button type="button" onClick={loadRequirements} className={`${secondaryButton} shrink-0`}>
                   Load saved needs
                 </button>
               </div>
-              <p className="text-xs text-black">Use the positive number on the employer record, not a code such as EMP-1042.</p>
-
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Service type">
                   <input className={fieldClass} placeholder="e.g. Full-time live-in" value={requirements.service_type ?? ''} onChange={(e) => setRequirements({ ...requirements, service_type: e.target.value })} />

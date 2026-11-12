@@ -21,6 +21,8 @@ import {
   UserCheck,
   ShieldAlert,
   CircleDot,
+  Paperclip,
+  X,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -40,6 +42,7 @@ import type {
   SupportInquiryCategory,
   SupportPriority,
 } from "@/lib/chat";
+import { ChatAttachmentPreview } from "@/components/chat/ChatAttachmentPreview";
 import { streamSse } from "@/lib/sse";
 
 /* â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -591,12 +594,11 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
             borderBottomRightRadius: isOwn ? 6 : undefined,
             borderBottomLeftRadius: isOwn ? undefined : 6,
           }}>
-          <span className="leading-relaxed" style={{ fontSize: 14, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-            {message.message}
-          </span>
+          {message.message && <span className="leading-relaxed" style={{ fontSize: 14, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>{message.message}</span>}
+          {message.attachments?.map((attachment, index) => <ChatAttachmentPreview key={`${message.id}-${index}`} attachment={attachment} viewer="admin" />)}
 
           {/* Copy button */}
-          {!isPending && (
+          {!isPending && message.message && (
             <button
               onClick={() => onCopy(message.message)}
               className={`absolute -top-2.5 ${isOwn ? "-left-2.5" : "-right-2.5"} hidden group-hover:flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-lg transition-all hover:scale-110 active:scale-90`}
@@ -662,6 +664,7 @@ const AdminSupportChat = () => {
   const [activeConversationKey, setActiveConversationKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterOption>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
@@ -678,6 +681,7 @@ const AdminSupportChat = () => {
   const isNearBottomRef = useRef(true);
   const justPrependedRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const activeConversationRef = useRef<AdminConversation | null>(null);
   const lastMessageSignatureRef = useRef("");
   const lastLoadedConversationKeyRef = useRef<string | null>(null);
@@ -768,14 +772,17 @@ const AdminSupportChat = () => {
         return data.conversations[0]?.key ?? null;
       });
     } catch (error) {
+      // Background presence refreshes must not replace an already loaded chat
+      // with a blocking error. The next scheduled refresh retries automatically.
+      if (silent) return;
       if ((error as { name?: string }).name === "AbortError") {
-        const msg = "Server is not responding. Check that the backend is running.";
+        const msg = "The chat service took too long to respond. Please retry.";
         setErrorMessage(msg);
-        if (!silent) toast.error(msg);
+        toast.error(msg);
       } else {
         const message = error instanceof Error ? error.message : "Failed to load conversations";
         setErrorMessage(message);
-        if (!silent) toast.error(message);
+        toast.error(message);
       }
     } finally {
       window.clearTimeout(timeoutId);
@@ -939,7 +946,10 @@ const AdminSupportChat = () => {
     const refreshPresence = () => {
       if (document.visibilityState === "visible") void loadConversations(true);
     };
-    const interval = window.setInterval(refreshPresence, 10_000);
+    // Presence is considered active for 40 seconds by the API. A 20 second
+    // refresh keeps status current while avoiding an unnecessary full inbox
+    // reload every 10 seconds.
+    const interval = window.setInterval(refreshPresence, 20_000);
     document.addEventListener("visibilitychange", refreshPresence);
     return () => {
       window.clearInterval(interval);
@@ -1065,17 +1075,22 @@ const AdminSupportChat = () => {
     } finally { setIsUpdatingMeta(false); }
   }, [activeConversation, admin]);
 
-  const sendText = useCallback(async (rawText: string) => {
+  const sendText = useCallback(async (rawText: string, files: File[] = []) => {
     if (!activeConversation) return;
     const messageText = rawText.trim();
-    if (!messageText) return;
+    if (!messageText && files.length === 0) return;
+    if (files.length > 5 || files.some((file) => file.size > 20 * 1024 * 1024) || files.reduce((sum, file) => sum + file.size, 0) > 50 * 1024 * 1024) {
+      toast.error("Attach up to 5 files, 20MB each and 50MB total.");
+      return;
+    }
+    const filesToSend = [...files];
     const tempId = -Date.now();
     const optimistic: ChatMessage = {
       id: tempId, clientId: activeConversation.clientId,
       conversationType: activeConversation.conversationType,
       agencyId: activeConversation.agencyId, agencyName: activeConversation.agencyName,
       senderRole: "agency", senderName: admin?.username || admin?.agencyName || "Support",
-      message: messageText, createdAt: new Date().toISOString(), _optimistic: true,
+      message: messageText || (filesToSend.length === 1 ? "Shared an attachment" : `Shared ${filesToSend.length} attachments`), createdAt: new Date().toISOString(), _optimistic: true,
     };
     setMessages((prev) => {
       const next = [...prev, optimistic];
@@ -1084,17 +1099,21 @@ const AdminSupportChat = () => {
       return next;
     });
     setDraft("");
+    setPendingFiles([]);
+    if (attachmentInputRef.current) attachmentInputRef.current.value = "";
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     try {
       setIsSending(true); setErrorMessage("");
-      const response = await fetch(
-        `/api/chats/admin/${activeConversation.clientId}?${buildQueryString(activeConversation)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-          body: JSON.stringify({ message: messageText }),
-        },
-      );
+      const url =
+        `/api/chats/admin/${activeConversation.clientId}?${buildQueryString(activeConversation)}`;
+      const formData = new FormData();
+      formData.set("message", messageText);
+      filesToSend.forEach((file) => formData.append("files", file, file.name));
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { ...getAgencyAdminAuthHeaders(), ...(filesToSend.length ? {} : { "Content-Type": "application/json" }) },
+        body: filesToSend.length ? formData : JSON.stringify({ message: messageText }),
+      });
       const data = await readSafeJson<{ message?: ChatMessage; error?: string }>(response);
       if (!response.ok || !data.message) {
         if (response.status === 401) { clearAgencyAdminAuth(); navigate(adminPath("/login"), { replace: true }); return; }
@@ -1120,12 +1139,26 @@ const AdminSupportChat = () => {
     } catch (error) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setDraft(messageText);
+      setPendingFiles(filesToSend);
       const message = error instanceof Error ? error.message : "Failed to send";
       setErrorMessage(message); toast.error(message);
     } finally { setIsSending(false); }
   }, [activeConversation, admin, navigate, scheduleConversationRefresh]);
 
-  const sendMessage = useCallback(async () => { await sendText(draft); }, [draft, sendText]);
+  const sendMessage = useCallback(async () => { await sendText(draft, pendingFiles); }, [draft, pendingFiles, sendText]);
+
+  const handleAttachmentSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const added = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    setPendingFiles((current) => {
+      const next = [...current, ...added];
+      if (next.length > 5 || next.some((file) => file.size > 20 * 1024 * 1024) || next.reduce((sum, file) => sum + file.size, 0) > 50 * 1024 * 1024) {
+        toast.error("Attach up to 5 files, 20MB each and 50MB total.");
+        return current;
+      }
+      return next;
+    });
+  };
 
   const handleRefreshMessages = useCallback(() => {
     const conversation = activeConversationRef.current;
@@ -1568,12 +1601,15 @@ const AdminSupportChat = () => {
               {/* Toolbar row */}
               <div className="flex items-center gap-2 mb-2.5">
                 <QuickReplyPanel onSelect={(text) => setDraft(text)} />
+                <input ref={attachmentInputRef} type="file" multiple className="hidden" accept=".jpg,.jpeg,.png,.gif,.webp,.avif,.heic,.heif,.mp4,.webm,.mov,.m4v,.3gp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" onChange={handleAttachmentSelection} />
+                <button type="button" onClick={() => attachmentInputRef.current?.click()} disabled={!activeConversation || isSending} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50" aria-label="Attach files"><Paperclip className="h-3.5 w-3.5" />Attach</button>
                 {draft.trim() && (
                   <span className="ml-auto" style={{ fontSize: 11, color: "#6B7280" }}>
                     {draft.length} chars Â· â†µ send
                   </span>
                 )}
               </div>
+              {pendingFiles.length > 0 && <div className="mb-2 flex flex-wrap gap-1.5">{pendingFiles.map((file, index) => <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] text-emerald-800"><span className="max-w-48 truncate">{file.name}</span><button type="button" onClick={() => setPendingFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${file.name}`}><X className="h-3 w-3" /></button></span>)}</div>}
               {/* Input */}
               <div className="asc-compose flex items-end gap-2.5 rounded-2xl p-2"
                 style={{ background: "#F8FAFC", border: "1.5px solid #E5E7EB", transition: "all 0.15s" }}>
@@ -1594,7 +1630,7 @@ const AdminSupportChat = () => {
                 />
                 <button
                   onClick={() => void sendMessage()}
-                  disabled={isSending || !draft.trim() || !activeConversation}
+                  disabled={isSending || (!draft.trim() && pendingFiles.length === 0) || !activeConversation}
                   className="asc-send-btn flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-white"
                   aria-label="Send">
                   {isSending

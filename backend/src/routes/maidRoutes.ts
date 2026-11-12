@@ -2,6 +2,7 @@ import express, { Router } from 'express'
 import {
   addMaidPhoto,
   bringMaidToTop,
+  bringMaidsToTop,
   createMaid,
   deleteMaid,
   exportMaidsCsv,
@@ -32,6 +33,7 @@ router.get('/export.xls', requireAgencyAuth, canManageMaidProfiles, exportMaidsX
 router.post('/import.batch', requireAgencyAuth, canManageMaidProfiles, importMaidsBatch)
 router.post('/import.csv', requireAgencyAuth, canManageMaidProfiles, importMaidsCsv)
 router.post('/photos-batch', getMaidPhotosBatch)
+router.patch('/bring-to-top', requireAgencyAuth, canManageMaidProfiles, bringMaidsToTop)
 router.get('/:referenceCode/photo-authenticated', getMaidAuthenticatedPhoto)
 router.get('/:referenceCode/photo-preview', getMaidPhotoPreview)
 router.get('/:referenceCode/photo-original', getMaidOriginalPhoto)

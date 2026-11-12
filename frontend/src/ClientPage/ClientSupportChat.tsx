@@ -13,6 +13,7 @@ import {
   Sparkles,
   Tag,
   X,
+  Paperclip,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
@@ -24,6 +25,7 @@ import type {
   ClientConversation,
   ConversationType,
 } from "@/lib/chat";
+import { ChatAttachmentPreview } from "@/components/chat/ChatAttachmentPreview";
 import { streamSse } from "@/lib/sse";
 import {
   clientFetch,
@@ -806,7 +808,7 @@ function MessageBubble({ message, isOwn }: { message: ChatMessage; isOwn: boolea
       />
       <div className="sc-msg-col">
         {!isOwn && <div className="sc-msg-sender">{message.senderName}</div>}
-        <div className="sc-bubble">{message.message}</div>
+        <div className="sc-bubble">{message.message && <div>{message.message}</div>}{message.attachments?.map((attachment, index) => <ChatAttachmentPreview key={`${message.id}-${index}`} attachment={attachment} viewer="client" />)}</div>
         <div className="sc-msg-time">{time}</div>
       </div>
     </div>
@@ -823,6 +825,7 @@ const ClientSupportChat = () => {
   const [conversations, setConversations] = useState<ClientConversation[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
@@ -866,6 +869,7 @@ const ClientSupportChat = () => {
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const lastSigRef = useRef("");
   const activeConvRef = useRef<ClientConversation>(defaultConversation);
   const botReplyTimerRef = useRef<number | null>(null);
@@ -1104,7 +1108,6 @@ const ClientSupportChat = () => {
       lastSigRef.current = "";
       if (!cancelled) {
         void loadConversations(false);
-        void loadMessages(false);
       }
     };
     void boot();
@@ -1220,7 +1223,12 @@ const ClientSupportChat = () => {
 
   const sendMessage = async (override?: string) => {
     const text = (override ?? draft).trim();
-    if (!text || isSending) return;
+    const files = override === undefined ? [...pendingFiles] : [];
+    if ((!text && files.length === 0) || isSending) return;
+    if (files.length > 5 || files.some((file) => file.size > 20 * 1024 * 1024) || files.reduce((sum, file) => sum + file.size, 0) > 50 * 1024 * 1024) {
+      toast.error("Attach up to 5 files, 20MB each and 50MB total.");
+      return;
+    }
 
     const conversation = activeConv;
     const optimisticId = -Date.now();
@@ -1232,7 +1240,7 @@ const ClientSupportChat = () => {
       agencyName: conversation.agencyName,
       senderRole: "client",
       senderName: client?.name || "You",
-      message: text,
+      message: text || (files.length === 1 ? "Shared an attachment" : `Shared ${files.length} attachments`),
       createdAt: new Date().toISOString(),
       _optimistic: true,
     };
@@ -1242,14 +1250,21 @@ const ClientSupportChat = () => {
       ? { ...item, lastMessage: text, lastMessageAt: optimisticMessage.createdAt }
       : item));
     if (override === undefined || draft.trim() === text) setDraft("");
+    if (override === undefined) {
+      setPendingFiles([]);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+    }
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     try {
       setIsSending(true);
+      const formData = new FormData();
+      formData.set("message", text);
+      files.forEach((file) => formData.append("files", file, file.name));
       const response = await clientFetch(`/api/chats/client?${qs}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        headers: files.length ? undefined : { "Content-Type": "application/json" },
+        body: files.length ? formData : JSON.stringify({ message: text }),
       });
       const data = (await response.json().catch(() => ({}))) as {
         message?: ChatMessage;
@@ -1289,7 +1304,7 @@ const ClientSupportChat = () => {
       void loadConversations(true);
 
       // Trigger bot reply for support conversations
-      if (chatbotEnabled && activeConv.conversationType === "support") {
+      if (text && chatbotEnabled && activeConv.conversationType === "support") {
         if (botReplyTimerRef.current !== null) window.clearTimeout(botReplyTimerRef.current);
         setIsBotTyping(true);
         const bot = getBotReply(text, chatbotConfig, {
@@ -1319,12 +1334,26 @@ const ClientSupportChat = () => {
       if (activeConvRef.current.key === conversation.key) {
         setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
         setDraft((current) => current || text);
+        if (files.length) setPendingFiles(files);
       }
       void loadConversations(true);
       toast.error(error instanceof Error ? error.message : "Failed to send");
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleAttachmentSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const added = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    setPendingFiles((current) => {
+      const next = [...current, ...added];
+      if (next.length > 5 || next.some((file) => file.size > 20 * 1024 * 1024) || next.reduce((sum, file) => sum + file.size, 0) > 50 * 1024 * 1024) {
+        toast.error("Attach up to 5 files, 20MB each and 50MB total.");
+        return current;
+      }
+      return next;
+    });
   };
 
   const selectConversation = (conversation: ClientConversation) => {
@@ -1553,7 +1582,10 @@ const ClientSupportChat = () => {
                 </button>
               </div>
             )}
+            <input ref={attachmentInputRef} type="file" multiple className="hidden" accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.webm,.mov,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" onChange={handleAttachmentSelection} />
+            {pendingFiles.length > 0 && <div className="mb-2 flex flex-wrap gap-1.5">{pendingFiles.map((file, index) => <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] text-emerald-800"><span className="max-w-48 truncate">{file.name}</span><button type="button" onClick={() => setPendingFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove ${file.name}`}><X size={13} /></button></span>)}</div>}
             <div className="sc-compose-box">
+              <button type="button" onClick={() => attachmentInputRef.current?.click()} disabled={isSending} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-emerald-700 hover:bg-emerald-50 disabled:opacity-50" aria-label="Attach images, videos or documents" title="Attach images, videos or documents"><Paperclip size={17} /></button>
               <textarea
                 ref={textareaRef}
                 rows={1}
@@ -1572,7 +1604,7 @@ const ClientSupportChat = () => {
               />
               <button
                 className="sc-send-btn"
-                disabled={!draft.trim() || isSending}
+                disabled={(!draft.trim() && pendingFiles.length === 0) || isSending}
                 onClick={() => void sendMessage()}
                 aria-label="Send message"
               >

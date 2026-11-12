@@ -126,6 +126,14 @@ const readUploadedFileResponse = (
     category: data.category || firstFile?.category || fallbackCategory,
   };
 };
+const appendEmployerUploadFile = (formData: FormData, file: File) => {
+  const isXlsx = file.name.toLowerCase().endsWith(".xlsx");
+  const xlsxMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const uploadFile = isXlsx && file.type !== xlsxMime
+    ? new File([file], file.name, { type: xlsxMime })
+    : file;
+  formData.append("file", uploadFile, file.name);
+};
 
 /**
  * Determine if a maid result is already assigned to a DIFFERENT employer.
@@ -259,7 +267,7 @@ const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload,
       const uploaded: UploadedFile[] = [];
       for (const file of files) {
         const fd = new FormData();
-        fd.append("file", file); fd.append("category", category); fd.append("refCode", refCode);
+        appendEmployerUploadFile(fd, file); fd.append("category", category); fd.append("refCode", refCode);
         const res = await fetch("/api/employer-files", { method: "POST", headers: getAgencyAdminAuthHeaders(), body: fd });
         const data = readUploadedFileResponse(
           (await res.json().catch(() => ({}))) as {
@@ -304,9 +312,9 @@ const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload,
                 />
                 <Printer className="h-6 w-6 shrink-0 text-emerald-600 stroke-[1.35]" aria-hidden="true" />
                 <FileCheck2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                <button type="button" onClick={() => void openEmployerDocument(u).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold text-sky-700 hover:underline">{u.name}</button>
-                <button type="button" onClick={() => void openEmployerDocument(u).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="inline-flex shrink-0 items-center gap-0.5 rounded border border-sky-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50">
-                  <Eye className="h-2.5 w-2.5" />View
+                <button type="button" onClick={() => void openEmployerDocument(u, !/\.pdf$/i.test(u.name)).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold text-sky-700 hover:underline">{u.name}</button>
+                <button type="button" onClick={() => void openEmployerDocument(u, !/\.pdf$/i.test(u.name)).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="inline-flex shrink-0 items-center gap-0.5 rounded border border-sky-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50">
+                  {/\.pdf$/i.test(u.name) ? <><Eye className="h-2.5 w-2.5" />View</> : <><Download className="h-2.5 w-2.5" />Download</>}
                 </button>
                 {!readOnly && (
                   <button type="button" onClick={() => removeUpload(i)} className="shrink-0 text-gray-300 hover:text-red-400">
@@ -325,7 +333,7 @@ const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload,
           </button>
         )}
       </div>
-      <input ref={inputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handleFileChange} />
+      <input ref={inputRef} type="file" accept=".pdf,application/pdf,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple className="hidden" onChange={handleFileChange} />
     </div>
   );
 };
@@ -369,7 +377,7 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
     for (const pf of pending) {
       setPendingFiles((p) => p.map((f) => f.id === pf.id ? { ...f, status: "uploading" } : f));
       try {
-        const fd = new FormData(); fd.append("file", pf.file); fd.append("category", pf.category); fd.append("refCode", refCode);
+        const fd = new FormData(); appendEmployerUploadFile(fd, pf.file); fd.append("category", pf.category); fd.append("refCode", refCode);
         const res = await fetch("/api/employer-files", { method: "POST", headers: getAgencyAdminAuthHeaders(), body: fd });
         const data = readUploadedFileResponse(
           (await res.json().catch(() => ({}))) as {
@@ -405,7 +413,7 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100"><Upload className="h-5 w-5 text-black" /></div>
               <div>
                 <h2 className="text-[16px] font-bold text-black">Upload Documents</h2>
-                <p className="text-[16px] text-black">Add all PDF files, then assign a category to each one</p>
+                <p className="text-[16px] text-black">Add PDF or Excel (.xlsx) files, then assign a category to each one</p>
               </div>
             </div>
             <button type="button" onClick={handleClose} disabled={isUploading} className="flex h-8 w-8 items-center justify-center rounded-lg text-black hover:bg-blue-100 disabled:opacity-40">
@@ -419,8 +427,8 @@ const BulkUploadModal = ({ open, onClose, refCode, onUploadComplete }: {
             <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isDragging ? "bg-emerald-100" : "bg-gray-200"}`}>
               <Upload className={`h-5 w-5 ${isDragging ? "text-emerald-600" : "text-gray-400"}`} />
             </div>
-            <p className="text-[16px] font-medium text-black">{isDragging ? "Release to add files" : "Click or drag & drop PDF files"}</p>
-            <input ref={bulkInputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handleFileInput} />
+            <p className="text-[16px] font-medium text-black">{isDragging ? "Release to add files" : "Click or drag & drop PDF or Excel (.xlsx) files"}</p>
+            <input ref={bulkInputRef} type="file" accept=".pdf,application/pdf,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple className="hidden" onChange={handleFileInput} />
           </div>
           {pendingFiles.length > 0 && (
             <div className="space-y-1.5">
@@ -1345,7 +1353,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
                     {[
                       "Save the contract first so the record receives a reference number.",
                       "Confirm the maid profile and employer details before uploading signed documents.",
-                      "Use bulk upload for completed PDFs and keep categories organized.",
+                      "Use bulk upload for completed PDFs or Excel files and keep categories organized.",
                       "Review uploaded files before downloading, printing, or sharing the contract set.",
                     ].map((step, i) => (
                       <div key={i} className="flex items-start gap-1.5">
@@ -1366,7 +1374,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
               <div className="flex items-center gap-2 border-b border-blue-300 bg-[#9fc5e8] px-3 py-2 sm:px-4">
                 <FilePlus2 className="h-4 w-4 text-blue-900" />
                 <h3 className="text-[13px] font-bold text-blue-950">Contract Documents &amp; Forms</h3>
-                <span className="ml-auto text-[11px] font-medium text-blue-900">Upload completed PDF forms</span>
+                <span className="ml-auto text-[11px] font-medium text-blue-900">Upload completed PDF or Excel forms</span>
               </div>
               <div>
                 {DOCUMENT_SECTIONS.map((section) => (
@@ -1389,7 +1397,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
             </div>
 
             <p className="text-center text-[12px] text-gray-400 font-medium">
-              PDF forms are for demo purposes only. Contact admin for customization.
+              PDF and Excel (.xlsx) files are supported for document storage.
             </p>
 
             {showStepTabs && (

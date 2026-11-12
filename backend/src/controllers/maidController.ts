@@ -17,6 +17,7 @@ import {
   updateMaidPhotoStore,
   updateMaidVideoStore,
   updateMaidStore,
+  updateMaidSortTimestampsStore,
   updateMaidVisibilityStore,
 } from '../store'
 import {
@@ -1171,6 +1172,52 @@ export const bringMaidToTop = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error bringing maid to top:', error)
     res.status(500).json({ error: 'Failed to bring maid to top' })
+  }
+}
+
+export const bringMaidsToTop = async (req: Request, res: Response) => {
+  try {
+    const agencyId = await getRequestAgencyId(req)
+    const rawReferences = (req.body as { referenceCodes?: unknown } | undefined)?.referenceCodes
+    if (!Array.isArray(rawReferences)) {
+      return res.status(400).json({ error: 'referenceCodes must be an array' })
+    }
+    const referenceCodes = [...new Set(rawReferences
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim().toUpperCase())
+      .filter(Boolean))]
+    if (referenceCodes.length === 0 || referenceCodes.length > 200) {
+      return res.status(400).json({ error: 'Select between 1 and 200 maids' })
+    }
+
+    const agencyMaids = await getMaidsStore(undefined, undefined, agencyId)
+    const maidsByReference = new Map(agencyMaids.map((maid) => [maid.referenceCode.trim().toUpperCase(), maid]))
+    const selected = referenceCodes.map((referenceCode) => maidsByReference.get(referenceCode))
+    if (selected.some((maid) => !maid)) {
+      return res.status(404).json({ error: 'One or more selected maids could not be found' })
+    }
+
+    const newestTimestamp = agencyMaids.reduce((latest, maid) => {
+      const timestamp = Date.parse(maid.updatedAt)
+      return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest
+    }, Date.now())
+    const entries = referenceCodes.map((referenceCode, index) => ({
+      referenceCode: selected[index]!.referenceCode,
+      updatedAt: new Date(newestTimestamp + referenceCodes.length - index).toISOString(),
+    }))
+    const updated = await updateMaidSortTimestampsStore(entries, agencyId)
+    if (updated.length !== entries.length) {
+      return res.status(409).json({ error: 'The selected maid list changed. Refresh and try again.' })
+    }
+
+    const updatedByReference = new Map(updated.map((maid) => [maid.referenceCode.trim().toUpperCase(), maid]))
+    clearMaidListCache()
+    return res.status(200).json({
+      maids: referenceCodes.map((referenceCode) => updatedByReference.get(referenceCode)).filter(Boolean),
+    })
+  } catch (error) {
+    console.error('Error bringing selected maids to top:', error)
+    return res.status(500).json({ error: 'Failed to bring selected maids to top' })
   }
 }
 

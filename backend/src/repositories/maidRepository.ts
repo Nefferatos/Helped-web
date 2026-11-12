@@ -520,6 +520,24 @@ export const updateMaidSql = async (
   }
 }
 
+export const updateMaidSortTimestampsSql = async (
+  entries: Array<{ referenceCode: string; updatedAt: string }>,
+  agencyId: number
+) => {
+  if (entries.length === 0) return []
+  const result = (await query(
+    `
+      UPDATE maids AS maid
+      SET updated_at = ordered.updated_at
+      FROM unnest($1::text[], $2::timestamptz[]) AS ordered(reference_code, updated_at)
+      WHERE maid.reference_code = ordered.reference_code AND maid.agency_id = $3
+      RETURNING maid.*
+    `,
+    [entries.map((entry) => entry.referenceCode), entries.map((entry) => entry.updatedAt), agencyId]
+  )) as { rows: MaidRow[] }
+  return result.rows.map(mapMaidRow)
+}
+
 export const updateMaidVisibilitySql = async (
   referenceCode: string,
   isPublic: boolean,

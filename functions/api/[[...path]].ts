@@ -273,11 +273,21 @@ interface ChatMessageRecord {
   senderRole: "client" | "agency";
   senderName: string;
   message: string;
+  attachments?: ChatAttachmentRecord[];
   createdAt: string;
   readByAgency: boolean;
   readByClient: boolean;
   isBot?: boolean;
   conversationMeta?: SupportConversationMetadata;
+}
+
+interface ChatAttachmentRecord {
+  name: string;
+  mimeType: string;
+  size: number;
+  storagePath: string;
+  clientUrl: string;
+  adminUrl: string;
 }
 
 interface SupportConversationMetadata {
@@ -1477,6 +1487,7 @@ type SupabaseStorageConfig = {
 };
 
 const EMPLOYER_CONTRACT_BUCKET = "helped-employer-contracts";
+const EMPLOYER_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 const SUPABASE_APP_DATA_BASE = Symbol("supabaseAppDataBase");
 const SUPABASE_APP_DATA_UPDATED_AT = Symbol("supabaseAppDataUpdatedAt");
@@ -2139,14 +2150,43 @@ const callSupabaseRpc = async <T>(
   throw new Error(`Supabase RPC failed for ${fnName} after retries`);
 };
 
+// Keep track of RPCs that are not installed in the connected Supabase project.
+// Chat read endpoints can poll every few seconds; repeatedly making a network
+// round trip for a known-missing fast-path RPC adds latency before each
+// fallback to app_data. This is only a short-lived capability cache, never
+// request data, and expires so newly applied migrations are picked up quickly.
+const SUPABASE_MISSING_RPC_CACHE_TTL_MS = 60_000;
+const SUPABASE_MISSING_RPC_CACHE_MAX = 128;
+const missingSupabaseRpcUntil = new Map<string, number>();
+
 const tryCallSupabaseRpc = async <T>(
   config: SupabaseAppDataConfig,
   fnName: string,
   payload: Record<string, unknown>,
 ): Promise<T | null> => {
+  const cacheKey = `${config.baseUrl}:${fnName}`;
+  const cachedUntil = missingSupabaseRpcUntil.get(cacheKey);
+  if (cachedUntil && cachedUntil > Date.now()) return null;
+  if (cachedUntil) missingSupabaseRpcUntil.delete(cacheKey);
+
   try {
     return await callSupabaseRpc<T>(config, fnName, payload);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/\(404\):.*PGRST202|could not find the function .*schema cache/i.test(message)) {
+      if (missingSupabaseRpcUntil.size >= SUPABASE_MISSING_RPC_CACHE_MAX) {
+        const now = Date.now();
+        for (const [key, expiresAt] of missingSupabaseRpcUntil) {
+          if (expiresAt <= now) missingSupabaseRpcUntil.delete(key);
+        }
+        if (missingSupabaseRpcUntil.size >= SUPABASE_MISSING_RPC_CACHE_MAX) {
+          missingSupabaseRpcUntil.clear();
+        }
+      }
+      missingSupabaseRpcUntil.set(cacheKey, Date.now() + SUPABASE_MISSING_RPC_CACHE_TTL_MS);
+      console.warn(`Supabase RPC ${fnName} is not installed; using the app_data fallback for 60 seconds`);
+      return null;
+    }
     console.warn(`Fast Supabase RPC path failed for ${fnName}; falling back`, error);
     return null;
   }
@@ -2872,7 +2912,7 @@ const ensurePrivateEmployerContractBucket = async (config: SupabaseStorageConfig
         name: EMPLOYER_CONTRACT_BUCKET,
         public: false,
         file_size_limit: 52428800,
-        allowed_mime_types: ["application/pdf"],
+        allowed_mime_types: ["application/pdf", EMPLOYER_XLSX_MIME],
       }),
     });
     if (!response.ok && response.status !== 409) {
@@ -2890,6 +2930,20 @@ const ensurePrivateEmployerContractBucket = async (config: SupabaseStorageConfig
   const bucketInfo = (await response.json()) as { public?: boolean };
   if (bucketInfo.public !== false) {
     throw new Error("Contract storage bucket must be private");
+  }
+
+  // Existing production buckets may still have the original PDF-only allowlist.
+  const updateResponse = await fetch(bucketUrl, {
+    method: "PUT",
+    headers: supabaseStorageHeaders(config, { "content-type": "application/json" }),
+    body: JSON.stringify({
+      public: false,
+      file_size_limit: 52428800,
+      allowed_mime_types: ["application/pdf", EMPLOYER_XLSX_MIME],
+    }),
+  });
+  if (!updateResponse.ok) {
+    throw new Error(`Contract storage bucket configuration failed (${updateResponse.status})`);
   }
 };
 
@@ -7958,6 +8012,59 @@ app.put(
 );
 
 app.patch(
+  "/api/maids/bring-to-top",
+  requireAgencyAdminAuth,
+  safeApi(async (c) => {
+    const body = await parseBody<{ referenceCodes?: unknown }>(c.req.raw);
+    if (!Array.isArray(body?.referenceCodes)) {
+      return c.json({ error: "referenceCodes must be an array" }, 400);
+    }
+
+    const referenceCodes = [...new Set(
+      body.referenceCodes
+        .filter((value): value is string => typeof value === "string")
+        .map(normalizeReferenceCode)
+        .filter(Boolean),
+    )];
+    if (referenceCodes.length === 0 || referenceCodes.length > 200) {
+      return c.json({ error: "Select between 1 and 200 maids" }, 400);
+    }
+
+    const data = await loadData(c.env);
+    const selectedReferences = new Set(referenceCodes);
+    const selected = data.maids.filter((maid) => selectedReferences.has(normalizeReferenceCode(maid.referenceCode)));
+    if (selected.length !== referenceCodes.length) {
+      return c.json({ error: "One or more selected maids could not be found" }, 404);
+    }
+
+    // Keep the user's selection order: the first selected profile receives
+    // the newest timestamp and therefore appears first in the public list.
+    const selectedByReference = new Map(
+      selected.map((maid) => [normalizeReferenceCode(maid.referenceCode), maid]),
+    );
+    const selectedInOrder = referenceCodes.map((referenceCode) => selectedByReference.get(referenceCode)!);
+    const newestExistingTimestamp = data.maids
+      .map((maid) => Date.parse(maid.updatedAt))
+      .filter(Number.isFinite)
+      .reduce((latest, timestamp) => Math.max(latest, timestamp), Date.now());
+    const updatedByReference = new Map<string, MaidRecord>();
+    selectedInOrder.forEach((maid, index) => {
+      const updated = {
+        ...maid,
+        updatedAt: new Date(newestExistingTimestamp + selectedInOrder.length - index).toISOString(),
+      };
+      updatedByReference.set(normalizeReferenceCode(maid.referenceCode), updated);
+    });
+    data.maids = data.maids.map((maid) => updatedByReference.get(normalizeReferenceCode(maid.referenceCode)) ?? maid);
+    await saveData(c.env, data);
+
+    return c.json({
+      maids: selectedInOrder.map((maid) => updatedByReference.get(normalizeReferenceCode(maid.referenceCode)) ?? maid),
+    });
+  }),
+);
+
+app.patch(
   "/api/maids/:referenceCode/bring-to-top",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
@@ -8700,13 +8807,20 @@ app.post(
     const uploaded: Array<{ name: string; url: string; size: number; category: string }> = [];
     for (const [, value] of formData.entries()) {
       if (!(value instanceof File)) continue;
-      if (value.type !== "application/pdf" || value.size > 52428800) {
-        return c.json({ error: "Only PDF files up to 50MB are allowed" }, 400);
+      const fileName = value.name.toLowerCase();
+      const requestMime = value.type.trim().toLowerCase();
+      const isPdf = fileName.endsWith(".pdf") && requestMime === "application/pdf";
+      const isXlsx = fileName.endsWith(".xlsx") &&
+        (!requestMime || requestMime === EMPLOYER_XLSX_MIME || requestMime === "application/octet-stream");
+      if ((!isPdf && !isXlsx) || value.size > 52428800) {
+        return c.json({ error: "Upload a PDF or Excel (.xlsx) file up to 50MB" }, 400);
       }
       const bytes = await value.arrayBuffer();
-      const header = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 5));
-      if (String.fromCharCode(...header) !== "%PDF-") {
-        return c.json({ error: "Only valid PDF files are allowed" }, 400);
+      const headerLength = isPdf ? 5 : 4;
+      const header = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, headerLength));
+      const signature = isPdf ? "%PDF-" : "PK\u0003\u0004";
+      if (String.fromCharCode(...header) !== signature) {
+        return c.json({ error: "The file contents do not match a valid PDF or Excel (.xlsx) file" }, 400);
       }
       const safeName = sanitizeStoragePathSegment(value.name, "document.pdf");
       const key = `${Date.now()}-${crypto.randomUUID()}-${safeName}`;
@@ -8721,7 +8835,7 @@ app.post(
           headers: {
             apikey: storageConfig.serviceRoleKey,
             authorization: `Bearer ${storageConfig.serviceRoleKey}`,
-            "content-type": "application/pdf",
+            "content-type": isPdf ? "application/pdf" : EMPLOYER_XLSX_MIME,
             "x-upsert": "false",
           },
           body: bytes,
@@ -8795,8 +8909,12 @@ app.get(
     return new Response(response.body, {
       status: 200,
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": "inline",
+        "Content-Type": parsed.objectPath.toLowerCase().endsWith(".xlsx")
+          ? EMPLOYER_XLSX_MIME
+          : "application/pdf",
+        "Content-Disposition": parsed.objectPath.toLowerCase().endsWith(".xlsx")
+          ? "attachment"
+          : "inline",
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, no-store",
       },
@@ -9738,15 +9856,12 @@ const deploymentTaskTemplates = [
   { task_key: "security_bond", task_group: "Pre-arrival", title: "Confirm security bond", description: "Record verified bond details and supporting evidence." },
   { task_key: "flight_booking", task_group: "Travel", title: "Book and verify flight", description: "Record the confirmed airline, flight number, and arrival time." },
   { task_key: "sg_arrival_card", task_group: "Travel", title: "Complete SG Arrival Card", description: "Record completion using the confirmed arrival details and applicable rules." },
-  { task_key: "airport_pickup", task_group: "Arrival", title: "Assign airport pickup", description: "Confirm the pickup contact, transport, and arrival instructions." },
-  { task_key: "airport_pickup_acknowledged", task_group: "Arrival", title: "Confirm pickup acknowledgement", description: "Record that the assigned pickup contact acknowledged the task and arrival details." },
+  { task_key: "airport_pickup", task_group: "Arrival", title: "Arrange and confirm airport pickup", description: "Record the pickup contact, transport, arrival instructions, and confirmation from the assigned contact." },
   { task_key: "accommodation", task_group: "Arrival", title: "Confirm accommodation", description: "Record the confirmed accommodation arrangement and contact." },
   { task_key: "arrival_confirmed", task_group: "Arrival", title: "Record applicant arrival", description: "Staff confirms the applicant arrived using an authoritative operational update." },
   { task_key: "airport_pickup_completed", task_group: "Arrival", title: "Confirm airport pickup completed", description: "Record pickup completion and any delay, incident, or destination change." },
-  { task_key: "medical_appointment", task_group: "After arrival", title: "Schedule medical examination", description: "Record the clinic, appointment time, assigned owner, and applicable deadline." },
-  { task_key: "medical_exam", task_group: "After arrival", title: "Complete medical examination", description: "Track the appointment and verify the recorded result." },
-  { task_key: "sip_registration", task_group: "After arrival", title: "Check and register SIP if applicable", description: "Staff verifies whether SIP applies and records its registration and due date." },
-  { task_key: "sip", task_group: "After arrival", title: "Complete SIP if applicable", description: "Record whether SIP applies and verify completion when required." },
+  { task_key: "medical_exam", task_group: "After arrival", title: "Schedule and verify medical examination", description: "Record the clinic, appointment time, assigned owner, and deadline, then verify the completed examination and recorded result." },
+  { task_key: "sip", task_group: "After arrival", title: "Determine SIP requirement and record completion", description: "Staff verifies whether SIP applies, records registration and due date, then verifies completion when required." },
   { task_key: "temporary_work_permit", task_group: "Work permit", title: "Prepare temporary Work Permit documents", description: "Record required temporary documents and link evidence; staff verifies the actual requirements." },
   { task_key: "mom_registration_appointment", task_group: "Work permit", title: "Track MOM registration appointment", description: "Record the appointment only where required and verify attendance and outcome." },
   { task_key: "work_permit_issuance", task_group: "Work permit", title: "Verify Work Permit issuance", description: "Record the actual issuance result and evidence." },
@@ -9837,9 +9952,13 @@ const getClientPlacementForEmployer = async (
   const email = normalizeEmail(client.email);
   if (!email) return { config, placement: null };
   const data = await loadData(env, { readOnly: true });
+  const supabaseUserId = toTrimmedString(client.supabaseUserId);
   const matchedEmployers = data.employers.filter((record) => {
     const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
-    return (record.agencyId ?? 1) > 0 && normalizeEmail(toTrimmedString(employer.email)) === email;
+    return (record.agencyId ?? 1) > 0 && (
+      Boolean(supabaseUserId && toTrimmedString(employer.supabaseUserId) === supabaseUserId) ||
+      normalizeEmail(toTrimmedString(employer.email)) === email
+    );
   });
   for (const employer of matchedEmployers) {
     const placements = await fetchSupabaseTableRows<ClientPlacementRow>(config, "placements", {
@@ -9859,9 +9978,13 @@ app.get("/api/client/placements", requireClientAuth, safeApi(async (c) => {
   const email = normalizeEmail(client.email);
   if (!email) return c.json({ placements: [], accountLinked: false });
   const data = await loadData(c.env, { readOnly: true });
+  const supabaseUserId = toTrimmedString(client.supabaseUserId);
   const employers = data.employers.filter((record) => {
     const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
-    return (record.agencyId ?? 1) > 0 && normalizeEmail(toTrimmedString(employer.email)) === email;
+    return (record.agencyId ?? 1) > 0 && (
+      Boolean(supabaseUserId && toTrimmedString(employer.supabaseUserId) === supabaseUserId) ||
+      normalizeEmail(toTrimmedString(employer.email)) === email
+    );
   });
   const placements = (await Promise.all(employers.map(async (employer) =>
     fetchSupabaseTableRows<ClientPlacementRow>(config, "placements", {
@@ -10736,19 +10859,165 @@ app.get(
   }),
 );
 
+type EmployerLoginDirectoryRow = {
+  record_id: number;
+  supabase_user_id: string | null;
+  email: string | null;
+  name: string | null;
+  company: string | null;
+  phone: string | null;
+  created_at: string | null;
+};
+
+app.get("/api/operations-board/employer-login-accounts", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Employer login accounts require Supabase storage" }, 503);
+  const [accounts, data] = await Promise.all([
+    fetchSupabaseTableRows<EmployerLoginDirectoryRow>(config, "helped_query_clients", {
+      select: "record_id,supabase_user_id,email,name,company,phone,created_at",
+      filters: { app_id: config.rowId }, orderBy: "record_id.asc", limit: 5000,
+    }),
+    loadData(c.env, { readOnly: true }),
+  ]);
+  const clientsById = new Map(data.clients.map((client) => [String(client.id), client] as const));
+  const eligibleAccounts = accounts.filter((account) => {
+    const client = clientsById.get(String(account.record_id));
+    return Boolean(
+      client && client.emailVerified !== false && normalizeEmail(toTrimmedString(account.email)) &&
+      (account.supabase_user_id || client.password.trim()),
+    );
+  });
+  const loginAccounts = eligibleAccounts.map((account) => {
+    const client = clientsById.get(String(account.record_id))!;
+    const email = normalizeEmail(toTrimmedString(account.email));
+    const linkedEmployerIds = data.employers
+      .filter((record) => (record.agencyId ?? 1) === (c.get("agencyAdmin") as AgencyAdminRecord).agencyId)
+      .filter((record) => {
+        const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
+        const employerUserId = toTrimmedString(employer.supabaseUserId);
+        return account.supabase_user_id
+          ? employerUserId === account.supabase_user_id || (!employerUserId && normalizeEmail(toTrimmedString(employer.email)) === email)
+          : !employerUserId && normalizeEmail(toTrimmedString(employer.email)) === email;
+      })
+      .map((record) => ({ id: String(record.id), refCode: record.refCode, name: toTrimmedString(record.employer?.name) || record.refCode }));
+    return {
+      id: String(account.record_id), supabaseUserId: account.supabase_user_id ?? "",
+      loginType: account.supabase_user_id ? "Supabase login" : "Email and password login",
+      email, name: toTrimmedString(account.name), company: toTrimmedString(account.company),
+      phone: toTrimmedString(account.phone), createdAt: account.created_at,
+      linkedEmployers: linkedEmployerIds,
+    };
+  }).sort((left, right) => left.name.localeCompare(right.name) || left.email.localeCompare(right.email));
+  return c.json({ loginAccounts });
+}));
+
+app.post("/api/operations-board/employer-login-accounts/:clientId/employer-record", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Employer account linking requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const clientId = Number(c.req.param("clientId"));
+  if (!Number.isSafeInteger(clientId) || clientId <= 0) return c.json({ error: "Valid client account ID is required" }, 400);
+  const body = await parseBody<{ confirmEmployerAccount?: boolean }>(c.req.raw);
+  if (body?.confirmEmployerAccount !== true) return c.json({ error: "Confirm that the selected login belongs to an employer before creating an employer record" }, 400);
+  const data = await loadData(c.env);
+  const client = data.clients.find((item) => item.id === clientId);
+  if (!client || client.emailVerified === false || !client.password.trim()) return c.json({ error: "This client record is not an active verified login account" }, 404);
+  const accountRows = await fetchSupabaseTableRows<EmployerLoginDirectoryRow>(config, "helped_query_clients", {
+    select: "record_id,supabase_user_id,email,name,company,phone,created_at",
+    filters: { app_id: config.rowId, record_id: clientId }, limit: 1,
+  });
+  const account = accountRows[0];
+  if (!account || (account.supabase_user_id ?? "") !== (client.supabaseUserId ?? "")) {
+    return c.json({ error: "The login directory no longer matches this client account. Refresh the page and try again." }, 409);
+  }
+  const email = normalizeEmail(toTrimmedString(account.email));
+  if (!email || email !== normalizeEmail(client.email)) return c.json({ error: "The login account email does not match its client profile. Resolve the account details before linking it." }, 409);
+
+  if (account.supabase_user_id) {
+    const authResponse = await fetch(`${config.baseUrl}/auth/v1/admin/users/${encodeURIComponent(account.supabase_user_id)}`, {
+      headers: { apikey: config.serviceRoleKey, authorization: `Bearer ${config.serviceRoleKey}`, accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!authResponse.ok) return c.json({ error: authResponse.status === 404 ? "The Supabase login account no longer exists" : "Unable to verify this Supabase login account" }, authResponse.status === 404 ? 404 : 502);
+    const authPayload: unknown = await authResponse.json();
+    const authPayloadRecord = authPayload && typeof authPayload === "object" ? authPayload as Record<string, unknown> : null;
+    const nestedAuthUser = authPayloadRecord?.user;
+    const authUserRecord = nestedAuthUser && typeof nestedAuthUser === "object"
+      ? nestedAuthUser as Record<string, unknown>
+      : authPayloadRecord;
+    if (!authUserRecord || toTrimmedString(authUserRecord.id) !== account.supabase_user_id || normalizeEmail(toTrimmedString(authUserRecord.email)) !== email || !toTrimmedString(authUserRecord.email_confirmed_at) || authUserRecord.is_anonymous === true) {
+      return c.json({ error: "The selected login is missing a confirmed email or does not match the saved client account" }, 409);
+    }
+  }
+
+  const agencyEmployerRecords = data.employers.filter((record) => (record.agencyId ?? 1) === admin.agencyId);
+  const emailMatches = agencyEmployerRecords.filter((record) => {
+    const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
+    return normalizeEmail(toTrimmedString(employer.email)) === email;
+  });
+  const conflictingAccountLink = emailMatches.some((record) => {
+    const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
+    const linkedUserId = toTrimmedString(employer.supabaseUserId);
+    return Boolean(linkedUserId && linkedUserId !== (account.supabase_user_id ?? ""));
+  });
+  if (conflictingAccountLink) return c.json({ error: "An employer record with this email is already linked to a different login UID. Resolve the account conflict before proceeding." }, 409);
+  const matches = emailMatches;
+  if (matches.length > 1) return c.json({ error: "More than one employer record already matches this account. Resolve duplicate records before linking." }, 409);
+  if (matches.length === 1) {
+    const existing = matches[0];
+    const employer = existing.employer && typeof existing.employer === "object" ? existing.employer as Record<string, unknown> : {};
+    const linkedUserId = toTrimmedString(employer.supabaseUserId);
+    if (linkedUserId && linkedUserId !== account.supabase_user_id) return c.json({ error: "The employer record is linked to a different Supabase account" }, 409);
+    existing.employer = { ...employer, supabaseUserId: account.supabase_user_id };
+    existing.updatedAt = now();
+    await saveData(c.env, data);
+    return c.json({ employer: { id: String(existing.id), refCode: existing.refCode, name: toTrimmedString(employer.name) || existing.refCode, email }, alreadyExisted: true });
+  }
+
+  const newEmployerId = data.counters.employers++;
+  const employerRecord = normalizeEmployerContractRecord({
+    id: newEmployerId, agencyId: admin.agencyId,
+    refCode: formatEmployerRefCode(newEmployerId),
+    employer: {
+      name: toTrimmedString(account.name) || email,
+      company: toTrimmedString(account.company), phone: toTrimmedString(account.phone),
+      email, ...(account.supabase_user_id ? { supabaseUserId: account.supabase_user_id } : {}),
+      accountSource: "helped_query_clients", accountLinkedBy: toTrimmedString(admin.username) || toTrimmedString(admin.email),
+      accountLinkedAt: now(),
+    },
+    createdAt: now(), updatedAt: now(),
+  });
+  data.employers.unshift(employerRecord);
+  await saveData(c.env, data);
+  return c.json({ employer: { id: String(employerRecord.id), refCode: employerRecord.refCode, name: toTrimmedString(employerRecord.employer.name) || email, email }, alreadyExisted: false }, 201);
+}));
+
 app.get("/api/operations-board/employers", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const data = await loadData(c.env, { readOnly: true });
+  const loginAccountsByEmail = new Map<string, ClientRecord>();
+  for (const client of data.clients) {
+    const email = normalizeEmail(client.email);
+    if (client.emailVerified !== false && email) loginAccountsByEmail.set(email, client);
+  }
   const employers = data.employers
     .filter((record) => (record.agencyId ?? 1) === admin.agencyId)
     .map((record) => {
       const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
+      const loginAccount = loginAccountsByEmail.get(normalizeEmail(toTrimmedString(employer.email)));
       return {
         id: String(record.id), refCode: toTrimmedString(record.refCode),
         name: toTrimmedString(employer.name) || toTrimmedString(record.refCode),
         company: toTrimmedString(employer.company), email: normalizeEmail(toTrimmedString(employer.email)),
+        phone: toTrimmedString(employer.phone || employer.mobile || employer.contactNumber),
+        address: toTrimmedString(employer.address || employer.homeAddress),
+        hasLogin: Boolean(loginAccount),
+        loginName: loginAccount?.name ?? "",
+        loginPhone: loginAccount?.phone ?? "",
+        supabaseUserId: toTrimmedString(employer.supabaseUserId),
       };
-    });
+    })
+    .sort((left, right) => Number(right.hasLogin) - Number(left.hasLogin) || left.name.localeCompare(right.name));
   return c.json({ employers });
 }));
 
@@ -18855,6 +19124,164 @@ type ChatMessageScope = {
   agencyId?: number;
 };
 
+const CHAT_ATTACHMENT_BUCKET = "helped-chat-attachments";
+const CHAT_ATTACHMENT_MAX_FILES = 5;
+const CHAT_ATTACHMENT_MAX_FILE_BYTES = 20 * 1024 * 1024;
+const CHAT_ATTACHMENT_MAX_TOTAL_BYTES = 50 * 1024 * 1024;
+const CHAT_ATTACHMENT_TYPES: Record<string, { mime: string; kind: "image" | "video" | "document" }> = {
+  jpg: { mime: "image/jpeg", kind: "image" }, jpeg: { mime: "image/jpeg", kind: "image" },
+  png: { mime: "image/png", kind: "image" }, gif: { mime: "image/gif", kind: "image" },
+  webp: { mime: "image/webp", kind: "image" }, avif: { mime: "image/avif", kind: "image" },
+  heic: { mime: "image/heic", kind: "image" }, heif: { mime: "image/heif", kind: "image" },
+  mp4: { mime: "video/mp4", kind: "video" }, webm: { mime: "video/webm", kind: "video" },
+  mov: { mime: "video/quicktime", kind: "video" }, m4v: { mime: "video/x-m4v", kind: "video" },
+  "3gp": { mime: "video/3gpp", kind: "video" },
+  pdf: { mime: "application/pdf", kind: "document" }, doc: { mime: "application/msword", kind: "document" },
+  docx: { mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", kind: "document" },
+  xls: { mime: "application/vnd.ms-excel", kind: "document" },
+  xlsx: { mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", kind: "document" },
+  csv: { mime: "text/csv", kind: "document" }, txt: { mime: "text/plain", kind: "document" },
+};
+
+const getChatAttachmentStorageConfig = (env: Bindings): SupabaseStorageConfig | null => {
+  const baseUrl = env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  return baseUrl && serviceRoleKey
+    ? { baseUrl, serviceRoleKey, bucket: CHAT_ATTACHMENT_BUCKET }
+    : null;
+};
+
+const ensureChatAttachmentBucket = async (config: SupabaseStorageConfig) => {
+  const bucketUrl = `${config.baseUrl}/storage/v1/bucket/${encodeURIComponent(config.bucket)}`;
+  let response = await fetch(bucketUrl, { headers: supabaseStorageHeaders(config) });
+  if (response.status === 404) {
+    const createResponse = await fetch(`${config.baseUrl}/storage/v1/bucket`, {
+      method: "POST",
+      headers: supabaseStorageHeaders(config, { "content-type": "application/json" }),
+      body: JSON.stringify({
+        id: config.bucket,
+        name: config.bucket,
+        public: false,
+        file_size_limit: CHAT_ATTACHMENT_MAX_FILE_BYTES,
+        allowed_mime_types: [...new Set(Object.values(CHAT_ATTACHMENT_TYPES).map((item) => item.mime))],
+      }),
+    });
+    if (!createResponse.ok && createResponse.status !== 409) {
+      console.error("Chat attachment bucket creation failed", createResponse.status, await readSupabaseError(createResponse));
+      throw new Error(`Chat attachment storage setup failed (HTTP ${createResponse.status}). Apply supabase/20261111_chat_attachments_bucket.sql, then retry.`);
+    }
+    response = await fetch(bucketUrl, { headers: supabaseStorageHeaders(config) });
+  }
+  if (!response.ok) {
+    console.error("Chat attachment bucket verification failed", response.status, await readSupabaseError(response));
+    throw new Error(`Chat attachment storage could not be verified (HTTP ${response.status}).`);
+  }
+  const bucket = await response.json() as { public?: boolean };
+  if (bucket.public !== false) throw new Error("Chat attachment storage must remain private. Apply supabase/20261111_chat_attachments_bucket.sql, then retry.");
+};
+
+const parseChatSubmission = async (request: Request) => {
+  if ((request.headers.get("content-type") ?? "").toLowerCase().includes("multipart/form-data")) {
+    const form = await request.formData();
+    const files = form.getAll("files").filter((value): value is File => value instanceof File && value.size > 0);
+    return { message: toTrimmedString(form.get("message")), files };
+  }
+  const body = await parseBody<{ message?: string }>(request);
+  return { message: toTrimmedString(body?.message), files: [] as File[] };
+};
+
+const uploadChatAttachments = async (
+  env: Bindings,
+  files: File[],
+  agencyId: number,
+  clientId: number,
+  messageId: number,
+): Promise<ChatAttachmentRecord[]> => {
+  if (!files.length) return [];
+  if (files.length > CHAT_ATTACHMENT_MAX_FILES) throw new Error("Attach up to 5 files per message");
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalBytes > CHAT_ATTACHMENT_MAX_TOTAL_BYTES) throw new Error("Attachments together must be 50MB or smaller");
+
+  const prepared = files.map((file) => {
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const type = CHAT_ATTACHMENT_TYPES[extension];
+    if (!type) {
+      throw new Error(`Unsupported attachment: ${file.name}`);
+    }
+    if (file.size > CHAT_ATTACHMENT_MAX_FILE_BYTES) throw new Error(`${file.name} exceeds the 20MB per-file limit`);
+    return { file, type };
+  });
+
+  const config = getChatAttachmentStorageConfig(env);
+  if (!config) throw new Error("Chat file storage is not configured. Ask an administrator to configure private storage.");
+  await ensureChatAttachmentBucket(config);
+  const attachments: ChatAttachmentRecord[] = [];
+  for (let index = 0; index < prepared.length; index += 1) {
+    const { file, type } = prepared[index];
+    const safeName = sanitizeStoragePathSegment(file.name, "attachment.bin");
+    const storagePath = `messages/agency-${agencyId}/client-${clientId}/${crypto.randomUUID()}-${safeName}`;
+    const response = await fetch(
+      `${config.baseUrl}/storage/v1/object/${encodeURIComponent(config.bucket)}/${storagePath.split("/").map(encodeURIComponent).join("/")}`,
+      {
+        method: "POST",
+        headers: supabaseStorageHeaders(config, { "content-type": type.mime, "x-upsert": "false" }),
+        body: await file.arrayBuffer(),
+      },
+    );
+    if (!response.ok) {
+      console.error("Chat attachment storage upload failed", response.status, await readSupabaseError(response));
+      throw new Error(`Could not upload ${file.name} (storage error ${response.status})`);
+    }
+    attachments.push({
+      name: file.name,
+      mimeType: type.mime,
+      size: file.size,
+      storagePath,
+      clientUrl: `/api/chats/client/attachments/${messageId}/${index}`,
+      adminUrl: `/api/chats/admin/attachments/${messageId}/${index}`,
+    });
+  }
+  return attachments;
+};
+
+const serveChatAttachment = async (c: any, viewer: "client" | "admin") => {
+  const messageId = Number(c.req.param("messageId"));
+  const attachmentIndex = Number(c.req.param("attachmentIndex"));
+  if (!Number.isInteger(messageId) || !Number.isInteger(attachmentIndex) || attachmentIndex < 0) {
+    return c.json({ error: "Attachment not found" }, 404);
+  }
+  const data = await loadData(c.env, { readOnly: true });
+  const message = data.chatMessages.find((item) => item.id === messageId);
+  const attachment = message?.attachments?.[attachmentIndex];
+  if (!message || !attachment?.storagePath) return c.json({ error: "Attachment not found" }, 404);
+
+  if (viewer === "client") {
+    const client = c.get("client") as ClientRecord;
+    if (message.clientId !== client.id) return c.json({ error: "Attachment not found" }, 404);
+  } else {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    if (message.conversationType === "agency" && message.agencyId !== admin.agencyId) {
+      return c.json({ error: "Attachment not found" }, 404);
+    }
+  }
+
+  const config = getChatAttachmentStorageConfig(c.env);
+  if (!config) return c.json({ error: "Chat file storage is not configured" }, 503);
+  const objectUrl = `${config.baseUrl}/storage/v1/object/${encodeURIComponent(config.bucket)}/${attachment.storagePath.split("/").map(encodeURIComponent).join("/")}`;
+  const response = await fetch(objectUrl, { headers: supabaseStorageHeaders(config) });
+  if (!response.ok) return c.json({ error: "Attachment is unavailable" }, 404);
+  const disposition = /^(image|video)\//.test(attachment.mimeType) ? "inline" : "attachment";
+  return new Response(response.body, {
+    status: 200,
+    headers: {
+      "Content-Type": attachment.mimeType,
+      "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(attachment.name)}`,
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "private, no-store",
+    },
+  });
+};
+
 const getSupportConversationMetadata = (
   messages: ChatMessageRecord[],
   clientId: number,
@@ -19203,37 +19630,46 @@ const generateChatBotReply = async (
 };
 
 app.post("/api/chats/client", requireClientAuth, async (c) => {
-  const body = await parseBody<{ message?: string }>(c.req.raw);
-  if (!body?.message?.trim()) {
-    return c.json({ error: "message is required" }, 400);
-  }
+  try {
+    const submission = await parseChatSubmission(c.req.raw);
+    if (!submission.message && !submission.files.length) return c.json({ error: "Write a message or attach a file" }, 400);
+    if (submission.message.length > 5000) return c.json({ error: "Messages must be 5,000 characters or fewer" }, 400);
 
-  const client = c.get("client");
-  const { conversationType, agencyId, agencyName } = getConversationContext(
-    new URL(c.req.url),
-  );
-  const data = await loadData(c.env);
-  const message: ChatMessageRecord = {
-    id: data.counters.chatMessages++,
-    clientId: client.id,
-    conversationType,
-    agencyId,
-    agencyName: agencyName ?? "",
-    senderRole: "client",
-    senderName: client.name,
-    message: body.message.trim(),
-    createdAt: now(),
-    readByAgency: false,
-    readByClient: true,
-  };
-  data.chatMessages.push(message);
-  await saveData(c.env, data);
-  runChatBackgroundTask(c, touchChatPresence(c.env, "client", client.id, agencyId));
-  if (conversationType === "support") {
-    runChatBackgroundTask(c, generateChatBotReply(c.env, client, message));
+    const client = c.get("client");
+    const { conversationType, agencyId, agencyName } = getConversationContext(new URL(c.req.url));
+    const data = await loadData(c.env);
+    const id = data.counters.chatMessages++;
+    const attachments = await uploadChatAttachments(c.env, submission.files, agencyId ?? 1, client.id, id);
+    const message: ChatMessageRecord = {
+      id,
+      clientId: client.id,
+      conversationType,
+      agencyId,
+      agencyName: agencyName ?? "",
+      senderRole: "client",
+      senderName: client.name,
+      message: submission.message || (attachments.length === 1 ? "Shared an attachment" : `Shared ${attachments.length} attachments`),
+      ...(attachments.length ? { attachments } : {}),
+      createdAt: now(),
+      readByAgency: false,
+      readByClient: true,
+    };
+    data.chatMessages.push(message);
+    await saveData(c.env, data);
+    runChatBackgroundTask(c, touchChatPresence(c.env, "client", client.id, agencyId));
+    if (conversationType === "support" && submission.message) {
+      runChatBackgroundTask(c, generateChatBotReply(c.env, client, message));
+    }
+    return c.json({ message }, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not send message";
+    const status = /limit|unsupported|attach up to|5,000 characters/i.test(message) ? 400 : /not configured|Chat attachment storage/i.test(message) ? 503 : /Could not upload .*storage error/i.test(message) ? 502 : 500;
+    console.error("Client chat message send failed:", message);
+    return c.json({ error: status === 500 ? "Could not send the message and attachments. Please try again." : message }, status);
   }
-  return c.json({ message }, 201);
 });
+
+app.get("/api/chats/client/attachments/:messageId/:attachmentIndex", requireClientAuth, (c) => serveChatAttachment(c, "client"));
 
 app.post("/api/chats/client/heartbeat", requireClientAuth, async (c) => {
   const client = c.get("client");
@@ -19250,8 +19686,9 @@ app.post("/api/chats/client/offline", requireClientAuth, async (c) => {
 
 app.get("/api/chats/admin", requireAgencyAdminAuth, async (c) => {
   const config = getSupabaseAppDataConfig(c.env);
+  let presence: ChatPresenceSnapshot;
   if (config) {
-    const [fast, presence] = await Promise.all([
+    const [fast, loadedPresence] = await Promise.all([
       tryCallSupabaseRpc<Array<{ clientId: number; conversationType: "support" | "agency"; agencyId?: number; [key: string]: unknown }>>(
         config,
         "list_helped_chat_admin_conversations",
@@ -19259,33 +19696,21 @@ app.get("/api/chats/admin", requireAgencyAdminAuth, async (c) => {
       ),
       loadChatPresence(c.env),
     ]);
+    presence = loadedPresence;
     if (fast) {
-      const data = await loadData(c.env, { readOnly: true });
       return c.json({
         conversations: fast.map((conv) => {
-          const metadata = getSupportConversationMetadata(
-            data.chatMessages,
-            Number(conv.clientId),
-            conv.conversationType === "agency" ? "agency" : "support",
-            Number(conv.agencyId) || undefined,
-          );
           return {
             ...conv,
-            status: metadata?.status ?? "OPEN",
-            category: metadata?.category ?? "General Inquiry",
-            priority: metadata?.priority ?? "MEDIUM",
-            assignedAdminId: metadata?.assignedAdminId,
-            assignedAdminName: metadata?.assignedAdminName,
-            subject: metadata?.subject,
-            description: metadata?.description,
             clientOnline: presence.clients.includes(Number(conv.clientId)),
           };
         }),
       });
     }
+  } else {
+    presence = await loadChatPresence(c.env);
   }
 
-  const presence = await loadChatPresence(c.env);
   const data = await loadData(c.env, { readOnly: true });
   const conversations = new Map<string, any>();
 
@@ -19595,45 +20020,46 @@ app.post("/api/chats/admin/:clientId", requireAgencyAdminAuth, async (c) => {
     return c.json({ error: "Valid client id is required" }, 400);
   }
 
-  const body = await parseBody<{ message?: string }>(c.req.raw);
-  if (!body?.message?.trim()) {
-    return c.json({ error: "message is required" }, 400);
-  }
+  try {
+    const submission = await parseChatSubmission(c.req.raw);
+    if (!submission.message && !submission.files.length) return c.json({ error: "Write a message or attach a file" }, 400);
+    if (submission.message.length > 5000) return c.json({ error: "Messages must be 5,000 characters or fewer" }, 400);
 
-  const data = await loadData(c.env);
-  const client = data.clients.find((item) => item.id === clientId);
-  if (!client) {
-    return c.json({ error: "Client not found" }, 404);
+    const data = await loadData(c.env);
+    const client = data.clients.find((item) => item.id === clientId);
+    if (!client) return c.json({ error: "Client not found" }, 404);
+    const admin = c.get("agencyAdmin");
+    const { conversationType, agencyId, agencyName } = getConversationContext(new URL(c.req.url));
+    if (conversationType === "agency" && agencyId !== admin.agencyId) return c.json({ error: "Conversation not found" }, 404);
+    const id = data.counters.chatMessages++;
+    const attachments = await uploadChatAttachments(c.env, submission.files, admin.agencyId, clientId, id);
+    const message: ChatMessageRecord = {
+      id,
+      clientId,
+      conversationType,
+      agencyId,
+      agencyName: agencyName ?? admin.agencyName,
+      senderRole: "agency",
+      senderName: conversationType === "agency" ? `${agencyName ?? admin.agencyName} Team` : `${admin.agencyName} Support`,
+      message: submission.message || (attachments.length === 1 ? "Shared an attachment" : `Shared ${attachments.length} attachments`),
+      ...(attachments.length ? { attachments } : {}),
+      createdAt: now(),
+      readByAgency: true,
+      readByClient: false,
+    };
+    data.chatMessages.push(message);
+    await saveData(c.env, data);
+    runChatBackgroundTask(c, touchChatPresence(c.env, "admin", admin.id, admin.agencyId));
+    return c.json({ message }, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not send message";
+    const status = /limit|unsupported|attach up to|5,000 characters/i.test(message) ? 400 : /not configured|Chat attachment storage/i.test(message) ? 503 : /Could not upload .*storage error/i.test(message) ? 502 : 500;
+    console.error("Admin chat message send failed:", message);
+    return c.json({ error: status === 500 ? "Could not send the message and attachments. Please try again." : message }, status);
   }
-
-  const admin = c.get("agencyAdmin");
-  const { conversationType, agencyId, agencyName } = getConversationContext(
-    new URL(c.req.url),
-  );
-  const message: ChatMessageRecord = {
-    id: data.counters.chatMessages++,
-    clientId,
-    conversationType,
-    agencyId,
-    agencyName: agencyName ?? admin.agencyName,
-    senderRole: "agency",
-    senderName:
-      conversationType === "agency"
-        ? `${agencyName ?? admin.agencyName} Team`
-        : `${admin.agencyName} Support`,
-    message: body.message.trim(),
-    createdAt: now(),
-    readByAgency: true,
-    readByClient: false,
-  };
-  data.chatMessages.push(message);
-  await saveData(c.env, data);
-  runChatBackgroundTask(
-    c,
-    touchChatPresence(c.env, "admin", admin.id, admin.agencyId),
-  );
-  return c.json({ message }, 201);
 });
+
+app.get("/api/chats/admin/attachments/:messageId/:attachmentIndex", requireAgencyAdminAuth, (c) => serveChatAttachment(c, "admin"));
 
 app.get("/api/chats/client/stream", requireClientAuth, async (c) => {
   const client = c.get("client");

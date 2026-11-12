@@ -49,6 +49,13 @@ as $$
       m.payload->>'message' as last_message,
       m.created_at as last_message_at,
       coalesce(m.payload->>'agencyName', '') as agency_name,
+      coalesce(metadata.value->>'status', 'OPEN') as status,
+      coalesce(metadata.value->>'category', 'General Inquiry') as category,
+      coalesce(metadata.value->>'priority', 'MEDIUM') as priority,
+      nullif(metadata.value->>'assignedAdminId', '')::integer as assigned_admin_id,
+      coalesce(metadata.value->>'assignedAdminName', '') as assigned_admin_name,
+      metadata.value->>'subject' as subject,
+      metadata.value->>'description' as description,
       c.name as client_name,
       c.email as client_email,
       c.company as client_company,
@@ -58,6 +65,17 @@ as $$
       on m.app_id = p_app_id and m.record_id = g.last_record_id
     join public.helped_query_clients c
       on c.app_id = p_app_id and c.record_id = g.client_id
+    left join lateral (
+      select cm.payload->'conversationMeta' as value
+      from public.helped_query_chat_messages cm
+      where cm.app_id = p_app_id
+        and cm.client_id = g.client_id
+        and cm.conversation_type = g.conversation_type
+        and cm.agency_id is not distinct from g.agency_id
+        and cm.payload ? 'conversationMeta'
+      order by cm.payload#>>'{conversationMeta,updatedAt}' desc nulls last, cm.record_id desc
+      limit 1
+    ) metadata on true
   )
   select coalesce(
     jsonb_agg(
@@ -73,7 +91,14 @@ as $$
         'clientProfileImageUrl', client_profile_image_url,
         'lastMessage', coalesce(last_message, ''),
         'lastMessageAt', last_message_at,
-        'unreadCount', unread_count
+        'unreadCount', unread_count,
+        'status', status,
+        'category', category,
+        'priority', priority,
+        'assignedAdminId', assigned_admin_id,
+        'assignedAdminName', assigned_admin_name,
+        'subject', subject,
+        'description', description
       )
       order by last_message_at desc nulls last
     ),
@@ -312,6 +337,18 @@ as $$
 $$;
 
 -- ─── Grants ────────────────────────────────────────────────────────────────
+
+-- PostgreSQL grants EXECUTE on new functions to PUBLIC by default. These
+-- SECURITY DEFINER RPCs include private chat content and presence, so expose
+-- them only to the Worker's service-role key.
+revoke execute on function public.list_helped_chat_admin_conversations(text) from public, anon, authenticated;
+revoke execute on function public.list_helped_chat_client_conversations(text, integer) from public, anon, authenticated;
+revoke execute on function public.get_helped_chat_messages(text, integer, text, integer, integer, integer) from public, anon, authenticated;
+revoke execute on function public.get_helped_chat_messages_after(text, integer, integer, text, integer) from public, anon, authenticated;
+revoke execute on function public.get_helped_chat_last_id(text, integer) from public, anon, authenticated;
+revoke execute on function public.helped_presence_touch(text, text, integer, integer) from public, anon, authenticated;
+revoke execute on function public.helped_presence_offline(text, text, integer) from public, anon, authenticated;
+revoke execute on function public.get_helped_presence(text, integer) from public, anon, authenticated;
 
 grant execute on function public.list_helped_chat_admin_conversations(text) to service_role;
 grant execute on function public.list_helped_chat_client_conversations(text, integer) to service_role;

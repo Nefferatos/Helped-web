@@ -12,6 +12,7 @@ import {
   type SqlMaidPayload,
   updateMaidMediaSql,
   updateMaidSql,
+  updateMaidSortTimestampsSql,
   updateMaidVisibilitySql,
   upsertMaidRecordsSql,
 } from './repositories/maidRepository'
@@ -2440,6 +2441,22 @@ export const updateMaidStore = async (
   }
   await saveData(data)
   return data.maids[index]
+}
+
+export const updateMaidSortTimestampsStore = async (
+  entries: Array<{ referenceCode: string; updatedAt: string }>,
+  agencyId: number = DEFAULT_AGENCY_ID
+) => {
+  const updated = await updateMaidSortTimestampsSql(entries, agencyId)
+  if (updated.length === entries.length) return updated
+
+  const data = await loadData()
+  const updatesByReference = new Map(entries.map((entry) => [entry.referenceCode, entry.updatedAt]))
+  const matched = data.maids.filter((maid) => maid.agencyId === agencyId && updatesByReference.has(maid.referenceCode))
+  if (matched.length !== entries.length) return []
+  for (const maid of matched) maid.updatedAt = updatesByReference.get(maid.referenceCode)!
+  await saveData(data)
+  return matched
 }
 
 export const updateMaidVisibilityStore = async (

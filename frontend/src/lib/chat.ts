@@ -17,6 +17,14 @@ export type SupportInquiryCategory =
   | "General Inquiry";
 export type SupportPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
+export interface ChatAttachment {
+  name: string;
+  mimeType: string;
+  size: number;
+  clientUrl: string;
+  adminUrl: string;
+}
+
 export interface ChatMessage {
   id: number;
   conversationId?: number;
@@ -29,12 +37,7 @@ export interface ChatMessage {
   senderRole: "client" | "agency";
   senderName: string;
   message: string;
-  attachments?: Array<{
-    name: string;
-    url: string;
-    mimeType?: string;
-    size?: number;
-  }>;
+  attachments?: ChatAttachment[];
   createdAt: string;
   isBot?: boolean;
   _optimistic?: boolean;
