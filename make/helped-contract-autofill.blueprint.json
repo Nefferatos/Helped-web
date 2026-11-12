@@ -1,0 +1,286 @@
+{
+  "name": "Helped - Employment Contract Draft Autofill",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 0,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "hook": {
+              "data": {
+                "editable": "true"
+              },
+              "label": "Create Contract Draft Autofill webhook after import"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ],
+        "notes": "Create a new webhook unique to contract autofill. Do not reuse the biodata webhook."
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 250,
+          "y": 0
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 27,
+              "module": "ai-local-agent:RunLocalAIAgent",
+              "version": 0,
+              "parameters": {
+                "makeConnectionId": 9990574
+              },
+              "filter": {
+                "name": "Text contract draft autofill - authorized",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.scenario}}",
+                      "b": "contract_autofill",
+                      "o": "text:equal"
+                    },
+                    {
+                      "a": "{{1.fileDataBase64}}",
+                      "b": "",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "files": [],
+                "message": "Website extraction instructions:\n{{1.systemPrompt}}\n\nPDF text and requested output schema:\n{{1.userPrompt}}",
+                "threadId": "pdf-autofill-{{ifempty(1.requestId; \"anonymous\")}}",
+                "outputType": "text",
+                "tokenLimit": "8192",
+                "modelConfig": {
+                  "timeout": "",
+                  "recursionLimit": "300",
+                  "iterationsFromHistoryCount": "1"
+                },
+                "defaultModel": "gpt-5-nano",
+                "systemPrompt": "You are a careful employment contract extraction assistant. Follow the website extraction instructions exactly. Never invent values. Return only the requested JSON object. Do not use Markdown or comments.",
+                "promptCaching": "none",
+                "fallbackEnabled": false,
+                "reasoningEffort": "low"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 550,
+                  "y": -120
+                },
+                "notes": "Dedicated employment contract draft extraction. Select a Make AI Provider connection and a model that supports PDF and image attachments."
+              },
+              "tools": []
+            },
+            {
+              "id": 28,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\n  \"content\": \"{{escapeJSON(27.response)}}\",\n  \"finish_reason\": \"stop\"\n}",
+                "status": "200",
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 850,
+                  "y": -120
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 31,
+              "module": "ai-local-agent:RunLocalAIAgent",
+              "version": 0,
+              "parameters": {
+                "makeConnectionId": 9990574
+              },
+              "filter": {
+                "name": "PDF or image contract draft autofill - authorized",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.scenario}}",
+                      "b": "contract_autofill",
+                      "o": "text:equal"
+                    },
+                    {
+                      "a": "{{1.fileDataBase64}}",
+                      "b": "",
+                      "o": "text:notEqual"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "files": [
+                  {
+                    "fileName": "{{1.fileName}}",
+                    "data": "{{toBinary(1.fileDataBase64; \"base64\")}}"
+                  }
+                ],
+                "message": "Website extraction instructions:\n{{1.systemPrompt}}\n\nPDF text and requested output schema:\n{{1.userPrompt}}",
+                "threadId": "pdf-autofill-{{ifempty(1.requestId; \"anonymous\")}}",
+                "outputType": "text",
+                "tokenLimit": "8192",
+                "modelConfig": {
+                  "timeout": "",
+                  "recursionLimit": "300",
+                  "iterationsFromHistoryCount": "1"
+                },
+                "defaultModel": "gpt-5-nano",
+                "systemPrompt": "You are a careful employment contract extraction assistant. Follow the website extraction instructions exactly. Never invent values. Return only the requested JSON object. Do not use Markdown or comments.",
+                "promptCaching": "none",
+                "fallbackEnabled": false,
+                "reasoningEffort": "low"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 550,
+                  "y": 120
+                },
+                "notes": "Dedicated employment contract draft extraction. Select a Make AI Provider connection and a model that supports PDF and image attachments."
+              },
+              "tools": []
+            },
+            {
+              "id": 32,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "body": "{\n  \"content\": \"{{escapeJSON(31.response)}}\",\n  \"finish_reason\": \"stop\"\n}",
+                "status": "200",
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 850,
+                  "y": 120
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 29,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "filter": {
+                "name": "Unsupported scenario",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.scenario}}",
+                      "b": "contract_autofill",
+                      "o": "text:notEqual"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "body": "{\"error\":\"Unsupported website automation scenario\"}",
+                "status": "400",
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 550,
+                  "y": 140
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "slots": null,
+      "confidential": true,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "eu1.make.com",
+    "notes": [
+      "Dedicated Make AI Agent scenario for employment contract draft extraction. It has its own custom webhook, separate from the biodata autofill scenario.",
+      "",
+      "AFTER IMPORT:",
+      "1. Create a new custom webhook named Contract Draft Autofill. Run once with a sample request so Make learns systemPrompt, userPrompt, fileName, fileMimeType, and fileDataBase64.",
+      "2. In both AI Agent modules, select the Make AI Provider connection and a model that can read PDF and image attachments. Keep the binary file mapping toBinary(1.fileDataBase64; \"base64\").",
+      "3. Set the new webhook URL as the Worker secret MAKE_CONTRACT_AUTOFILL_WEBHOOK_URL.",
+      "4. Test with a contract draft and confirm the response is JSON containing maid, agency, employer, spouse, notificationDate, and familyMembers.",
+      "5. Activate this scenario. Biodata uploads continue to use the existing PDF Biodata Autofill scenario and webhook.",
+      "",
+      "Requests use scenario=contract_autofill. No shared token is required; the dedicated webhook URL is the connection setting."
+    ]
+  }
+}

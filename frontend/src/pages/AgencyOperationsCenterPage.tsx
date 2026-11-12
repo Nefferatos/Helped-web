@@ -1,6 +1,9 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowRight, BookOpen, CheckCircle2, ExternalLink, FileAudio, FolderSync, Search, ShieldCheck, Sparkles, UsersRound, Plane, Stethoscope, HeartHandshake, ClipboardList, Trash2 } from 'lucide-react'
+import { ArrowRight, BookOpen, Check, CheckCircle2, ChevronsUpDown, ExternalLink, FileAudio, FolderSync, Search, ShieldCheck, Sparkles, UsersRound, Plane, Stethoscope, HeartHandshake, ClipboardList, Trash2 } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Button } from '@/components/ui/button'
 import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from '@/lib/agencyAdminAuth'
 import { adminPath } from '@/lib/routes'
 import ContractorTasksPage from '@/pages/ContractorTasksPage'
@@ -149,7 +152,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [employerId, setEmployerId] = useState('')
   const [employerLoginAccounts, setEmployerLoginAccounts] = useState<EmployerLoginAccount[]>([])
   const [selectedLoginAccountId, setSelectedLoginAccountId] = useState('')
-  const [employerSearch, setEmployerSearch] = useState('')
+  const [employerPickerOpen, setEmployerPickerOpen] = useState(false)
   const [creatingEmployerRecord, setCreatingEmployerRecord] = useState(false)
   const [requestEmployerChoices, setRequestEmployerChoices] = useState<EmployerLoginAccount[]>([])
   const [requestClientLabel, setRequestClientLabel] = useState('')
@@ -213,9 +216,6 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   }, [])
 
   const selectedLoginAccount = employerLoginAccounts.find((account) => account.id === selectedLoginAccountId)
-  const filteredEmployerAccounts = employerLoginAccounts.filter((account) =>
-    `${account.name} ${account.company} ${account.email} ${account.phone}`.toLowerCase().includes(employerSearch.trim().toLowerCase()),
-  )
 
   const chooseEmployerAccount = async (accountId: string) => {
     setSelectedLoginAccountId(accountId)
@@ -598,12 +598,28 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <Field label="Employer">
-                    <input value={employerSearch} onChange={(event) => setEmployerSearch(event.target.value)} className={`${fieldClass} mb-2`} placeholder="Search employer by name, email, or phone" aria-label="Search employers" />
-                    <select value={selectedLoginAccountId} disabled={creatingEmployerRecord} onChange={(event) => void chooseEmployerAccount(event.target.value)} className={fieldClass} aria-label="Choose employer">
-                      <option value="">Select employer</option>
-                      {filteredEmployerAccounts.map((account) => <option key={account.id} value={account.id}>{account.name || "Name not set"}{account.company ? ` · ${account.company}` : ""} · {account.email}{account.phone ? ` · ${account.phone}` : ""}</option>)}
-                    </select>
-                    {employerSearch && filteredEmployerAccounts.length === 0 && <p className="mt-1 text-xs text-slate-600">No employers match that search.</p>}
+                    <Popover open={employerPickerOpen} onOpenChange={setEmployerPickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" role="combobox" aria-expanded={employerPickerOpen} aria-label="Choose employer" disabled={creatingEmployerRecord} className={`${fieldClass} flex h-12 items-center justify-between font-normal`}>
+                          <span className="truncate text-left">{selectedLoginAccount ? `${selectedLoginAccount.name || "Name not set"}${selectedLoginAccount.company ? ` · ${selectedLoginAccount.company}` : ""} · ${selectedLoginAccount.email}` : "Select employer"}</span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search name, email, or phone…" aria-label="Search employers" />
+                          <CommandList>
+                            <CommandEmpty>No employers found.</CommandEmpty>
+                            <CommandGroup>
+                              {employerLoginAccounts.map((account) => <CommandItem key={account.id} value={`${account.name} ${account.company} ${account.email} ${account.phone}`} onSelect={() => { setEmployerPickerOpen(false); void chooseEmployerAccount(account.id) }}>
+                                <Check className={`mr-2 h-4 w-4 ${selectedLoginAccountId === account.id ? "opacity-100" : "opacity-0"}`} />
+                                <span className="min-w-0"><span className="block truncate font-medium">{account.name || "Name not set"}{account.company ? ` · ${account.company}` : ""}</span><span className="block truncate text-xs text-slate-600">{account.email}{account.phone ? ` · ${account.phone}` : ""}</span></span>
+                              </CommandItem>)}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     {creatingEmployerRecord && <p className="mt-1 text-xs text-black">Selecting employer…</p>}
                     {selectedLoginAccount && <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-black"><b>{selectedLoginAccount.name || "Name not set"}</b>{selectedLoginAccount.company ? ` · ${selectedLoginAccount.company}` : ""}<br />{selectedLoginAccount.email}{selectedLoginAccount.phone ? ` · ${selectedLoginAccount.phone}` : ""}</p>}
                     {requestEmployerChoices.length > 0 && <p className="mt-2 text-xs text-black">Request matches: {requestEmployerChoices.map((employer) => `${employer.name} (${employer.email})`).join(" · ")}</p>}

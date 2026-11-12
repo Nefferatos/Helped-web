@@ -60,6 +60,13 @@ export default defineConfig(({ mode }) => {
         target: workerApiProxyTarget,
         changeOrigin: true,
       },
+      // Biodata and employment contract draft autofill run through the Worker
+      // so local Make webhook settings and uploaded file attachments follow
+      // the same path as the deployed site.
+      "/api/pdf-autofill": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       // The Operations Board's placement, checklist, document, employer,
       // interview, arrival, and MOM endpoints are served by the Worker.
       // Proxy the whole route family here so local development does not send

@@ -11,7 +11,7 @@ import {
   searchSimilarMaids,
   buildRecommendationQuery,
 } from "./services/ai/embeddings";
-import { getAiProviderConfig, openaiChat, type OpenAIMessage } from "./services/ai/openai";
+import { getAiProviderConfig, openaiChat, type OpenAIMessage, type OpenAIVisionMessage } from "./services/ai/openai";
 import {
   buildSpreadsheetUrl,
   extractSpreadsheetId,
@@ -641,6 +641,8 @@ type Bindings = {
   MAKE_PDF_AUTOFILL_WEBHOOK_URL?: string;
   // Optional shared token checked by the Make scenario before it runs the agent.
   MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN?: string;
+  // Separate synchronous Make scenario for employment contract draft extraction.
+  MAKE_CONTRACT_AUTOFILL_WEBHOOK_URL?: string;
   // Dedicated webhook for the HR Interview Email Notifications Make scenario.
   // Keep this separate from the general inquiry/lead orchestrator webhook.
   MAKE_HR_EMAIL_WEBHOOK_URL?: string;
@@ -6956,6 +6958,12 @@ const buildMakeAutomationInventory = (env: Bindings) => {
       purpose: "Sends a staff-uploaded biodata PDF to the Make extraction workflow.",
       trigger: "Staff requests PDF autofill in the agency portal.",
       ...makeHook(env.MAKE_PDF_AUTOFILL_WEBHOOK_URL, "MAKE_PDF_AUTOFILL_WEBHOOK_URL", undefined, "7260114"),
+    },
+    {
+      id: "contract-draft-autofill", name: "Employment Contract Draft Autofill", mode: "staff initiated",
+      purpose: "Sends a staff-uploaded contract draft to its dedicated Make extraction workflow.",
+      trigger: "Staff requests autofill from the employment contract form.",
+      ...makeHook(env.MAKE_CONTRACT_AUTOFILL_WEBHOOK_URL, "MAKE_CONTRACT_AUTOFILL_WEBHOOK_URL"),
     },
     {
       id: "hr-email", name: "HR Interview Email Notifications", mode: "staff initiated",
@@ -22655,41 +22663,80 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
   const openaiKey = c.env.OPENAI_API_KEY?.trim() || c.env.CLINE_API_KEY?.trim();
   const anthropicKey = c.env.ANTHROPIC_API_KEY?.trim() || c.env.CLAUDE_API_KEY?.trim();
   const makePdfWebhookUrl = c.env.MAKE_PDF_AUTOFILL_WEBHOOK_URL?.trim();
+  const makeContractWebhookUrl = c.env.MAKE_CONTRACT_AUTOFILL_WEBHOOK_URL?.trim();
 
-  console.log("[pdf-autofill] Config:", { hasMakeUrl: !!makePdfWebhookUrl, hasOpenai: !!openaiKey, hasAnthropic: !!anthropicKey });
+  console.log("[pdf-autofill] Config:", { hasMakeUrl: !!makePdfWebhookUrl, hasContractMakeUrl: !!makeContractWebhookUrl, hasOpenai: !!openaiKey, hasAnthropic: !!anthropicKey });
 
-  if (!makePdfWebhookUrl && !openaiKey && !anthropicKey) {
+  if (!makePdfWebhookUrl && !makeContractWebhookUrl && !openaiKey && !anthropicKey && !c.env.AI) {
     return c.json({ error: "PDF autofill is not configured" }, 503);
   }
 
-  const body = await parseBody<{ model?: string; messages?: unknown[] }>(c.req.raw);
+  const body = await parseBody<{
+    model?: string;
+    vision?: boolean;
+    makeOnly?: boolean;
+    scenario?: string;
+    fileName?: string;
+    fileMimeType?: string;
+    fileDataBase64?: string;
+    messages?: unknown[];
+  }>(c.req.raw);
   console.log("[pdf-autofill] Body parsed:", { hasBody: !!body, hasMessages: Array.isArray(body?.messages), msgCount: body?.messages?.length });
   if (!Array.isArray(body?.messages) || body.messages.length === 0) {
     return c.json({ error: "messages are required" }, 400);
   }
-
-  type MsgLike = { role?: string; content?: string };
+  const requestedVision = body.vision === true;
+  const makeOnly = body.makeOnly === true;
+  const autofillScenario = body.scenario === "contract_autofill" ? "contract_autofill" : "pdf_autofill";
+  const makeWebhookUrl = autofillScenario === "contract_autofill"
+    ? makeContractWebhookUrl
+    : makePdfWebhookUrl;
+  const makeWebhookToken = autofillScenario === "pdf_autofill"
+    ? c.env.MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN?.trim()
+    : undefined;
+  if (makeOnly && !makeWebhookUrl) {
+    const serviceName = autofillScenario === "contract_autofill" ? "contract draft" : "PDF";
+    return c.json({ error: `The Make ${serviceName} autofill service is not connected. Please contact your administrator.` }, 503);
+  }
+  if (typeof body.fileDataBase64 === "string" && body.fileDataBase64.length > 4_000_000) {
+    return c.json({ error: "The attached file is too large for Make autofill. Use a smaller image or scanned PDF." }, 413);
+  }
+  type MsgLike = { role?: string; content?: unknown };
   const msgs = body.messages as MsgLike[];
 
   // PDF extraction is handled by the Make AI Agent. The browser continues to
   // use this authenticated endpoint, so Make credentials never reach it.
-  if (makePdfWebhookUrl) {
+  if (makeWebhookUrl && (makeOnly || !requestedVision || typeof body.fileDataBase64 === "string")) {
     const systemPrompt = msgs.filter((message) => message.role === "system")
       .map((message) => message.content ?? "").filter(Boolean).join("\n\n");
     const userPrompt = msgs.filter((message) => message.role !== "system")
-      .map((message) => message.content ?? "").filter(Boolean).join("\n\n");
+      .map((message) => {
+        if (typeof message.content === "string") return message.content;
+        if (Array.isArray(message.content)) return message.content
+          .filter((part): part is { type: string; text: string } => !!part && typeof part === "object" && "type" in part && part.type === "text" && "text" in part && typeof part.text === "string")
+          .map((part) => part.text).join("\n\n");
+        return "";
+      }).filter(Boolean).join("\n\n");
+    if (requestedVision && !body.fileDataBase64) {
+      return c.json({ error: "The image could not be prepared for Make autofill. Please try another image." }, 400);
+    }
     try {
       console.log("[pdf-autofill] Calling configured Make webhook");
-      const response = await fetch(makePdfWebhookUrl, {
+      const response = await fetch(makeWebhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scenario: "pdf_autofill",
+          scenario: autofillScenario,
           requestId: crypto.randomUUID(),
           systemPrompt,
           userPrompt,
-          ...(c.env.MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN?.trim()
-            ? { authToken: c.env.MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN.trim() }
+          ...(body.fileDataBase64 ? {
+            fileName: body.fileName || "uploaded-draft",
+            fileMimeType: body.fileMimeType || "application/octet-stream",
+            fileDataBase64: body.fileDataBase64,
+          } : {}),
+          ...(makeWebhookToken
+            ? { authToken: makeWebhookToken }
             : {}),
         }),
         signal: AbortSignal.timeout(55_000),
@@ -22724,11 +22771,20 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
   }
 
   // ── OpenAI-compatible path (Cline / Kimi / OpenRouter) ──────────────
+  if (makeOnly) {
+    return c.json({ error: "The Make autofill service is not connected. Please contact your administrator." }, 503);
+  }
+
   if (openaiKey) {
     try {
-      const openaiMessages: OpenAIMessage[] = msgs
+      const openaiMessages: OpenAIVisionMessage[] = msgs
         .filter((m) => m.role === "system" || m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as OpenAIMessage["role"], content: m.content ?? "" }));
+        .map((m) => ({
+          role: m.role as OpenAIMessage["role"],
+          content: typeof m.content === "string" || Array.isArray(m.content)
+            ? m.content as OpenAIVisionMessage["content"]
+            : "",
+        }));
 
       const result = await openaiChat({
         apiKey:      openaiKey,

@@ -19,6 +19,7 @@ import { downloadMergedEmployerPdf, openEmployerDocument, printMergedEmployerPdf
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
 import { getExperienceBucket } from "@/lib/maids";
+import { ContractDraftAutofill } from "@/components/ContractDraftAutofill";
 
 /* ─── types ─── */
 type UploadedFile = { name: string; url: string; category: string };
@@ -502,6 +503,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
   const [maidSearch, setMaidSearch] = useState("");
   const [maidResults, setMaidResults] = useState<MaidSearchResult[]>([]);
   const [maidSearchLoading, setMaidSearchLoading] = useState(false);
+  const maidSelectionRequestRef = useRef(0);
   const [showMaidResults, setShowMaidResults] = useState(false);
   const [selectedMaidExperience, setSelectedMaidExperience] = useState("");
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
@@ -550,7 +552,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
     toDownload.forEach((file) => { const a = document.createElement("a"); a.href = file.url; a.download = file.name; a.target = "_blank"; document.body.appendChild(a); a.click(); document.body.removeChild(a); });
   };
 
-  const applyMaidResult = useCallback((selectedMaid: MaidSearchResult) => {
+  const applyMaidResult = useCallback(async (selectedMaid: MaidSearchResult) => {
     // ── GUARD: block selection of maids already assigned to another employer ──
     if (isMaidAlreadyAssigned(selectedMaid, refCode)) {
       const assignedTo = selectedMaid.assignedEmployerName
@@ -560,33 +562,84 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
       return; // abort — do not populate the form
     }
 
-    const introduction = (selectedMaid.introduction as Record<string, unknown> | undefined) ?? {};
-    const skillsPreferences = (selectedMaid.skillsPreferences as Record<string, unknown> | undefined) ?? {};
+    const selectionRequest = ++maidSelectionRequestRef.current;
+    let maidRecord = selectedMaid;
+    const authHeaders = getAgencyAdminAuthHeaders();
+    if (selectedMaid.referenceCode && authHeaders.Authorization) {
+      try {
+        // Search results use blurred public previews. Fetch the selected profile
+        // with the staff session so its original photo is shown in this contract.
+        const response = await fetch(`/api/maids/${encodeURIComponent(selectedMaid.referenceCode)}`, { headers: authHeaders });
+        if (response.ok) {
+          const payload = await response.json() as { maid?: MaidSearchResult };
+          if (payload.maid) maidRecord = { ...selectedMaid, ...payload.maid };
+        }
+      } catch {
+        // Keep the maid details usable if the authenticated profile request fails.
+      }
+    }
+    if (selectionRequest !== maidSelectionRequestRef.current) return;
 
-    const photoUrls: string[] = Array.isArray(selectedMaid.photoDataUrls)
-      ? selectedMaid.photoDataUrls.filter((i): i is string => typeof i === "string" && i.trim().length > 0)
+    const introduction = (maidRecord.introduction as Record<string, unknown> | undefined) ?? {};
+    const skillsPreferences = (maidRecord.skillsPreferences as Record<string, unknown> | undefined) ?? {};
+
+    const photoUrls: string[] = Array.isArray(maidRecord.photoDataUrls)
+      ? maidRecord.photoDataUrls.filter((i): i is string => typeof i === "string" && i.trim().length > 0 && !i.includes("/photo-preview"))
       : [];
-    const singlePhoto = toText(selectedMaid.photoDataUrl);
-    if (singlePhoto && !photoUrls.includes(singlePhoto)) photoUrls.unshift(singlePhoto);
+    const singlePhoto = toText(maidRecord.photoDataUrl);
+    const usableSinglePhoto = singlePhoto.includes("/photo-preview") ? "" : singlePhoto;
+    if (usableSinglePhoto && !photoUrls.includes(usableSinglePhoto)) photoUrls.unshift(usableSinglePhoto);
 
     setMaid((c) => ({
       ...c,
-      referenceCode: toText(selectedMaid.referenceCode),
-      name: toText(selectedMaid.fullName),
-      nationality: toText(selectedMaid.nationality),
-      passportNo: getMaidPassportNo(selectedMaid),
+      referenceCode: toText(maidRecord.referenceCode),
+      name: toText(maidRecord.fullName),
+      nationality: toText(maidRecord.nationality),
+      passportNo: getMaidPassportNo(maidRecord),
       salary: toText(introduction.expectedSalary),
       numberOfOffDays: toText(skillsPreferences.offDaysPerMonth),
       compensationNoOffday: toText(introduction.offdayCompensation),
-      photoDataUrl: photoUrls[0] ?? singlePhoto,
+      photoDataUrl: photoUrls[0] ?? usableSinglePhoto,
       photoDataUrls: photoUrls,
     }));
-    setAgency((c) => ({ ...c, maidId: selectedMaid.id ? String(selectedMaid.id) : c.maidId }));
-    setSelectedMaidExperience(getMaidExperienceLabel(selectedMaid));
+    setAgency((c) => ({ ...c, maidId: maidRecord.id ? String(maidRecord.id) : c.maidId }));
+    setSelectedMaidExperience(getMaidExperienceLabel(maidRecord));
     setMaidSearch("");
     setShowMaidResults(false);
     toast.success("Maid details added to the employment form");
   }, [refCode]);
+
+  const applyContractDraft = useCallback((data: Record<string, unknown>) => {
+    const fillEmpty = <T extends object>(current: T, candidate: unknown): T => {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return current;
+      const source = candidate as Record<string, unknown>;
+      const next = { ...current } as Record<string, unknown>;
+      const existing = current as Record<string, unknown>;
+      for (const key of Object.keys(current)) {
+        const value = source[key];
+        if ((typeof existing[key] === "string" && existing[key].trim()) || value == null) continue;
+        if (typeof value === "string" || typeof value === "number") next[key] = String(value);
+      }
+      return next as T;
+    };
+
+    setMaid((current) => fillEmpty(current, data.maid));
+    setAgency((current) => fillEmpty(current, data.agency));
+    setEmployer((current) => fillEmpty(current, data.employer));
+    setSpouse((current) => fillEmpty(current, data.spouse));
+    setNotificationDate((current) => fillEmpty(current, data.notificationDate));
+    if (Array.isArray(data.familyMembers) && data.familyMembers.length > 0) {
+      const draftMembers = data.familyMembers.filter((member): member is Record<string, unknown> => !!member && typeof member === "object" && !Array.isArray(member));
+      setFamilyMembers((current) => {
+        const hasExistingDetails = current.some((member) => Object.values(member).some((value) => value.trim()));
+        if (!hasExistingDetails) {
+          return draftMembers.map((member) => fillEmpty(emptyFamilyMember(), member));
+        }
+        return current.map((member, index) => fillEmpty(member, draftMembers[index]));
+      });
+    }
+    setDirty(true);
+  }, []);
 
   /* ── Load contract from API ── */
   useEffect(() => {
@@ -865,6 +918,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
               </div>
             </div>
           </div>
+          {mode !== "view" && <ContractDraftAutofill onApply={applyContractDraft} />}
         </div>
 
         {/* Step tabs */}

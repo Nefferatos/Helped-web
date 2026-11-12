@@ -18,10 +18,15 @@ export type OpenAIMessage = {
   content: string;
 };
 
+export type OpenAIVisionMessage = {
+  role: "system" | "user" | "assistant";
+  content: string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+};
+
 export type OpenAIChatOptions = {
   apiKey: string;
   model: string;
-  messages: OpenAIMessage[];
+  messages: Array<OpenAIMessage | OpenAIVisionMessage>;
   temperature?: number;
   maxTokens?: number;
   responseFormat?: "json_object";
@@ -75,10 +80,10 @@ export const openaiChat = async (options: OpenAIChatOptions) => {
   const url = `${baseUrl}/chat/completions`;
 
   const systemMessages = options.messages.filter((m) => m.role === "system");
-  const nonSystemMessages = options.messages.filter((m) => m.role !== "system") as { role: "user" | "assistant"; content: string }[];
+  const nonSystemMessages = options.messages.filter((m) => m.role !== "system") as Array<OpenAIMessage | OpenAIVisionMessage>;
 
-  const systemContent = systemMessages.map((m) => m.content).join("\n\n");
-  const finalMessages: OpenAIMessage[] = [];
+  const systemContent = systemMessages.map((m) => typeof m.content === "string" ? m.content : "").join("\n\n");
+  const finalMessages: Array<OpenAIMessage | OpenAIVisionMessage> = [];
   if (systemContent) {
     finalMessages.push({ role: "system", content: systemContent });
   }
