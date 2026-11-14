@@ -19,7 +19,7 @@ import { adminPath } from "@/lib/routes";
 import { exportMaidProfileToPdf } from "@/lib/maidExport";
 import SendMaidToClientDialog from "@/components/SendMaidToClientDialog";
 
-type LocationState = { fromView?: "public" | "hidden" };
+type LocationState = { fromView?: "public" | "hidden"; maid?: MaidProfile };
 
 // ── Passport background presets ──────────────────────────────────────────────
 const PASSPORT_BACKGROUNDS = [
@@ -352,7 +352,10 @@ const MaidProfilePage = () => {
   const { refCode } = useParams();
   const navigate = useNavigate();
 
-  const [maid, setMaid] = useState<MaidProfile | null>(null);
+  const [maid, setMaid] = useState<MaidProfile | null>(() => {
+    const cached = (location.state as LocationState | null)?.maid;
+    return cached?.referenceCode === refCode ? cached : null;
+  });
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isThroughAgencyDialogOpen, setIsThroughAgencyDialogOpen] = useState(false);
@@ -500,6 +503,9 @@ const MaidProfilePage = () => {
   };
 
   useEffect(() => {
+    const cached = (location.state as LocationState | null)?.maid;
+    if (cached?.referenceCode === refCode) setMaid(cached);
+    else setMaid(null);
     const loadMaid = async () => {
       if (!refCode) return;
       try {
@@ -516,7 +522,7 @@ const MaidProfilePage = () => {
       }
     };
     void loadMaid();
-  }, [navigate, refCode]);
+  }, [location.state, navigate, refCode]);
 
   const handleDelete = async () => {
     if (!maid) return;

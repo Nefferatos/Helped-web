@@ -6,9 +6,9 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // The local Express API defaults to port 3000 (see backend/src/server.ts).
+  // Port 3000 is used by the local WAHA container; the Express API uses 3001.
   // VITE_API_PROXY_TARGET can be set when developing against another API host.
-  const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || "http://localhost:3000";
+  const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || "http://localhost:3001";
   // The AI Command Center is implemented by the Cloudflare Worker, where it
   // securely calls the Make.com AI-agent webhook. Keep this separate from the
   // legacy Express API so Vite development matches the deployed route.

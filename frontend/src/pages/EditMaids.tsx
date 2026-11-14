@@ -1016,6 +1016,9 @@ const EditMaids = () => {
       maidPageCacheRef.current.set(cacheKey, entry);
       if (applyResult && !signal.aborted) {
         applyMaidPage(data.maids, total);
+        // The list rows are ready now. Let the page render before optional
+        // profile detail and photo requests finish in the background.
+        setIsLoading(false);
         void hydrateMissingMaidDetails(data.maids, signal);
       }
 
@@ -1905,7 +1908,7 @@ const EditMaids = () => {
                   else if (e.key === "ArrowUp") { e.preventDefault(); setMenuActiveIndex((i) => Math.max(i - 1, 0)); }
                   else if (e.key === "Enter" && menuActiveIndex >= 0) {
                     const m = menuSearchResults[menuActiveIndex];
-                    if (m) navigate(adminPath(`/maid/${encodeURIComponent(m.referenceCode)}`), { state: { fromView: (m as MaidProfile & { _vis?: string })._vis ?? "public" } });
+                    if (m) navigate(adminPath(`/maid/${encodeURIComponent(m.referenceCode)}`), { state: { fromView: (m as MaidProfile & { _vis?: string })._vis ?? "public", maid: m } });
                   }
                   else if (e.key === "Escape") setMenuSearchOpen(false);
                 }}
@@ -1932,7 +1935,7 @@ const EditMaids = () => {
                       key={maid.referenceCode}
                       className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-slate-100 last:border-b-0 ${idx === menuActiveIndex ? "bg-violet-50" : "hover:bg-slate-50"}`}
                       onMouseEnter={() => setMenuActiveIndex(idx)}
-                      onClick={() => { navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: vis ?? "public" } }); setMenuSearchOpen(false); }}
+                      onClick={() => { navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: vis ?? "public", maid } }); setMenuSearchOpen(false); }}
                     >
                       {photo ? (
                         <img src={photo} alt={maid.fullName} className="w-11 h-11 rounded-lg object-cover flex-shrink-0 bg-slate-100 border border-slate-200" />
@@ -2331,7 +2334,7 @@ const EditMaids = () => {
                   {/* Photo area */}
                   <div
                     className="mx-auto w-full max-w-[120px] cursor-pointer"
-                    onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
+                    onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view, maid } })}
                   >
                     {photoPreview ? (
                       <img
@@ -2422,7 +2425,7 @@ const EditMaids = () => {
                     </div>
                     <p
                       className="editmaids-strong-name w-full cursor-pointer break-words text-[12px] font-extrabold leading-tight text-black transition-colors hover:text-violet-800"
-                      onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view } })}
+                      onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}`), { state: { fromView: view, maid } })}
                     >
                       {maid.fullName}
                     </p>

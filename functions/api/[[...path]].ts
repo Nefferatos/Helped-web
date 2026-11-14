@@ -605,6 +605,9 @@ type Bindings = {
   MAKE_WEBHOOK_URL_MEDIA_TRANSCRIBE?: string;
   // Retired WhatsApp variables retained only for legacy storage cleanup.
   MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?: string;
+  WHATSAPP_AUTOMATION_SECRET?: string;
+  WAHA_API_URL?: string;
+  WAHA_API_KEY?: string;
   MAKE_TELEGRAM_BROADCAST_WEBHOOK_URL?: string;
   MAKE_TELEGRAM_CHATBOT_WEBHOOK_URL?: string;
   TELEGRAM_BOT_TOKEN?: string;
@@ -755,7 +758,7 @@ app.use(
       return null;
     },
     credentials: true,
-    allowHeaders: ["Content-Type", "Authorization", "X-Bootstrap-Token"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Bootstrap-Token", "X-Whatsapp-Automation-Secret"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   }),
 );
@@ -5987,6 +5990,39 @@ const resolveRequestActor = async (
   return { actor: { type: "client", client }, dataChanged: true };
 };
 
+// Maid read endpoints use this session fast path so an ordinary admin request
+// can query the maid table without first loading the full app data document
+// (which can contain every profile's original photos and videos).
+const resolveMaidReadActor = async (
+  env: Bindings,
+  request: Request,
+): Promise<{ actor: RequestActor | null; authData: AppData | null }> => {
+  const token = parseAuthorizationToken(request);
+  if (!token) return { actor: null, authData: null };
+
+  const sessions = await loadAgencyAdminSessions(env);
+  const session = sessions.find((item) => item.token === token);
+  if (session?.admin) {
+    const admin = {
+      id: session.admin.id,
+      agencyId: session.admin.agencyId,
+      username: session.admin.username,
+      email: session.admin.email ?? "",
+      password: "",
+      agencyName: session.admin.agencyName,
+      emailVerified: session.admin.emailVerified,
+      profileImageUrl: session.admin.profileImageUrl ?? "",
+      createdAt: session.admin.createdAt,
+    } satisfies AgencyAdminRecord;
+    return { actor: { type: "admin", admin }, authData: null };
+  }
+
+  const authData = await loadData(env);
+  const resolved = await resolveRequestActor(env, request, authData);
+  if (resolved.dataChanged) await saveData(env, authData);
+  return { actor: resolved.actor, authData };
+};
+
 const getRequestAgencyName = (data: AppData, agencyId: number) =>
   data.agencyAdmins.find((admin) => admin.agencyId === agencyId)?.agencyName ||
   data.companyProfile.short_name ||
@@ -6524,7 +6560,7 @@ app.get("/api", (c) => c.json({ message: "Welcome to Helped Cloudflare API" }));
 // Agency staff knowledge library. Keep this on the Worker because the deployed
 // dashboard is served here (the legacy Express-only routes are not deployed).
 const knowledgeCollection = "agency_knowledge";
-const knowledgeVector = (text: string) => {
+const knowledgeHashVector = (text: string) => {
   const vector = new Array<number>(64).fill(0);
   const tokens = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
   for (const token of tokens) {
@@ -6538,6 +6574,17 @@ const knowledgeVector = (text: string) => {
   }
   const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
   return magnitude ? vector.map((value) => value / magnitude) : vector;
+};
+const knowledgeVector = async (ai: Bindings["AI"] | undefined, text: string) => {
+  if (ai && text.trim()) {
+    try {
+      const result = await ai.run("@cf/baai/bge-small-en-v1.5", { text: [text.slice(0, 1800)] }) as { data?: number[][] };
+      if (Array.isArray(result.data?.[0]) && result.data[0].length === 384) return result.data[0];
+    } catch (error) {
+      console.error("Knowledge embedding failed; using lexical fallback", errMsg(error));
+    }
+  }
+  return knowledgeHashVector(text);
 };
 const knowledgeSimilarity = (left: number[], right: number[]) => {
   if (left.length !== right.length || !left.length) return 0;
@@ -6553,7 +6600,7 @@ const knowledgeChunks = (content: string) => {
 const knowledgeConfig = (c: any) => getSupabaseAppDataConfig(c.env);
 const knowledgeHeaders = (config: SupabaseAppDataConfig, extra?: HeadersInit) =>
   supabaseHeaders(config, { "content-type": "application/json", ...extra });
-const retrieveAgencyKnowledge = async (config: SupabaseAppDataConfig, agencyId: number, text: string) => {
+const retrieveAgencyKnowledge = async (config: SupabaseAppDataConfig, agencyId: number, text: string, ai?: Bindings["AI"]) => {
   const docsResponse = await fetch(`${config.baseUrl}/rest/v1/knowledge_documents?select=id,title,category,source_key&agency_id=eq.${agencyId}&collection=eq.${knowledgeCollection}&active=eq.true`, {
     headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(12_000),
   });
@@ -6567,10 +6614,12 @@ const retrieveAgencyKnowledge = async (config: SupabaseAppDataConfig, agencyId: 
   });
   if (!chunksResponse.ok) throw new Error(`Knowledge chunk retrieval failed (${chunksResponse.status}): ${await readSupabaseError(chunksResponse)}`);
   const chunks = await chunksResponse.json() as Array<{ document_id: string; content: string; embedding: number[] }>;
-  const queryVector = knowledgeVector(text);
+  const queryVector = await knowledgeVector(ai, text);
   return chunks.map((chunk) => {
     const doc = docById.get(chunk.document_id)!;
-    return { id: doc.id, title: doc.title, category: doc.category, sourceKey: doc.source_key, content: chunk.content, similarity: knowledgeSimilarity(queryVector, chunk.embedding ?? []) };
+    const storedVector = chunk.embedding ?? [];
+    const compatibleQuery = storedVector.length === queryVector.length ? queryVector : knowledgeHashVector(text);
+    return { id: doc.id, title: doc.title, category: doc.category, sourceKey: doc.source_key, content: chunk.content, similarity: knowledgeSimilarity(compatibleQuery, storedVector) };
   }).filter((item) => item.similarity >= 0.53).sort((a, b) => b.similarity - a.similarity).slice(0, 4);
 };
 
@@ -6604,7 +6653,7 @@ app.post("/api/knowledge/documents", requireAgencyAdminAuth, async (c) => {
   if (chunks.length) {
     const inserted = await fetch(`${config.baseUrl}/rest/v1/knowledge_chunks`, {
       method: "POST", headers: knowledgeHeaders(config, { prefer: "return=minimal" }),
-      body: JSON.stringify(chunks.map((chunk, chunk_index) => ({ document_id: documentId, chunk_index, content: chunk, embedding: knowledgeVector(chunk) }))),
+      body: JSON.stringify(await Promise.all(chunks.map(async (chunk, chunk_index) => ({ document_id: documentId, chunk_index, content: chunk, embedding: await knowledgeVector(c.env.AI, chunk) })))),
       signal: AbortSignal.timeout(12_000),
     });
     if (!inserted.ok) return c.json({ error: await readSupabaseError(inserted) }, inserted.status as any);
@@ -6618,8 +6667,18 @@ app.get("/api/knowledge/search", requireAgencyAdminAuth, async (c) => {
   const text = c.req.query("q")?.trim() ?? "";
   if (!text) return c.json({ error: "q is required" }, 400);
   const agencyId = Number(c.get("agencyAdmin")?.agencyId ?? 1);
-  try { return c.json({ snippets: await retrieveAgencyKnowledge(config, agencyId, text) }); }
+  try { return c.json({ snippets: await retrieveAgencyKnowledge(config, agencyId, text, c.env.AI) }); }
   catch (error) { return c.json({ error: error instanceof Error ? error.message : "Knowledge retrieval failed" }, 503); }
+});
+
+app.get("/api/knowledge/documents", requireAgencyAdminAuth, async (c) => {
+  const config = knowledgeConfig(c);
+  if (!config) return c.json({ error: "Knowledge storage is not configured" }, 503);
+  const agencyId = Number(c.get("agencyAdmin")?.agencyId ?? 1);
+  const params = new URLSearchParams({ select: "id,source_key,title,category,content,metadata,active,updated_at", agency_id: `eq.${agencyId}`, collection: `eq.${knowledgeCollection}`, order: "updated_at.desc", limit: "200" });
+  const response = await fetch(`${config.baseUrl}/rest/v1/knowledge_documents?${params}`, { headers: supabaseHeaders(config, { accept: "application/json" }), signal: AbortSignal.timeout(12_000) });
+  if (!response.ok) return c.json({ error: await readSupabaseError(response) }, response.status as any);
+  return c.json({ documents: await response.json() });
 });
 
 /**
@@ -7413,10 +7472,11 @@ app.get(
     // photos while still being restricted to public maid profiles.
     let isAdminRequest = false;
     let isAuthenticatedRequest = false;
+    let authData: AppData | null = null;
     if (parseAuthorizationToken(c.req.raw)) {
-      const authData = await loadData(c.env);
-      const { actor, dataChanged } = await resolveRequestActor(c.env, c.req.raw, authData);
-      if (dataChanged) await saveData(c.env, authData);
+      const resolved = await resolveMaidReadActor(c.env, c.req.raw);
+      authData = resolved.authData;
+      const actor = resolved.actor;
       isAdminRequest = actor?.type === "admin";
       isAuthenticatedRequest = actor !== null;
     }
@@ -7467,7 +7527,7 @@ app.get(
       }
     }
 
-    const data = await loadData(c.env, { readOnly: true })
+    const data = authData ?? await loadData(c.env, { readOnly: true })
 
     let maids = [...data.maids]
     if (search) {
@@ -7821,14 +7881,8 @@ app.post(
 app.get(
   "/api/maids/:referenceCode",
   safeApi(async (c) => {
-    const token = parseAuthorizationToken(c.req.raw);
-    const authData = token ? await loadData(c.env) : null;
-    let actor: RequestActor | null = null;
-    if (authData) {
-      const resolved = await resolveRequestActor(c.env, c.req.raw, authData);
-      actor = resolved.actor;
-      if (resolved.dataChanged) await saveData(c.env, authData);
-    }
+    const resolved = await resolveMaidReadActor(c.env, c.req.raw);
+    const { actor, authData } = resolved;
 
     const config = getSupabaseAppDataConfig(c.env);
     if (config) {
@@ -10484,7 +10538,7 @@ app.post("/api/operations-board/placements/:placementId/document-readiness-draft
   const [documents, tasks, knowledge] = await Promise.all([
     fetchPlacementDocuments(config, placementId, admin.agencyId),
     fetchDeploymentTasks(config, placementId, admin.agencyId),
-    retrieveAgencyKnowledge(config, admin.agencyId, "placement employer document checklist contract insurance security bond flight medical SIP work permit handover review and human approval"),
+    retrieveAgencyKnowledge(config, admin.agencyId, "placement employer document checklist contract insurance security bond flight medical SIP work permit handover review and human approval", c.env.AI),
   ]);
   // Deliberately send only category, file type/size and checklist state; never filenames, identities, IDs or file contents.
   const input = {
@@ -12288,7 +12342,10 @@ app.post("/api/requests/:id/interview-selection", safeApi(async (c) => {
     return c.json({ data: buildRequestResponse(data, request), alreadySaved: true });
   }
   const updatedAt = now();
-  const details = { ...request.details, interviewCandidateReferences: maidReferences };
+  const details: Record<string, unknown> = {
+    ...request.details,
+    interviewCandidateReferences: maidReferences,
+  };
   if (typeof details.finalCandidateReference === "string" && !maidReferences.includes(details.finalCandidateReference)) {
     delete details.finalCandidateReference;
     delete details.finalCandidateSelectedAt;
@@ -15490,6 +15547,7 @@ app.post("/api/operations-board/maid-interviews/:interviewId/coordination-draft"
     config,
     admin.agencyId,
     `interview coordination scheduling confirmations rescheduling candidate employer ${availabilityAndGuidance}`,
+    c.env.AI,
   );
   const input = {
     scheduledAt: interview.scheduled_at,
@@ -23828,6 +23886,336 @@ app.get("/api/whatsapp-broadcast/media/:key", async (c) => {
   headers.set("X-Content-Type-Options", "nosniff");
   return new Response(object.body, { headers });
 });
+
+const whatsappMarketingDb = async (env: Bindings, path: string, init?: RequestInit) => {
+  const config = getSupabaseAppDataConfig(env);
+  if (!config) throw new Error("WhatsApp marketing storage is not configured. Apply supabase/20261123_whatsapp_broadcast.sql and set Supabase service credentials.");
+  const response = await fetch(`${config.baseUrl}/rest/v1/${path}`, {
+    ...init,
+    headers: { apikey: config.serviceRoleKey, Authorization: `Bearer ${config.serviceRoleKey}`, "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) throw new Error(`WhatsApp marketing database request failed (${response.status}): ${(await response.text()).slice(0, 500)}`);
+  return response;
+};
+
+const whatsappPhone = (value: unknown) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : "";
+};
+const whatsappPhoneFromJid = (value: unknown) => {
+  const jid = String(value ?? "").trim();
+  if (!jid || /@lid$/i.test(jid)) return "";
+  return whatsappPhone(jid.includes("@") ? jid.split("@")[0] : jid);
+};
+const resolveWhatsAppLidPhone = async (env: Bindings, session: string, lidJid: string) => {
+  const baseUrl = env.WAHA_API_URL?.trim().replace(/\/+$/, "");
+  const apiKey = env.WAHA_API_KEY?.trim();
+  const lid = lidJid.split("@")[0].trim();
+  if (!baseUrl || !apiKey || !session || !lid) return "";
+  try {
+    const response = await fetch(`${baseUrl}/api/${encodeURIComponent(session)}/lids/${encodeURIComponent(lid)}`, {
+      headers: { "X-Api-Key": apiKey },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return "";
+    const result = await response.json() as { pn?: string | null };
+    return whatsappPhoneFromJid(result.pn);
+  } catch {
+    return "";
+  }
+};
+const whatsappTemplate = (message: string, contact: Record<string, unknown>) => message
+  .replace(/\{\{\s*name\s*\}\}/gi, String(contact.full_name ?? "there"))
+  .replace(/\{\{\s*phone\s*\}\}/gi, String(contact.phone_number ?? ""))
+  .replace(/\{\{\s*company\s*\}\}/gi, String(contact.company ?? ""));
+const whatsappAutomationAuthorized = (c: any) => {
+  const expected = c.env.WHATSAPP_AUTOMATION_SECRET?.trim() ?? "";
+  const provided = c.req.header("x-whatsapp-automation-secret") ?? "";
+  if (!expected || expected.length !== provided.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ provided.charCodeAt(i);
+  return diff === 0;
+};
+const whatsappCampaignCounts = async (env: Bindings, campaignId: string, agencyId: number) => {
+  const rows = await (await whatsappMarketingDb(env, `whatsapp_marketing_recipients?select=delivery_status&campaign_id=eq.${campaignId}&agency_id=eq.${agencyId}`)).json() as Array<{ delivery_status: string }>;
+  const campaignRows = await (await whatsappMarketingDb(env, `whatsapp_marketing_campaigns?select=campaign_status&id=eq.${campaignId}&agency_id=eq.${agencyId}&limit=1`)).json() as Array<{ campaign_status: string }>;
+  const sent = rows.filter(r => ["sent", "delivered", "read"].includes(r.delivery_status)).length;
+  const failed = rows.filter(r => r.delivery_status === "failed").length;
+  const pending = rows.filter(r => ["pending", "queued", "sending"].includes(r.delivery_status)).length;
+  const currentStatus = campaignRows[0]?.campaign_status ?? "sending";
+  const campaign_status = ["paused", "cancelled"].includes(currentStatus) ? currentStatus : pending === 0 ? "completed" : "sending";
+  await whatsappMarketingDb(env, `whatsapp_marketing_campaigns?id=eq.${campaignId}&agency_id=eq.${agencyId}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ sent_count: sent, failed_count: failed, pending_count: pending, campaign_status, ...(pending === 0 ? { completed_at: now() } : {}), updated_at: now() }) });
+  return { sent_count: sent, failed_count: failed, pending_count: pending, campaign_status };
+};
+
+app.get("/api/whatsapp-broadcast/status", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const [contacts, campaigns, settings] = await Promise.all([
+    whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id&agency_id=eq.${admin.agencyId}`),
+    whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?select=id&agency_id=eq.${admin.agencyId}`),
+    whatsappMarketingDb(c.env, `whatsapp_marketing_settings?select=ai_auto_reply_enabled&agency_id=eq.${admin.agencyId}`),
+  ]);
+  return c.json({ configured: true, makeConfigured: Boolean(c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim()), automationSecretConfigured: Boolean(c.env.WHATSAPP_AUTOMATION_SECRET?.trim()), totalContacts: (await contacts.json() as unknown[]).length, totalCampaigns: (await campaigns.json() as unknown[]).length, aiAutoReplyEnabled: ((await settings.json() as Array<{ ai_auto_reply_enabled: boolean }>)[0]?.ai_auto_reply_enabled ?? false) });
+}));
+
+app.get("/api/whatsapp-broadcast/contacts", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=*&agency_id=eq.${admin.agencyId}&order=created_at.desc&limit=1000`)).json();
+  return c.json({ contacts: rows });
+}));
+
+app.post("/api/whatsapp-broadcast/contacts", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<any>(c.req.raw);
+  const incoming = Array.isArray(body?.contacts) ? body.contacts : [body];
+  if (!incoming.length || incoming.length > 1000) return c.json({ error: "Provide 1–1,000 contacts." }, 400);
+  const rows = incoming.map((item: any) => {
+    const phone_number = whatsappPhone(item.phone_number ?? item.phone);
+    const consent_status = item.consent_status === "subscribed" || item.consent === "subscribed" ? "subscribed" : item.consent_status === "opted_out" || item.consent === "opted-out" ? "opted_out" : "not_consented";
+    const consent_source = String(item.consent_source ?? item.consentSource ?? "").trim().slice(0, 240);
+    if (consent_status === "subscribed" && consent_source.length < 5) return null;
+    if (!phone_number) return null;
+    return { agency_id: admin.agencyId, full_name: String(item.full_name ?? item.name ?? "").trim().slice(0, 120), phone_number, email: String(item.email ?? "").trim().slice(0, 240), company: String(item.company ?? "").trim().slice(0, 160), tags: Array.isArray(item.tags) ? item.tags.map(String).slice(0, 30) : [], consent_status, consent_source, consent_timestamp: consent_status === "subscribed" ? item.consent_timestamp ?? item.consentTimestamp ?? now() : null, opted_out_at: consent_status === "opted_out" ? now() : null, updated_at: now() };
+  }).filter(Boolean);
+  if (rows.length !== incoming.length) return c.json({ error: "Every phone must be valid and every subscribed contact must include a consent source of at least five characters." }, 400);
+  const saved = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_contacts?on_conflict=agency_id,phone_number", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(rows) })).json();
+  return c.json({ contacts: saved }, 200);
+}));
+
+app.patch("/api/whatsapp-broadcast/contacts/:id", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<any>(c.req.raw);
+  const patch: Record<string, unknown> = { updated_at: now() };
+  for (const field of ["full_name", "email", "company", "tags"] as const) if (field in (body ?? {})) patch[field] = body[field];
+  if (body?.phone_number) { const phone = whatsappPhone(body.phone_number); if (!phone) return c.json({ error: "Enter a valid international phone number." }, 400); patch.phone_number = phone; }
+  if (body?.consent_status === "subscribed") {
+    const source = String(body.consent_source ?? "").trim();
+    if (source.length < 5) return c.json({ error: "A consent source is required to record opt-in." }, 400);
+    patch.consent_status = "subscribed"; patch.consent_source = source; patch.consent_timestamp = body.consent_timestamp ?? now(); patch.opted_out_at = null;
+  } else if (body?.consent_status === "opted_out") { patch.consent_status = "opted_out"; patch.opted_out_at = now(); }
+  else if (body?.consent_status === "not_consented") { patch.consent_status = "not_consented"; patch.opted_out_at = null; }
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?id=eq.${c.req.param("id")}&agency_id=eq.${admin.agencyId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) })).json() as unknown[];
+  return rows.length ? c.json({ contact: rows[0] }) : c.json({ error: "Contact not found." }, 404);
+}));
+app.delete("/api/whatsapp-broadcast/contacts/:id", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?id=eq.${c.req.param("id")}&agency_id=eq.${admin.agencyId}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+  return c.json({ deleted: true });
+}));
+
+app.get("/api/whatsapp-broadcast/campaigns", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?select=*&agency_id=eq.${admin.agencyId}&order=created_at.desc&limit=250`)).json();
+  return c.json({ campaigns: rows });
+}));
+app.post("/api/whatsapp-broadcast/campaigns", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<any>(c.req.raw);
+  const name = String(body?.campaign_name ?? "").trim().slice(0, 160), message = String(body?.message_content ?? "").trim();
+  if (!name || !message || message.length > 4096) return c.json({ error: "Campaign name and a message of 1–4,096 characters are required." }, 400);
+  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,full_name,phone_number,company,consent_status,opted_out_at&agency_id=eq.${admin.agencyId}&consent_status=eq.subscribed&opted_out_at=is.null&limit=2000`)).json() as Array<Record<string, any>>;
+  const requested = Array.isArray(body.contact_ids) && body.contact_ids.length ? new Set(body.contact_ids.map(String)) : null;
+  const eligible = contacts.filter(contact => !requested || requested.has(String(contact.id)));
+  if (requested && eligible.length !== requested.size) return c.json({ error: "Some selected contacts are not actively opted in." }, 409);
+  if (body.launch && !eligible.length) return c.json({ error: "No actively opted-in recipients are available." }, 409);
+  const status = body.launch ? "queued" : "draft";
+  const campaignRows = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_campaigns", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ agency_id: admin.agencyId, campaign_name: name, description: String(body.description ?? "").slice(0, 1000), message_content: message, campaign_status: status, total_recipients: body.launch ? eligible.length : 0, pending_count: body.launch ? eligible.length : 0, created_by: String((c.get("agencyAdmin") as AgencyAdminRecord).email ?? "") }) })).json() as Array<Record<string, any>>;
+  const campaign = campaignRows[0];
+  if (!campaign) return c.json({ error: "Could not save the campaign." }, 502);
+  if (body.launch && eligible.length) {
+    const recipients = eligible.map(contact => ({ campaign_id: campaign.id, agency_id: admin.agencyId, contact_id: contact.id, phone_number: contact.phone_number, personalized_message: whatsappTemplate(message, contact), delivery_status: "pending" }));
+    const savedRecipients = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_recipients", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(recipients) })).json() as Array<Record<string, any>>;
+    if (status === "queued") {
+      const hook = c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim();
+      if (!hook || !/^https:\/\/[^/]*\.make\.com\//i.test(hook)) return c.json({ campaign, warning: "Campaign saved as queued. Configure the Make webhook before delivery." }, 201);
+      const hookResponse = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "whatsapp_broadcast", campaignId: campaign.id, agencyId: admin.agencyId, recipients: savedRecipients.map(row => { const contact = eligible.find(item => item.id === row.contact_id); return { recipientId: row.id, contactId: row.contact_id, name: contact?.full_name ?? "", phone: row.phone_number, company: contact?.company ?? "", message: row.personalized_message }; }) }), signal: AbortSignal.timeout(12_000) });
+      if (!hookResponse.ok) return c.json({ campaign, warning: "Campaign is saved but Make did not accept the dispatch." }, 502);
+      await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?id=eq.${campaign.id}&agency_id=eq.${admin.agencyId}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ campaign_status: "sending", started_at: now(), dispatched_at: now(), dispatch_key: crypto.randomUUID(), updated_at: now() }) });
+      campaign.campaign_status = "sending";
+    }
+  }
+  return c.json({ campaign }, 201);
+}));
+app.patch("/api/whatsapp-broadcast/campaigns/:id", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<any>(c.req.raw), status = String(body?.campaign_status ?? "");
+  if (!["paused", "sending", "cancelled"].includes(status)) return c.json({ error: "Unsupported campaign transition." }, 400);
+  const result = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?id=eq.${c.req.param("id")}&agency_id=eq.${admin.agencyId}&campaign_status=in.(sending,paused,queued)`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ campaign_status: status, updated_at: now(), ...(status === "sending" ? { started_at: now() } : {}) }) })).json() as unknown[];
+  return result.length ? c.json({ campaign: result[0] }) : c.json({ error: "Campaign not found or already finished." }, 409);
+}));
+app.post("/api/whatsapp-broadcast/campaigns/:id/retry-failed", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const campaignRows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?select=id,campaign_name,message_content,campaign_status&agency_id=eq.${admin.agencyId}&id=eq.${c.req.param("id")}&limit=1`)).json() as Array<Record<string, any>>;
+  const campaign = campaignRows[0];
+  if (!campaign || campaign.campaign_status === "cancelled") return c.json({ error: "This campaign is not eligible for retries." }, 409);
+  const failedRows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?select=id,contact_id,phone_number,personalized_message,contact:whatsapp_marketing_contacts(full_name,company,consent_status,opted_out_at)&agency_id=eq.${admin.agencyId}&campaign_id=eq.${campaign.id}&delivery_status=eq.failed&limit=1000`)).json() as Array<any>;
+  const eligible = failedRows.filter(row => row.contact?.consent_status === "subscribed" && !row.contact?.opted_out_at);
+  if (!eligible.length) return c.json({ retried: 0, warning: "No failed recipients still have active consent." });
+  const hook = c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim();
+  if (!hook || !/^https:\/\/[^/]*\.make\.com\//i.test(hook)) return c.json({ error: "Configure the Make sender webhook before retrying failed messages." }, 503);
+  for (const row of eligible) await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?id=eq.${row.id}&delivery_status=eq.failed`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ delivery_status: "pending", attempt_count: 0, last_error: "", updated_at: now() }) });
+  await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?id=eq.${campaign.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ campaign_status: "queued", completed_at: null, updated_at: now() }) });
+  const response = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "whatsapp_broadcast", campaignId: campaign.id, agencyId: admin.agencyId, recipients: eligible.map(row => ({ recipientId: row.id, contactId: row.contact_id, name: row.contact.full_name, company: row.contact.company, phone: row.phone_number, message: row.personalized_message })) }), signal: AbortSignal.timeout(12_000) });
+  return response.ok ? c.json({ retried: eligible.length }) : c.json({ error: "Make did not accept failed-message retries." }, 502);
+}));
+app.post("/api/whatsapp-broadcast/campaigns/:id/test", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord, body = await parseBody<any>(c.req.raw);
+  const contactId = String(body?.contact_id ?? ""), text = String(body?.message ?? "").trim();
+  if (!contactId || !text || text.length > 4096) return c.json({ error: "Choose a test contact and provide a message." }, 400);
+  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,phone_number,consent_status,opted_out_at&agency_id=eq.${admin.agencyId}&id=eq.${contactId}&limit=1`)).json() as Array<Record<string, any>>;
+  const contact = contacts[0];
+  if (!contact || contact.consent_status !== "subscribed" || contact.opted_out_at) return c.json({ error: "Test messages require an actively opted-in contact." }, 409);
+  const hook = c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim();
+  if (!hook || !/^https:\/\/[^/]*\.make\.com\//i.test(hook)) return c.json({ error: "Configure the WhatsApp Make sender webhook first." }, 503);
+  const sent = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "whatsapp_test_message", agencyId: admin.agencyId, contactId: contact.id, phone: contact.phone_number, message: text }), signal: AbortSignal.timeout(12_000) });
+  return sent.ok ? c.json({ accepted: true }) : c.json({ error: "Make did not accept the test message." }, 502);
+}));
+app.get("/api/whatsapp-broadcast/messages", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  return c.json({ messages: await (await whatsappMarketingDb(c.env, `whatsapp_marketing_message_logs?select=*,contact:whatsapp_marketing_contacts(full_name)&agency_id=eq.${admin.agencyId}&order=created_at.desc&limit=200`)).json() });
+}));
+app.get("/api/whatsapp-broadcast/automation/inbox", safeApi(async (c) => {
+  if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation request." }, 401);
+  const phone = whatsappPhone(c.req.query("phone"));
+  if (!phone) return c.json({ messages: [] });
+  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,agency_id&phone_number=eq.${encodeURIComponent(phone)}&limit=1`)).json() as Array<Record<string, any>>;
+  const contact = contacts[0];
+  if (!contact) return c.json({ messages: [] });
+  const messages = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_message_logs?select=direction,message_content,created_at&agency_id=eq.${contact.agency_id}&contact_id=eq.${contact.id}&order=created_at.desc&limit=12`)).json();
+  return c.json({ messages });
+}));
+app.get("/api/whatsapp-broadcast/campaigns/:id/recipients", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?select=id,phone_number,delivery_status,attempt_count,last_error,sent_at,contact:whatsapp_marketing_contacts(full_name)&campaign_id=eq.${c.req.param("id")}&agency_id=eq.${admin.agencyId}&order=created_at.asc&limit=1000`)).json();
+  return c.json({ recipients: rows });
+}));
+app.get("/api/whatsapp-broadcast/settings", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_settings?select=*&agency_id=eq.${admin.agencyId}`)).json() as unknown[];
+  return c.json({ settings: rows[0] ?? { agency_id: admin.agencyId, ai_auto_reply_enabled: false, ai_reply_instructions: "" } });
+}));
+app.patch("/api/whatsapp-broadcast/settings", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord, body = await parseBody<any>(c.req.raw);
+  const row = { agency_id: admin.agencyId, ai_auto_reply_enabled: body?.ai_auto_reply_enabled === true, ai_reply_instructions: String(body?.ai_reply_instructions ?? "").slice(0, 2000), updated_at: now() };
+  return c.json({ settings: (await (await whatsappMarketingDb(c.env, "whatsapp_marketing_settings?on_conflict=agency_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(row) })).json() as unknown[])[0] });
+}));
+
+// Make callback routes. A separate shared secret is required; never expose the
+// Supabase service-role key or WAHA API key in a scenario payload.
+app.post("/api/whatsapp-broadcast/automation/delivery-result", safeApi(async (c) => {
+  if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation callback." }, 401);
+  const body = await parseBody<any>(c.req.raw);
+  if (!body?.recipientId || !body?.campaignId || !["sent", "delivered", "read", "failed"].includes(body?.status)) return c.json({ error: "Invalid delivery result." }, 400);
+  const recipientRows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?select=*&id=eq.${body.recipientId}&campaign_id=eq.${body.campaignId}`)).json() as Array<Record<string, any>>;
+  const recipient = recipientRows[0];
+  if (!recipient) return c.json({ error: "Recipient not found." }, 404);
+  if (["sent", "delivered", "read"].includes(recipient.delivery_status)) return c.json({ accepted: true, duplicate: true });
+  const next = body.status;
+  await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?id=eq.${recipient.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ delivery_status: next, last_error: next === "failed" ? String(body.error ?? "Delivery failed").slice(0, 500) : "", waha_message_id: body.wahaMessageId || null, sent_at: next === "failed" ? null : now(), updated_at: now() }) });
+  await whatsappMarketingDb(c.env, "whatsapp_marketing_message_logs", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ agency_id: recipient.agency_id, campaign_id: recipient.campaign_id, contact_id: recipient.contact_id, phone_number: recipient.phone_number, direction: "outgoing", message_content: recipient.personalized_message, message_status: next, waha_message_id: body.wahaMessageId || null, error_message: body.error ?? "" }) });
+  await whatsappCampaignCounts(c.env, recipient.campaign_id, recipient.agency_id);
+  return c.json({ accepted: true });
+}));
+
+app.post("/api/whatsapp-broadcast/automation/incoming", safeApi(async (c) => {
+  if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized WAHA event." }, 401);
+  const body = await parseBody<any>(c.req.raw), event = body?.payload ?? body;
+  if (String(body?.event ?? "") === "message.ack") {
+    const ack = Number(event?.ack), status = ack >= 3 ? "read" : ack === 2 ? "delivered" : ack === 1 ? "sent" : ack === -1 ? "failed" : "";
+    const messageId = String(event?.id ?? "").trim();
+    if (!status || !messageId || event?.fromMe !== true) return c.json({ accepted: true, ignored: true });
+    const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?select=id,campaign_id,agency_id,delivery_status&waha_message_id=eq.${encodeURIComponent(messageId)}&limit=1`)).json() as Array<Record<string, any>>;
+    const recipient = rows[0];
+    if (!recipient || ["failed", "skipped"].includes(recipient.delivery_status)) return c.json({ accepted: true, matched: false });
+    if (["sent", "delivered", "read"].includes(recipient.delivery_status) && status === "sent") return c.json({ accepted: true, duplicate: true });
+    await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?id=eq.${recipient.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ delivery_status: status, updated_at: now(), ...(status === "failed" ? { last_error: "WAHA reported message acknowledgment error" } : {}) }) });
+    await whatsappMarketingDb(c.env, `whatsapp_marketing_message_logs?waha_message_id=eq.${encodeURIComponent(messageId)}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ message_status: status }) });
+    await whatsappCampaignCounts(c.env, recipient.campaign_id, recipient.agency_id);
+    return c.json({ accepted: true, status });
+  }
+  const messageId = String(event?.id ?? event?.key?.id ?? "").trim();
+  const rawFrom = String(event?.from ?? event?.chatId ?? event?.fromNumber ?? "").trim();
+  const alternateFrom = event?.fromAlt ?? event?.remoteJidAlt ?? event?._data?.key?.remoteJidAlt ?? event?._data?.Info?.SenderAlt ?? "";
+  let phone = whatsappPhoneFromJid(alternateFrom) || whatsappPhoneFromJid(rawFrom);
+  const text = String(event?.body ?? event?.text ?? event?.message?.text ?? "").trim().slice(0, 4000);
+  if (!messageId || !text || event?.fromMe === true || event?.from_me === true) return c.json({ accepted: true, ignored: true });
+  if (!phone && /@lid$/i.test(rawFrom)) phone = await resolveWhatsAppLidPhone(c.env, String(body?.session ?? ""), rawFrom);
+  if (!phone) return c.json({ accepted: true, knownContact: false, autoReply: false, reason: /@lid$/i.test(rawFrom) ? "sender_lid_unresolved" : "sender_phone_unavailable" });
+  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,full_name,consent_status,agency_id&phone_number=eq.${encodeURIComponent(phone)}&limit=1`)).json() as Array<Record<string, any>>;
+  const contact = contacts[0];
+  const inserted = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_message_logs?on_conflict=waha_message_id", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify({ agency_id: Number(contact?.agency_id ?? 1), contact_id: contact?.id ?? null, phone_number: phone, direction: "incoming", message_content: text, message_status: "received", waha_message_id: messageId }) })).json() as unknown[];
+  if (!inserted.length) return c.json({ accepted: true, duplicate: true });
+  if (!contact) return c.json({ accepted: true, knownContact: false, autoReply: false, reason: "contact_not_found" });
+  const optOut = /\b(stop|unsubscribe|cancel|opt\s*out|optout)\b/i.test(text);
+  if (optOut) {
+    await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?id=eq.${contact.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ consent_status: "opted_out", opted_out_at: now(), updated_at: now() }) });
+    return c.json({ accepted: true, optedOut: true, autoReply: false, contactId: contact.id });
+  }
+  const settings = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_settings?select=ai_auto_reply_enabled,ai_reply_instructions&agency_id=eq.${contact.agency_id}`)).json() as Array<{ ai_auto_reply_enabled: boolean; ai_reply_instructions: string }>;
+  const autoReply = settings[0]?.ai_auto_reply_enabled === true;
+  let knowledge: Array<{ title: string; category: string; content: string; sourceKey: string }> = [];
+  if (autoReply) {
+    const config = knowledgeConfig(c);
+    if (config) {
+      try { knowledge = await retrieveAgencyKnowledge(config, Number(contact.agency_id), text, c.env.AI); }
+      catch (error) { console.error("WhatsApp auto-reply knowledge retrieval failed", errMsg(error)); }
+    }
+  }
+  const profileFacts = [
+    "OFFICIAL WEBSITE: https://rinzinagency.com",
+    "DIRECT APPLICATION PAGE: https://rinzinagency.com/apply-as-maid",
+  ];
+  try {
+    const profile = (await loadData(c.env, { readOnly: true })).companyProfile;
+    if (profile?.company_name || profile?.short_name) profileFacts.push(`AGENCY NAME: ${profile.company_name || profile.short_name}`);
+    if (profile?.about_us?.trim()) profileFacts.push(`AGENCY PROFILE: ${profile.about_us.trim().slice(0, 1200)}`);
+    const contact = [profile?.contact_person, profile?.contact_phone, profile?.contact_email].filter((value) => typeof value === "string" && value.trim());
+    if (contact.length) profileFacts.push(`PUBLIC AGENCY CONTACT (from the current agency profile): ${contact.join(" | ")}`);
+    if (profile?.office_hours_regular?.trim()) profileFacts.push(`OFFICE HOURS: ${profile.office_hours_regular.trim()}`);
+    if (profile?.contact_website?.trim()) profileFacts.push(`AGENCY PROFILE WEBSITE: ${profile.contact_website.trim()}`);
+  } catch (error) { console.error("WhatsApp auto-reply could not load the current agency profile", errMsg(error)); }
+  const knowledgeContext = [profileFacts.join("\n"), ...knowledge.map((item) => `[${item.category}] ${item.title}\n${item.content}`)].join("\n\n").slice(0, 7000);
+  return c.json({ accepted: true, optedOut: false, knownContact: true, autoReplyEnabled: autoReply, autoReply, contactId: contact.id, contactName: contact.full_name, phone, inboundText: text, instructions: settings[0]?.ai_reply_instructions ?? "", knowledgeContext, knowledgeSources: knowledge.map(({ title, sourceKey }) => ({ title, sourceKey })) });
+}));
+app.post("/api/whatsapp-broadcast/automation/auto-reply-result", safeApi(async (c) => {
+  if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation callback." }, 401);
+  const body = await parseBody<any>(c.req.raw), phone = whatsappPhone(body?.phone), reply = String(body?.reply ?? "").trim().slice(0, 2000), messageId = String(body?.wahaMessageId ?? "");
+  if (!phone || !reply || !messageId) return c.json({ error: "Phone, reply, and WAHA message ID are required." }, 400);
+  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,agency_id,consent_status&phone_number=eq.${encodeURIComponent(phone)}&limit=1`)).json() as Array<Record<string, any>>;
+  if (!contacts[0]) return c.json({ error: "Contact not found." }, 404);
+  const inserted = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_message_logs?on_conflict=waha_message_id", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify({ agency_id: contacts[0].agency_id, contact_id: contacts[0].id, phone_number: phone, direction: "outgoing", message_content: reply, message_status: "sent", waha_message_id: messageId }) })).json() as unknown[];
+  return c.json({ accepted: true, duplicate: !inserted.length });
+}));
+
+app.post("/api/whatsapp-broadcast/automation/authorize-test", safeApi(async (c) => {
+  if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation request." }, 401);
+  const body = await parseBody<any>(c.req.raw), phone = whatsappPhone(body?.phone), contactId = String(body?.contactId ?? "");
+  if (!phone || !contactId) return c.json({ canSend: false });
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,phone_number,consent_status,opted_out_at&agency_id=eq.${Number(body.agencyId)}&id=eq.${contactId}&limit=1`)).json() as Array<Record<string, any>>;
+  const contact = rows[0];
+  return c.json({ canSend: Boolean(contact && contact.phone_number === phone && contact.consent_status === "subscribed" && !contact.opted_out_at) });
+}));
+
+app.get("/api/whatsapp-broadcast/automation/campaign-status/:id", safeApi(async (c) => {
+  if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation request." }, 401);
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?select=id,campaign_status,agency_id&id=eq.${c.req.param("id")}&limit=1`)).json() as Array<Record<string, any>>;
+  return rows[0] ? c.json({ campaignId: rows[0].id, status: rows[0].campaign_status }) : c.json({ error: "Campaign not found." }, 404);
+}));
+app.get("/api/whatsapp-broadcast/automation/recipient-status/:id", safeApi(async (c) => {
+  if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation request." }, 401);
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?select=id,delivery_status,contact:whatsapp_marketing_contacts(consent_status,opted_out_at),campaign:whatsapp_marketing_campaigns(campaign_status)&id=eq.${c.req.param("id")}&limit=1`)).json() as Array<any>;
+  const row = rows[0];
+  if (!row) return c.json({ error: "Recipient not found." }, 404);
+  const canSend = ["pending", "failed"].includes(row.delivery_status) && row.contact?.consent_status === "subscribed" && !row.contact?.opted_out_at && ["queued", "sending"].includes(row.campaign?.campaign_status);
+  return c.json({ canSend, deliveryStatus: row.delivery_status, campaignStatus: row.campaign?.campaign_status ?? "unknown" });
+}));
+app.post("/api/whatsapp-broadcast/automation/claim/:id", safeApi(async (c) => {
+  if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation request." }, 401);
+  const rows = await (await whatsappMarketingDb(c.env, "rpc/claim_whatsapp_marketing_recipient", { method: "POST", body: JSON.stringify({ p_recipient_id: c.req.param("id") }) })).json() as Array<Record<string, any>>;
+  return c.json(rows[0] ? { claimed: true, phone: rows[0].phone_number, message: rows[0].personalized_message, campaignId: rows[0].campaign_id, recipientId: rows[0].id } : { claimed: false });
+}));
+
 
 app.get("/api/whatsapp-broadcast/status-legacy", requireAgencyAdminAuth, (c) =>
   c.json({

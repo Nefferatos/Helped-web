@@ -1,0 +1,89 @@
+{
+  "name": "Helped - WhatsApp AI Auto Reply",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": { "designer": { "x": 0, "y": 0 }, "restore": { "parameters": { "hook": { "data": { "editable": "true" }, "label": "WAHA incoming messages" } }, "notes": "Create a unique webhook. Configure the WAHA default session to send `message` and `message.ack` events to this URL. Treat the webhook URL as a secret." } }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLIB": true },
+      "mapper": {
+        "url": "https://YOUR-DEPLOYED-DOMAIN/api/whatsapp-broadcast/automation/incoming",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [{ "name": "Content-Type", "value": "application/json" }, { "name": "x-whatsapp-automation-secret", "value": "REPLACE_WITH_WHATSAPP_AUTOMATION_SECRET" }],
+        "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json",
+        "data": "{\n  \"event\": \"{{1.event}}\",\n  \"session\": \"{{1.session}}\",\n  \"payload\": {\n    \"id\": \"{{1.payload.id}}\",\n    \"from\": \"{{1.payload.from}}\",\n    \"fromMe\": {{ifempty(1.payload.fromMe; false)}},\n    \"body\": \"{{escapeJSON(1.payload.body)}}\",\n    \"ack\": \"{{ifempty(1.payload.ack; \"\")}}\"\n  }\n}"
+      },
+      "metadata": { "designer": { "x": 350, "y": 0 }, "restore": {}, "notes": "Worker deduplicates the WAHA message ID, stores the incoming message, immediately processes STOP/UNSUBSCRIBE/CANCEL/OPTOUT, and returns autoReply=true only for a known contact when AI replies are enabled." }
+    },
+    {
+      "id": 3,
+      "module": "ai-local-agent:RunLocalAIAgent",
+      "version": 0,
+      "filter": { "name": "Known contact and AI replies enabled", "conditions": [[{ "a": "{{2.data.autoReply}}", "o": "boolean:equal", "b": "true" }]] },
+      "parameters": {},
+      "mapper": {
+        "defaultModel": "gpt-4o-mini",
+        "reasoningEffort": "low",
+        "systemPrompt": "{{concat(2.data.instructions; \"\n\nSAFETY RULES: Reply only to the latest incoming message. Be concise, courteous, and factual as At The Agency. Do not send marketing or initiate a conversation. Do not request passwords, payment details, or sensitive personal data. Do not claim to have booked, sent, changed, or verified anything. If uncertain, say a team member will follow up. Return only the reply text.\")}}",
+        "message": "{{2.data.inboundText}}",
+        "threadId": "{{concat(\"whatsapp-\"; 2.data.phone)}}",
+        "modelConfig": { "recursionLimit": 4, "iterationsFromHistoryCount": "0" },
+        "outputType": "text"
+      },
+      "metadata": { "designer": { "x": 650, "y": 0 }, "restore": {}, "notes": "Select a Make AI Provider connection and a low-cost fast model. AI is opt-in per workspace from Dashboard > Settings > AI auto-reply." },
+      "tools": []
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLIB": true },
+      "mapper": {
+        "url": "https://YOUR-WAHA-HOST/api/sendText",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [{ "name": "X-Api-Key", "value": "REPLACE_WITH_WAHA_API_KEY" }],
+        "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json",
+        "data": "{\n  \"session\": \"default\",\n  \"chatId\": \"{{replace(2.data.phone; \"+\"; \"\")}}@c.us\",\n  \"text\": \"{{escapeJSON(3.response)}}\"\n}"
+      },
+      "metadata": { "designer": { "x": 950, "y": 0 }, "restore": {}, "notes": "Send only after the Worker confirms this is not an opt-out and AI auto-reply is enabled. Keep the WAHA endpoint private behind an authenticated HTTPS tunnel." }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLIB": true },
+      "mapper": {
+        "url": "https://YOUR-DEPLOYED-DOMAIN/api/whatsapp-broadcast/automation/auto-reply-result",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [{ "name": "Content-Type", "value": "application/json" }, { "name": "x-whatsapp-automation-secret", "value": "REPLACE_WITH_WHATSAPP_AUTOMATION_SECRET" }],
+        "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json",
+        "data": "{\n  \"phone\": \"{{2.data.phone}}\",\n  \"reply\": \"{{escapeJSON(3.response)}}\",\n  \"wahaMessageId\": \"{{4.data.id}}\"\n}"
+      },
+      "metadata": { "designer": { "x": 1260, "y": 0 }, "restore": {}, "notes": "Persist the reply in the incoming message inbox. WAHA HTTP acceptance is not a delivery or read receipt." }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": true, "slots": null, "confidential": true, "dataloss": false, "dlq": false, "freshVariables": false },
+    "designer": { "orphans": [] },
+    "zone": "eu1.make.com",
+    "notes": [
+      "After import create a Custom Webhook, configure WAHA's default session `message` webhook event to target it, then replace YOUR-DEPLOYED-DOMAIN, YOUR-WAHA-HOST, WAHA_API_KEY, and WHATSAPP_AUTOMATION_SECRET values in the HTTP modules. Keep the WAHA API key and automation secret in protected Make connections/secret fields.",
+      "Incoming event payloads are normalized by the Worker. It stores a message once, suppresses STOP, UNSUBSCRIBE, CANCEL, and OPTOUT immediately, and returns no AI permission for unknown contacts or when the workspace toggle is off.",
+      "Make receives no API authorization to send arbitrary messages: it sends one generated response only after a Worker-approved, non-opt-out incoming message. Never add promotional campaigns to this flow.",
+      "Configure WAHA with API-key authentication and use an HTTPS tunnel or cloud-hosted API reachable from Make. The Windows localhost address is not reachable from Make. WAHA is unofficial and carries account restriction risk; prefer the official WhatsApp Business Platform for production."
+    ]
+  }
+}

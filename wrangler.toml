@@ -86,6 +86,15 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 #   npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET
 # When unset, the receptionist falls back to the existing Cline/OpenAI/CF-AI pipeline.
 
+# WhatsApp Make automation. Incoming WAHA events may identify senders with a
+# WhatsApp LID instead of a phone number. The Worker resolves that LID through
+# WAHA so it can match the sender to a subscribed contact. Set these as secrets:
+#   npx wrangler secret put WAHA_API_URL   (public WAHA base URL, no /api/... path)
+#   npx wrangler secret put WAHA_API_KEY
+# Also configure the existing automation secrets:
+#   npx wrangler secret put WHATSAPP_AUTOMATION_SECRET
+#   npx wrangler secret put MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL
+
 # Maid Referral chatbot — create a Make custom webhook, then add Google Sheets
 # > Add a Row to store the maid_referral payload. Keep the URL in a Worker secret:
 #   npx wrangler secret put MAKE_WEBHOOK_URL_MAID_REFERRAL

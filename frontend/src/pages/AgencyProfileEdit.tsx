@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { PhoneNumberInput } from "@/components/ui/phone-input";
 import { toast } from "@/components/ui/sonner";
 import { adminPath } from "@/lib/routes";
+import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 
 interface CompanyProfileApi {
   id?: number;
@@ -386,7 +387,7 @@ const AgencyProfileEdit = () => {
       setIsSavingProfile(true);
       const response = await fetch("/api/company", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify(toProfilePayload(formData)),
       });
 
@@ -417,7 +418,7 @@ const AgencyProfileEdit = () => {
         person.isNew ? "/api/company/mom-personnel" : `/api/company/mom-personnel/${person.id}`,
         {
           method: person.isNew ? "POST" : "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
           body: JSON.stringify({
             name: person.name,
             registration_number: person.registrationNumber,
@@ -456,6 +457,7 @@ const AgencyProfileEdit = () => {
       setBusyPersonnelId(person.localId);
       const response = await fetch(`/api/company/mom-personnel/${person.id}`, {
         method: "DELETE",
+        headers: { ...getAgencyAdminAuthHeaders() },
       });
 
       if (!response.ok) {
@@ -481,7 +483,7 @@ const AgencyProfileEdit = () => {
       setIsAddingTestimonial(true);
       const response = await fetch("/api/company/testimonials", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
         body: JSON.stringify(newTestimonial),
       });
 
@@ -505,6 +507,7 @@ const AgencyProfileEdit = () => {
       setBusyTestimonialId(testimonialId);
       const response = await fetch(`/api/company/testimonials/${testimonialId}`, {
         method: "DELETE",
+        headers: { ...getAgencyAdminAuthHeaders() },
       });
 
       if (!response.ok) {

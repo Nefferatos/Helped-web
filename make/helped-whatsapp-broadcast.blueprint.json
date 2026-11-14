@@ -1,0 +1,132 @@
+{
+  "name": "Helped - WhatsApp Broadcast Sender",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": 0, "maxResults": 1 },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": { "parameters": { "hook": { "data": { "editable": "true" }, "label": "Helped WhatsApp Broadcast Sender" } } },
+        "notes": "Create this webhook after import. Save its URL as the Worker secret MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL. The Worker sends only recipients whose documented consent is currently active."
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": { "designer": { "x": 300, "y": 0, "name": "Campaign or consenting test message" } },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 3,
+              "module": "builtin:BasicFeeder",
+              "version": 1,
+              "parameters": {},
+              "mapper": { "array": "{{1.recipients}}" },
+              "metadata": { "designer": { "x": 580, "y": -140 }, "restore": {}, "notes": "Run scenario sequentially. Recommended volume is low; add Tools > Sleep for 1–2 seconds after each WAHA call." },
+              "expect": [{ "name": "array", "type": "array", "label": "Server-validated campaign recipients", "spec": [
+                { "name": "recipientId", "type": "text", "label": "Database recipient ID" },
+                { "name": "phone", "type": "text", "label": "International E.164 phone" },
+                { "name": "message", "type": "text", "label": "Personalized text" }
+              ] }]
+            },
+            {
+              "id": 4,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": true, "useNewZLIB": true },
+              "mapper": {
+                "url": "https://YOUR-DEPLOYED-DOMAIN/api/whatsapp-broadcast/automation/claim/{{3.recipientId}}",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [{ "name": "x-whatsapp-automation-secret", "value": "REPLACE_WITH_WHATSAPP_AUTOMATION_SECRET" }],
+                "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json", "data": ""
+              },
+              "metadata": { "designer": { "x": 850, "y": -140 }, "restore": {}, "notes": "Atomically claim this one pending recipient. The database rejects claims after opt-out, pause/cancel, duplicate successful send, or three attempts." }
+            },
+            {
+              "id": 5,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "filter": { "name": "Recipient claimed", "conditions": [[{ "a": "{{4.data.claimed}}", "o": "boolean:equal", "b": "true" }]] },
+              "parameters": { "handleErrors": true, "useNewZLIB": true },
+              "mapper": {
+                "url": "https://YOUR-WAHA-HOST/api/sendText",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [{ "name": "X-Api-Key", "value": "REPLACE_WITH_WAHA_API_KEY" }],
+                "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json",
+                "data": "{\n  \"session\": \"default\",\n  \"chatId\": \"{{replace(4.data.phone; \"+\"; \"\")}}@c.us\",\n  \"text\": \"{{escapeJSON(4.data.message)}}\"\n}"
+              },
+              "metadata": { "designer": { "x": 1130, "y": -140 }, "restore": {}, "notes": "Use an authenticated HTTPS WAHA endpoint reachable from Make. Localhost is not reachable from Make. WAHA API: POST /api/sendText; HTTP acceptance means sent/queued, not delivered or read." }
+            },
+            {
+              "id": 6,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": true, "useNewZLIB": true },
+              "mapper": {
+                "url": "https://YOUR-DEPLOYED-DOMAIN/api/whatsapp-broadcast/automation/delivery-result",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [{ "name": "Content-Type", "value": "application/json" }, { "name": "x-whatsapp-automation-secret", "value": "REPLACE_WITH_WHATSAPP_AUTOMATION_SECRET" }],
+                "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json",
+                "data": "{\n  \"recipientId\": \"{{4.data.recipientId}}\",\n  \"campaignId\": \"{{4.data.campaignId}}\",\n  \"status\": \"sent\",\n  \"wahaMessageId\": \"{{5.data.id}}\"\n}"
+              },
+              "metadata": { "designer": { "x": 1420, "y": -140 }, "restore": {}, "notes": "Successful sends are idempotent. Never retry a recipient after a successful callback." }
+            }
+          ],
+          "filter": { "name": "Campaign dispatch", "conditions": [[{ "a": "{{1.scenario}}", "o": "text:equal", "b": "whatsapp_broadcast" }]] }
+        },
+        {
+          "flow": [
+            {
+              "id": 7,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": true, "useNewZLIB": true },
+              "mapper": {
+                "url": "https://YOUR-DEPLOYED-DOMAIN/api/whatsapp-broadcast/automation/authorize-test",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [{ "name": "Content-Type", "value": "application/json" }, { "name": "x-whatsapp-automation-secret", "value": "REPLACE_WITH_WHATSAPP_AUTOMATION_SECRET" }],
+                "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json",
+                "data": "{\n  \"agencyId\": \"{{1.agencyId}}\",\n  \"contactId\": \"{{1.contactId}}\",\n  \"phone\": \"{{1.phone}}\"\n}"
+              },
+              "metadata": { "designer": { "x": 580, "y": 160 }, "restore": {}, "notes": "Confirm current consent using the private callback before sending a test message." }
+            },
+            {
+              "id": 8,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "filter": { "name": "Test contact is still opted in", "conditions": [[{ "a": "{{7.data.canSend}}", "o": "boolean:equal", "b": "true" }]] },
+              "parameters": { "handleErrors": true, "useNewZLIB": true },
+              "mapper": { "url": "https://YOUR-WAHA-HOST/api/sendText", "serializeUrl": false, "method": "post", "headers": [{ "name": "X-Api-Key", "value": "REPLACE_WITH_WAHA_API_KEY" }], "qs": [], "bodyType": "raw", "parseResponse": true, "rejectUnauthorized": true, "followRedirect": true, "gzip": true, "contentType": "application/json", "data": "{\n  \"session\": \"default\",\n  \"chatId\": \"{{replace(1.phone; \"+\"; \"\")}}@c.us\",\n  \"text\": \"{{escapeJSON(1.message)}}\"\n}" },
+              "metadata": { "designer": { "x": 900, "y": 160 }, "restore": {}, "notes": "Send test message only after backend permission verification." }
+            }
+          ],
+          "filter": { "name": "Consenting test message", "conditions": [[{ "a": "{{1.scenario}}", "o": "text:equal", "b": "whatsapp_test_message" }]] }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true, "sequential": true, "slots": null, "confidential": true, "dataloss": false, "dlq": false, "freshVariables": false },
+    "designer": { "orphans": [] },
+    "zone": "eu1.make.com",
+    "notes": [
+      "After import create the custom webhook and set its URL as the Worker secret MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL. Set WHATSAPP_AUTOMATION_SECRET on the Worker and in the two callback header mappings in Make.",
+      "Configure WAHA with an API key and an authenticated HTTPS tunnel or secure cloud address; set the X-Api-Key mapping in Make. WAHA cannot be reached at Windows localhost from Make. The chat ID format is international digits plus @c.us, and the request uses session=default.",
+      "In Make settings set sequential processing ON. Add Tools > Sleep for 1–2 seconds after each recipient send to avoid simultaneous delivery and reduce account restrictions. Start with one opted-in test contact.",
+      "Add an error handler on WAHA HTTP failures that posts status=failed to delivery-result only for definitive errors. Do not automatically retry a timeout with unknown outcome. Configure retry cap to three and never replay success callbacks.",
+      "WAHA is an unofficial WhatsApp Web integration and may cause account restrictions. Prefer the official WhatsApp Business Platform for production."
+    ]
+  }
+}

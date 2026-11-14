@@ -415,7 +415,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
     event.preventDefault()
     try {
       await api('/api/knowledge/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(knowledge) })
-      setKnowledge({ sourceKey: '', title: '', category: 'SOP', content: '' }); setNotice('Knowledge document indexed for receptionist search.')
+      setKnowledge({ sourceKey: '', title: '', category: 'SOP', content: '' }); setNotice('Knowledge document indexed for AI search.')
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to index knowledge') }
   }
 
@@ -762,7 +762,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
         </> : null}
 
         {activeTab === 'knowledge' ? (
-          <Card icon={BookOpen} title="Knowledge library" description="What your receptionist can look up">
+          <Card icon={BookOpen} title="Knowledge library" description="Approved facts used by AI reception and WhatsApp replies">
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-black">
               <p className="font-semibold">How this guide works</p>
               <p className="mt-1">Add an approved procedure or FAQ, then select <strong>Index knowledge</strong> to make it searchable. Search below to check what was indexed. Loading an example only fills the form; it does not save or index anything.</p>
