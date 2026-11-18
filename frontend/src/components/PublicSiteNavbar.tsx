@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type FormEvent } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useLocation, NavLink } from "react-router-dom";
 import { X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,7 +14,6 @@ import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
 import { buildEmployerLoginPath } from "@/lib/clientNavigation";
 import { logoutClientPortal, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import { cn } from "@/lib/utils";
-import { RequestForm, defaultFilters, GLOBAL_CSS as REQUEST_FORM_CSS } from "@/ClientPage/ClientMaidsPage";
 
 /* ─── Scoped keyframes injected once ─────────────────────────────────────── */
 const STYLE_ID = "pubnavbar-styles";
@@ -142,20 +141,9 @@ const PublicSiteNavbar = () => {
     return () => { document.body.style.overflow = ""; };
   }, [isMobileMenuOpen]);
 
-  // Bring the user back to whatever page they were browsing (including any
-  // active search filters) after they log in. On non-returnable pages (home,
-  // the auth pages) getClientPostLoginPath falls back to the maids search page.
-  const loginPath = buildEmployerLoginPath(
-    `${location.pathname}${location.search}${location.hash}`
-  );
-  const showFloatingRequest = !location.pathname.startsWith("/search-maids")
-    && !location.pathname.startsWith("/client/")
-    && !location.pathname.startsWith("/agency")
-    && !location.pathname.startsWith("/apply-as-maid");
-  const [isRequestOpen, setIsRequestOpen] = useState(false);
-  const [requestStatus, setRequestStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-  const [requestForm, setRequestForm] = useState({ name: "", email: "", phone: "", notes: "" });
-  const submitRequest = async (event: FormEvent) => { event.preventDefault(); setRequestStatus("idle"); };
+  // Employer login always enters the employer portal. Public or agency pages
+  // should not become the post-login destination.
+  const loginPath = buildEmployerLoginPath();
   /* ── Login Button ── */
   const LoginButton = ({ full = false, onClick }: { full?: boolean; onClick?: () => void }) => (
     <Link
@@ -484,15 +472,6 @@ const PublicSiteNavbar = () => {
           </div>
         </>
       )}
-      {showFloatingRequest && <>
-        <button type="button" onClick={() => { setIsRequestOpen(true); setRequestStatus("idle"); }} className="fixed left-0 top-1/2 z-40 h-[118px] w-10 -translate-y-1/2 text-[11px] font-bold shadow-lg sm:h-[154px] sm:w-[52px] sm:text-[13px]" style={{ border: 0, borderRadius: "0 12px 12px 0", background: "#FCD34D", color: "#0B3340", writingMode: "vertical-rl", boxShadow: "0 10px 28px rgba(11,51,64,.28)" }}>Request Maid</button>
-        {isRequestOpen && <div className="request-modal-overlay" onMouseDown={() => setIsRequestOpen(false)}><div className="request-modal-shell" onMouseDown={(event) => event.stopPropagation()}><style>{`${REQUEST_FORM_CSS}
-          .request-modal-overlay{position:fixed;inset:0;z-index:100;background:rgba(8,25,32,.62);padding:clamp(8px,2.5vw,24px);overflow-y:auto;display:flex;align-items:flex-start;justify-content:center;backdrop-filter:blur(4px)}
-          .request-modal-shell{width:min(1080px,100%);margin:auto 0;overflow:visible;border-radius:20px;background:#f0f7f9;box-shadow:0 24px 80px rgba(0,0,0,.28)}
-          .request-modal-scale{zoom:1}
-          @media(max-width:640px){.request-modal-shell{margin:0}.request-modal-scale{zoom:1}}
-        `}</style><div className="request-modal-scale"><RequestForm prefillFilters={defaultFilters} onBack={() => setIsRequestOpen(false)} /></div></div></div>}
-      </>}
     </header>
   );
 };

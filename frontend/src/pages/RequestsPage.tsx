@@ -23,6 +23,8 @@ import {
   XCircle,
   ArrowUpRight,
   Clock,
+  MessageCircle,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +37,11 @@ import { readSafeJson } from "@/lib/safeJson";
 import {
   type RequestRecord,
   type RequestStatus,
+  type RequestMessageRecord,
   fetchRequests,
+  fetchRequestConversation,
+  fetchRequestMessages,
+  createRequestMessage,
   subscribeToRequestsChanged,
   requestStatusMeta,
   requestStateMessage,
@@ -250,6 +256,7 @@ const RequestsPageContent = () => {
   const [selectedMaidReferences, setSelectedMaidReferences] = useState<string[]>([]);
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
   const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
+  const [messageDraft, setMessageDraft] = useState("");
 
   const deferredSearch = useDeferredValue(search);
   const deferredMaidSearch = useDeferredValue(maidSearch);
@@ -289,6 +296,19 @@ const RequestsPageContent = () => {
       if (!response.ok || !data.maids) throw new Error(data.error || "Failed to load maids");
       return data.maids;
     },
+  });
+
+  const conversationQuery = useQuery({
+    queryKey: ["request-conversation", selectedRequest?.id],
+    enabled: sheetOpen && drawerMode === "details" && Boolean(selectedRequest?.id),
+    queryFn: () => fetchRequestConversation(selectedRequest!.id),
+    retry: false,
+  });
+  const messagesQuery = useQuery({
+    queryKey: ["request-messages", conversationQuery.data?.id],
+    enabled: Boolean(conversationQuery.data?.id),
+    queryFn: () => fetchRequestMessages(conversationQuery.data!.id),
+    refetchInterval: 4000,
   });
 
   const requests = requestsQuery.data?.data ?? [];
@@ -383,6 +403,24 @@ const RequestsPageContent = () => {
     },
   });
 
+  const messageMutation = useMutation({
+    mutationFn: async () => {
+      const conversationId = conversationQuery.data?.id;
+      const message = messageDraft.trim();
+      if (!conversationId) throw new Error("Request conversation is not available.");
+      if (!message) throw new Error("Message cannot be empty.");
+      return createRequestMessage({ conversationId, message });
+    },
+    onSuccess: (message) => {
+      queryClient.setQueryData<RequestMessageRecord[]>(
+        ["request-messages", message.conversationId],
+        (current = []) => [...current, message],
+      );
+      setMessageDraft("");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to send message"),
+  });
+
   const filteredMaids = useMemo(() => {
     const term = deferredMaidSearch.trim().toLowerCase();
     const items = maidOptionsQuery.data ?? [];
@@ -397,6 +435,7 @@ const RequestsPageContent = () => {
     setDrawerMode(mode);
     setSelectedMaidReferences(request.maidReferences);
     setMaidSearch("");
+    setMessageDraft("");
     setSheetOpen(true);
   };
 
@@ -699,6 +738,53 @@ const RequestsPageContent = () => {
                     )}
                   </div>
                 </div>
+                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Request conversation">
+                  <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+                    <MessageCircle className="h-4 w-4 text-violet-700" />
+                    <div>
+                      <p className="text-[12px] font-black uppercase tracking-widest text-slate-900">Employer conversation</p>
+                      <p className="text-xs text-slate-600">Messages appear in the employer’s My Requests page.</p>
+                    </div>
+                  </div>
+                  <div className="max-h-80 min-h-28 space-y-3 overflow-y-auto p-4">
+                    {conversationQuery.isLoading || messagesQuery.isLoading ? (
+                      <p className="py-5 text-center text-sm text-slate-500"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading conversation…</p>
+                    ) : conversationQuery.isError ? (
+                      <p className="py-5 text-center text-sm text-rose-700">Could not load this request’s conversation. Try closing and reopening the request.</p>
+                    ) : (messagesQuery.data ?? []).length === 0 ? (
+                      <p className="py-5 text-center text-sm text-slate-500">No messages yet. Send the employer an update to start the conversation.</p>
+                    ) : (messagesQuery.data ?? []).map((message) => {
+                      const fromEmployer = message.senderType === "client";
+                      const isSystem = message.senderType === "system";
+                      if (isSystem) return <p key={message.id} className="text-center text-xs text-slate-500">{message.message}</p>;
+                      return (
+                        <div key={message.id} className={cn("flex", fromEmployer ? "justify-start" : "justify-end")}>
+                          <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2.5", fromEmployer ? "rounded-tl-sm bg-slate-100 text-slate-900" : "rounded-tr-sm bg-violet-700 text-white")}>
+                            <p className={cn("mb-1 text-[10px] font-bold", fromEmployer ? "text-slate-500" : "text-violet-100")}>{fromEmployer ? "Employer" : message.senderType === "staff" ? "Agency staff" : "You · Agency"}</p>
+                            <p className="whitespace-pre-wrap text-sm leading-5">{message.message}</p>
+                            <p className={cn("mt-1 text-right text-[10px]", fromEmployer ? "text-slate-500" : "text-violet-200")}>{new Date(message.createdAt).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <form className="flex items-end gap-2 border-t border-slate-100 p-3" onSubmit={(event) => { event.preventDefault(); messageMutation.mutate(); }}>
+                    <Textarea
+                      value={messageDraft}
+                      onChange={(event) => setMessageDraft(event.target.value)}
+                      placeholder="Write an update to the employer…"
+                      aria-label="Message to employer"
+                      maxLength={5000}
+                      rows={2}
+                      className="min-h-10 resize-y rounded-xl"
+                      disabled={!conversationQuery.data?.id || messageMutation.isPending}
+                    />
+                    <Button type="submit" className="shrink-0 rounded-xl bg-violet-700 text-white hover:bg-violet-800" disabled={!messageDraft.trim() || !conversationQuery.data?.id || messageMutation.isPending}>
+                      {messageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      <span className="sr-only">Send message</span>
+                    </Button>
+                  </form>
+                </section>
                 {selectedRequest.maidReferences.length > 0 && <div className="rounded-xl border border-violet-200 bg-violet-50 p-4"><p className="text-sm font-bold text-violet-950">Interview selection</p><p className="mt-1 text-xs text-violet-900">Request shortlist: {selectedRequest.maidReferences.join(", ")}</p>{clientInterviewReferences.length > 0 ? <><p className="mt-1 text-xs font-semibold text-violet-950">Client selected: {clientInterviewReferences.join(", ")}</p><Button type="button" className="mt-3 bg-violet-700 text-white hover:bg-violet-800" onClick={() => { const params = new URLSearchParams({ references: clientInterviewReferences.join(","), requestId: selectedRequest.id }); setSheetOpen(false); navigate(`/agencyadmin/maid-interviews?${params.toString()}`); }}>Coordinate selected interviews</Button></> : <p className="mt-2 text-xs text-slate-700">Waiting for the client to choose one to five shortlist profiles for interview in their request portal.</p>}{typeof selectedRequest.details?.finalCandidateReference === "string" && <div className="mt-3 rounded-lg border border-emerald-200 bg-white p-3"><p className="text-xs font-semibold text-emerald-900">Client's preferred helper after interviews: {selectedRequest.details.finalCandidateReference}. Confirm the interview outcome and employer record before creating a placement.</p><Button type="button" variant="outline" className="mt-2 border-emerald-300 text-emerald-950" onClick={() => { const params = new URLSearchParams({ preferredCandidate: String(selectedRequest.details.finalCandidateReference), requestId: selectedRequest.id }); setSheetOpen(false); navigate(`/agencyadmin/operations-center?${params.toString()}`); }}>Review placement handoff</Button></div>}</div>}
 
               </div>

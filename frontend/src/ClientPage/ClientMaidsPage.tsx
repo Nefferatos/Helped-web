@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   ChevronDown,
@@ -1764,39 +1764,22 @@ const ClientMaidsPage = ({
 }: ClientMaidsPageProps) => {
   const navigate      = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const requestRef    = useRef<HTMLDivElement|null>(null);
   const initialDraft  = useMemo(()=>parseDraftFromSearchParams(searchParams)??defaultFilters,[searchParams]);
 
   const [draft,           setDraft]           = useState<Filters>(initialDraft);
   const [filtersOpen,     setFiltersOpen]     = useState(true);
-  const [requestOpen,     setRequestOpen]     = useState(searchParams.get("intent")==="request");
-  const [searchedFilters, setSearchedFilters] = useState<Filters>(initialDraft);
-  const [searchResults,   setSearchResults]   = useState<MaidProfile[]>([]);
-  const [isSearching,     setIsSearching]     = useState(false);
-  const [hasSearched,     setHasSearched]     = useState(false);
-  const [isLoggedIn,      setIsLoggedIn]      = useState(() => Boolean(getClientToken()));
-  const refreshedPhotosForSession = useRef(false);
   const isPublicSearchPage = resultsPath === "/search-maids/results";
 
-  // The navbar restores the employer profile asynchronously. Restore the token here
-  // as well so the first maid search is authenticated and receives original photos.
   useEffect(() => {
-    let active = true;
-    void refreshClientToken()
-      .then((token) => { if (active) setIsLoggedIn(Boolean(token)); })
-      .catch(() => { if (active) setIsLoggedIn(false); });
-    return () => { active = false; };
-  }, []);
+    if (searchParams.get("intent") !== "request") return;
+    const filters = searchParams.get("filters");
+    navigate(filters ? `/client/requests?filters=${encodeURIComponent(filters)}` : "/client/requests", { replace: true });
+  }, [navigate, searchParams]);
 
   useEffect(()=>{
     const next=parseDraftFromSearchParams(searchParams);
-    if(next){setDraft(next);setSearchedFilters(next);}
-    setRequestOpen(searchParams.get("intent")==="request");
+    if(next) setDraft(next);
   },[searchParams]);
-
-  useEffect(()=>{
-    if(requestOpen) requestRef.current?.scrollIntoView({behavior:"smooth",block:"start"});
-  },[requestOpen]);
 
   const activeFilterCount = useMemo(()=>{
     let c=0;
@@ -1852,52 +1835,15 @@ const ClientMaidsPage = ({
 
   const clearAllFilters = () => {
     setDraft(defaultFilters);
-    setSearchedFilters(defaultFilters);
-    setHasSearched(false);setSearchResults([]);
-    setSearchParams(new URLSearchParams([["filters",JSON.stringify(defaultFilters)], ...(requestOpen ? [["intent","request"] as [string,string]] : [])]),{replace:true});
+    setSearchParams(new URLSearchParams([["filters",JSON.stringify(defaultFilters)]]),{replace:true});
   };
 
-  const handleSearch = async()=>{
-    setRequestOpen(false);setSearchedFilters(draft);
-    setHasSearched(true);setIsSearching(true);
+  const handleSearch = ()=>{
     const params=buildSearchParamsFromFilters(draft);
     navigate(`${resultsPath}?${params.toString()}`);
-    try {
-      // Refresh before each search: the in-memory auth cache may be empty after a
-      // direct navigation or a page refresh even when the employer has a session.
-      const token = await refreshClientToken().catch(() => getClientToken());
-      setIsLoggedIn(Boolean(token));
-      const resp=await fetch(`/api/maids?${params.toString()}`,{
-        headers: token ? { Authorization:`Bearer ${token}` } : {},
-        cache: "no-store",
-      });
-      const data=await readSafeJson<{maids?:MaidProfile[];data?:MaidProfile[];error?:string}>(resp);
-      if(!resp.ok) throw new Error(data.error||"Search failed");
-      setSearchResults((data.maids ?? data.data ?? []).map(toSearchCardMaid));
-    } catch { toast.error("Failed to load profiles. Please try again."); setSearchResults([]); }
-    finally { setIsSearching(false); }
   };
 
-  // A guest result can remain on screen while the login callback is completing.
-  // Replace that response once per employer session with authenticated image URLs.
-  useEffect(() => {
-    if (!isLoggedIn) {
-      refreshedPhotosForSession.current = false;
-      return;
-    }
-    if (!hasSearched || refreshedPhotosForSession.current) return;
-    refreshedPhotosForSession.current = true;
-    void handleSearch();
-  }, [hasSearched, isLoggedIn]);
-
-  const handleViewProfile=(m:MaidProfile)=>{
-    const p=getPublicProfilePath(m);
-    if(!p){toast.error("Profile link is unavailable for this maid.");return;}
-    navigate(p);
-  };
-  const handleOpenRequest=()=>{setSearchedFilters(draft);setRequestOpen(true);const next=new URLSearchParams();next.set("filters",JSON.stringify(draft));next.set("intent","request");setSearchParams(next,{replace:true});};
-  const handleCloseRequest=()=>{setRequestOpen(false);const next=new URLSearchParams();next.set("filters",JSON.stringify(draft));setSearchParams(next,{replace:true});window.scrollTo({top:0,behavior:"smooth"});};
-  const handleLoginClick=()=>navigate(loginPath);
+  const handleOpenRequest=()=>navigate(`/client/requests?filters=${encodeURIComponent(JSON.stringify(draft))}`);
 
   return (
     <>
@@ -2169,14 +2115,8 @@ const ClientMaidsPage = ({
         </div>
 
         {/* ── Search results ── */}
-        {hasSearched&&(
-          <SearchResults maids={searchResults} isLoggedIn={isLoggedIn}
-            isLoading={isSearching} onLoginClick={handleLoginClick}
-            onViewProfile={handleViewProfile}/>
-        )}
-
         {/* ── Agency CTA ── */}
-        {!isPublicSearchPage&&!requestOpen&&(
+        {!embedded&&!isPublicSearchPage&&(
           <div className="cm-cta">
             <div className="cm-cta-blob-1"/>
             <div className="cm-cta-blob-2"/>
@@ -2193,12 +2133,11 @@ const ClientMaidsPage = ({
               </div>
               <div>
                 {requestHighlights.length>0&&<div className="cm-cta-filter-preview"><p className="cm-cta-filter-lbl">Your current filters</p><div className="cm-cta-filter-pills">{requestHighlights.slice(0,4).map((item)=><span key={item} className="cm-cta-filter-pill">{item}</span>)}</div></div>}
-                <button type="button" className="cm-cta-btn" onClick={handleOpenRequest}>Open Request Form <ChevronRight size={15}/></button>
+                <button type="button" className="cm-cta-btn" onClick={handleOpenRequest}>Continue to Requests <ChevronRight size={15}/></button>
               </div>
             </div>
           </div>
         )}
-        {!isPublicSearchPage&&requestOpen&&<div ref={requestRef}><RequestForm prefillFilters={searchedFilters} onBack={handleCloseRequest}/></div>}
       </div>
 
       {/* ── Footer ── */}

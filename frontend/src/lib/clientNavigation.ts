@@ -1,4 +1,4 @@
-export const DEFAULT_CLIENT_POST_LOGIN_PATH = "/client/maids/search";
+export const DEFAULT_CLIENT_POST_LOGIN_PATH = "/client/home";
 
 // The site root is the configured Supabase Site URL and avoids deployment
 // failures when a nested callback path is missing from the redirect allow-list.
@@ -23,11 +23,10 @@ export const getClientPostLoginPath = (redirectTo?: string | null) => {
   if (!target.startsWith("/")) return DEFAULT_CLIENT_POST_LOGIN_PATH;
   if (target.startsWith("//")) return DEFAULT_CLIENT_POST_LOGIN_PATH;
 
-  // The home page and the auth pages themselves are never meaningful post-login
-  // destinations for an employer. Falling back to the default here guarantees a
-  // stray `redirectTo=/` (or a redirect loop through the login/callback pages)
-  // always lands the user on the maids search page instead of home.
+  // Employer sign-in must stay inside the employer portal. Ignore public and
+  // agency pages as return targets, and avoid loops through login/callback.
   if (target === "/") return DEFAULT_CLIENT_POST_LOGIN_PATH;
+  if (target !== "/client" && !target.startsWith("/client/")) return DEFAULT_CLIENT_POST_LOGIN_PATH;
   if (target.startsWith("/employer-login")) return DEFAULT_CLIENT_POST_LOGIN_PATH;
   if (target.startsWith("/auth/")) return DEFAULT_CLIENT_POST_LOGIN_PATH;
 

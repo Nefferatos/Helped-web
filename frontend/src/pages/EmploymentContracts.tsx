@@ -122,8 +122,9 @@ function ConfirmModal({
           Delete {count} contract{count !== 1 ? "s" : ""}?
         </p>
         <p className="text-[15px] text-gray-500 leading-relaxed mb-6">
-          This action cannot be undone. All selected employment records will be
-          permanently removed.
+          This action cannot be undone. The selected contract records and their
+          employment details will be removed. Employer portal login accounts are
+          not deleted.
         </p>
         <div className="flex gap-3">
           <button
@@ -408,20 +409,19 @@ const EmploymentContracts = () => {
     setShowDeleteModal(false);
     try {
       setIsMutating(true);
-      for (const ref of refs) {
-        const response = await fetch(
-          `/api/employers/${encodeURIComponent(ref)}`,
-          { method: "DELETE", headers: { ...getAgencyAdminAuthHeaders() } },
-        );
-        const data = await readSafeJson<{ error?: string }>(response);
-        if (!response.ok)
-          throw new Error(data.error || `Failed to delete ${ref}`);
-      }
+      const response = await fetch("/api/employers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+        body: JSON.stringify({ refCodes: refs }),
+      });
+      const data = await readSafeJson<{ error?: string }>(response);
+      if (!response.ok) throw new Error(data.error || "Failed to delete selected contracts");
       toast.success(
         `${refs.length} contract${refs.length === 1 ? "" : "s"} deleted`,
       );
+      const deletedRefs = new Set(refs);
+      setEmployers((current) => current.filter((item) => !deletedRefs.has(item.ref)));
       setSelected(new Set());
-      await loadEmployers();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete");
     } finally {

@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 const SITE_URL = "https://rinzinagency.com";
+const SITE_NAME = "At The Agency (formerly Rinzin Agency Pte. Ltd)";
 const DEFAULT_DESCRIPTION =
-  "Find verified North East Indian and Indian Nepali domestic helpers from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam in Singapore.";
+  "Find verified North East Indian domestic helpers from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam in Singapore.";
 const DEFAULT_KEYWORDS = [
   "Darjeeling maid Singapore",
   "Manipur maid Singapore",
@@ -13,18 +14,17 @@ const DEFAULT_KEYWORDS = [
   "Assam maid Singapore",
   "North East Indian maid Singapore",
   "NE Indian maid Singapore",
-  "Indian Nepali maid Singapore",
   "domestic helper Singapore",
 ].join(", ");
 
 const pageMetadata: Record<string, { title: string; description: string }> = {
   "/": {
-    title: "AT The Agency (formerly Rinzin Agency)",
+    title: SITE_NAME,
     description: DEFAULT_DESCRIPTION,
   },
   "/search-maids": {
     title: "Search North East Indian Maids Singapore | AT The Agency",
-    description: "Browse verified NE Indian and Indian Nepali helpers from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam.",
+    description: "Browse verified NE Indian helpers from Darjeeling, Manipur, Sikkim, Mizoram, Arunachal Pradesh and Assam.",
   },
   "/about": {
     title: "North East Indian Maid Specialists | AT The Agency",
@@ -108,6 +108,7 @@ const SeoMetadata = () => {
       shouldNoIndex ? "noindex, nofollow" : "index, follow",
     );
     upsertMeta('meta[property="og:title"]', "property", "og:title", metadata.title);
+    upsertMeta('meta[property="og:site_name"]', "property", "og:site_name", SITE_NAME);
     upsertMeta(
       'meta[property="og:description"]',
       "property",

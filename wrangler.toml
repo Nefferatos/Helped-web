@@ -7,7 +7,10 @@ preview_urls = false
 # Keep the production domain attached when deploying from this configuration.
 [[routes]]
 pattern = "rinzinagency.com"
-zone_name = "rinzinagency.com"
+custom_domain = true
+
+[[routes]]
+pattern = "www.rinzinagency.com"
 custom_domain = true
 
 [assets]
@@ -26,6 +29,7 @@ SUPABASE_USE_NORMALIZED = "false"
 ROLLING_ARRIVAL_REPORT_AGENCY_ID = "1"
 # Storage: "kv" uses the APP_DATA KV namespace above. Remove to fall back to Supabase.
 STORAGE_BACKEND = "supabase"
+APP_PUBLIC_URL = "https://rinzinagency.com"
 
 # RECOMMENDED FOR PRODUCTION: collapse agency-admin auth to a single normalized
 # table (helped_agency_admins) so the login store cannot drift from main data —

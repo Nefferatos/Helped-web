@@ -281,6 +281,7 @@ const FloatingAiReceptionist = () => {
     pathname === "/client/support-chat" ||
     pathname === "/client/change-password" ||
     pathname === "/employer-login" ||
+    pathname.endsWith("/whatsapp-broadcast") ||
     pathname.startsWith("/apply-as-maid")
   ) return null;
 

@@ -1,6 +1,6 @@
 import { Component, Fragment, type ErrorInfo, type ReactNode, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Check, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Download, LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Download, LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
 
@@ -444,6 +444,7 @@ function OperationsBoardPageContent() {
     : placements;
 
   return <main className="space-y-6 p-4 text-black md:p-8">
+    <Link to={placementId ? "/agencyadmin/operations" : "/agencyadmin/dashboard"} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"><ArrowLeft className="h-4 w-4" /> Back</Link>
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div>{placementId && <Link to="/agencyadmin/operations" className="mb-2 inline-flex text-sm font-semibold text-emerald-800 underline">← All placements</Link>}<p className="text-sm font-medium text-black">Placement lifecycle</p><h1 className="mt-1 text-3xl font-bold text-black">{placementId ? `Placement ${visiblePlacements[0]?.maid_reference_code || "details"}` : "Operations board"}</h1><p className="mt-2 max-w-3xl text-sm text-black">Track placement milestones and verified deployment tasks in one view. A green status requires a staff verification note or placement evidence.</p></div>
       <Button type="button" variant="outline" onClick={() => void loadPlacements()} disabled={loading} className="border-slate-300 text-black"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh board</Button>

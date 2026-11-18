@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -86,6 +87,31 @@ type RequirementsState = {
 const defaultRequirements: RequirementsState = {
   noOffDay: false, hasChildren: false, married: false,
   newMaid: false, transferMaid: false, exSingaporeMaid: false,
+};
+
+const requestFormFromSearch = (raw: string | null) => {
+  const form = { agencyId: "", nationality: "No Preference", primaryDuty: "No Preference", ageGroup: "No Preference", language: "No Preference", budget: "", otherRequirements: "" };
+  const requirements = { ...defaultRequirements };
+  if (!raw) return { form, requirements };
+  try {
+    const filters = JSON.parse(raw) as Record<string, unknown>;
+    const pick = (keys: string[], value: string) => keys.some((key) => filters[key] === true) ? value : undefined;
+    form.nationality = pick(["natFilipino"], "Filipino") ?? pick(["natIndonesian"], "Indonesian") ?? pick(["natMyanmar"], "Myanmar") ?? pick(["natIndian"], "Indian") ?? pick(["natSriLankan"], "Sri Lankan") ?? pick(["natCambodian"], "Cambodian") ?? pick(["natBangladeshi"], "Bangladeshi") ?? "No Preference";
+    form.primaryDuty = pick(["dutyGeneralHousekeeping"], "Housekeeping") ?? pick(["dutyCareElderlyDisabled"], "Elderly Care") ?? pick(["dutyCareInfant"], "Infant Care") ?? pick(["dutyCareYoungChildren"], "Kid Care") ?? pick(["dutyCooking"], "Cooking") ?? "No Preference";
+    form.ageGroup = pick(["age21to25"], "18-25") ?? pick(["age26to30", "age31to35"], "26-35") ?? pick(["age36to40"], "36-45") ?? pick(["age41above"], "46+") ?? "No Preference";
+    form.language = pick(["langEnglish"], "English") ?? pick(["langMandarin"], "Mandarin") ?? pick(["langBahasaIndonesia"], "Bahasa Indonesia") ?? pick(["langHindi"], "Hindi") ?? pick(["langTamil"], "Tamil") ?? "No Preference";
+    requirements.noOffDay = filters.noOffDay === true;
+    requirements.hasChildren = filters.hasChildren === true;
+    requirements.married = filters.marMarried === true;
+    const selectedFilters = Object.entries(filters)
+      .filter(([key, value]) => value === true && !["hasChildren", "marMarried", "noOffDay"].includes(key))
+      .map(([key]) => key.replace(/([A-Z])/g, " $1").replace(/^(nat|exp|duty|edu|lang|age|mar|height|rel) /, "").trim());
+    const extra = [typeof filters.maidType === "string" && filters.maidType ? `Maid type: ${filters.maidType}` : "", typeof filters.keyword === "string" && filters.keyword ? `Search: ${filters.keyword}` : "", ...selectedFilters];
+    form.otherRequirements = [...new Set(extra.filter(Boolean))].join("; ");
+  } catch {
+    // Ignore malformed or stale search filter state and show a blank request form.
+  }
+  return { form, requirements };
 };
 
 const formatDate = (value: string) =>
@@ -570,6 +596,8 @@ const GlobalStyles = () => (
    Main page
 ═══════════════════════════════════════ */
 const ClientRequestsPage = () => {
+  const [searchParams] = useSearchParams();
+  const [initialRequest] = useState(() => requestFormFromSearch(searchParams.get("filters")));
   const queryClient = useQueryClient();
   const storedClient = useMemo(() => getStoredClient(), []);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
@@ -577,19 +605,11 @@ const ClientRequestsPage = () => {
   const [savingInterviewSelection, setSavingInterviewSelection] = useState(false);
   const [savingFinalCandidateReference, setSavingFinalCandidateReference] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
-  const [requirements, setRequirements] = useState<RequirementsState>(defaultRequirements);
+  const [requirements, setRequirements] = useState<RequirementsState>(initialRequest.requirements);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const [profileModalRef, setProfileModalRef] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
-    agencyId: "",
-    nationality: "No Preference",
-    primaryDuty: "No Preference",
-    ageGroup: "No Preference",
-    language: "No Preference",
-    budget: "",
-    otherRequirements: "",
-  });
+  const [form, setForm] = useState(initialRequest.form);
 
   /* ── Queries ── */
   const requestsQuery = useQuery({
@@ -637,9 +657,10 @@ const ClientRequestsPage = () => {
         requirements.transferMaid ? "Transfer Maid" : null,
         requirements.exSingaporeMaid ? "Ex-Singapore Maid" : null,
       ].filter(Boolean);
-      const agencyId = Number(form.agencyId);
+      const onlyAgency = agenciesQuery.data?.length === 1 ? agenciesQuery.data[0] : null;
+      const agencyId = Number(onlyAgency?.id ?? form.agencyId);
       if (!agencyId || !Number.isInteger(agencyId) || agencyId <= 0) {
-        throw new Error("Please select an agency before submitting.");
+        throw new Error(agenciesQuery.data?.length ? "Please select an agency before submitting." : "No agency is currently available for requests.");
       }
       return createRequest({
         clientId: storedClient.id,
@@ -968,13 +989,19 @@ const ClientRequestsPage = () => {
                 {/* Agency */}
                 <div className="grid gap-1.5">
                   <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Our Agency</label>
-                  <StyledSelect
-                    value={form.agencyId || "No Preference"}
-                    onChange={(v) => setForm((c) => ({ ...c, agencyId: v }))}
-                  >
-                    <option value="">Choose an agency</option>
-                    {(agenciesQuery.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                  </StyledSelect>
+                  {agenciesQuery.data?.length === 1 ? (
+                    <div className="flex h-11 items-center rounded-xl border px-4 text-sm font-bold" style={{ borderColor: C.border, background: C.surface, color: C.tealDeep }}>
+                      {agenciesQuery.data[0].name}
+                    </div>
+                  ) : (
+                    <StyledSelect
+                      value={form.agencyId || "No Preference"}
+                      onChange={(v) => setForm((c) => ({ ...c, agencyId: v }))}
+                    >
+                      <option value="">{agenciesQuery.isLoading ? "Loading agencies…" : "Choose an agency"}</option>
+                      {(agenciesQuery.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </StyledSelect>
+                  )}
                 </div>
 
                 {/* 4-col prefs */}

@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BriefcaseBusiness, CalendarDays, CheckCircle2, Clock, Loader2, Mail, Phone, Sparkles, UserRound, XCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, BriefcaseBusiness, CalendarDays, CheckCircle2, Clock, Loader2, Mail, MessageCircle, Phone, Send, Sparkles, UserRound, XCircle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
-import { fetchRequest, requestStateMessage, requestStatusMeta, type RequestStatus, updateRequestStatus } from "@/lib/requests";
+import { createRequestMessage, fetchRequest, fetchRequestConversation, fetchRequestMessages, requestStateMessage, requestStatusMeta, type RequestMessageRecord, type RequestStatus, updateRequestStatus } from "@/lib/requests";
 import { cn } from "@/lib/utils";
 
 const formatDate = (value: string) =>
@@ -21,6 +22,8 @@ const statusIcons = { pending: Clock, interested: Sparkles, direct_hire: CheckCi
 const RequestDetailsPage = () => {
   const { requestId = "" } = useParams();
   const queryClient = useQueryClient();
+  const [messageDraft, setMessageDraft] = useState("");
+  const conversationScrollRef = useRef<HTMLDivElement | null>(null);
   const requestQuery = useQuery({
     queryKey: ["agency-request", requestId],
     queryFn: () => fetchRequest(requestId),
@@ -35,6 +38,40 @@ const RequestDetailsPage = () => {
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update request"),
   });
+  const conversationQuery = useQuery({
+    queryKey: ["request-conversation", requestId],
+    queryFn: () => fetchRequestConversation(requestId),
+    enabled: Boolean(requestId),
+    retry: false,
+  });
+  const messagesQuery = useQuery({
+    queryKey: ["request-messages", conversationQuery.data?.id],
+    queryFn: () => fetchRequestMessages(conversationQuery.data!.id),
+    enabled: Boolean(conversationQuery.data?.id),
+    refetchInterval: 4000,
+  });
+  const messageMutation = useMutation({
+    mutationFn: () => {
+      const conversationId = conversationQuery.data?.id;
+      const message = messageDraft.trim();
+      if (!conversationId) throw new Error("Request conversation is not available.");
+      if (!message) throw new Error("Message cannot be empty.");
+      return createRequestMessage({ conversationId, message });
+    },
+    onSuccess: (message) => {
+      queryClient.setQueryData<RequestMessageRecord[]>(
+        ["request-messages", message.conversationId],
+        (current = []) => [...current, message],
+      );
+      setMessageDraft("");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not send message"),
+  });
+
+  useEffect(() => {
+    const container = conversationScrollRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
+  }, [messagesQuery.data]);
 
   if (requestQuery.isLoading) {
     return <div className="flex min-h-[50vh] items-center justify-center text-slate-500"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading request…</div>;
@@ -49,15 +86,6 @@ const RequestDetailsPage = () => {
 
   return (
     <div className="request-details-root mx-auto max-w-7xl space-y-8 pb-10 text-base text-black">
-      <style>{`
-        .request-details-root p,
-        .request-details-root a,
-        .request-details-root button,
-        .request-details-root span {
-          color: #000 !important;
-          font-size: max(16px, 1em);
-        }
-      `}</style>
       <Link to="/agencyadmin/requests" className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 transition hover:text-slate-950">
         <ArrowLeft className="h-4 w-4" /> Back to requests
       </Link>
@@ -86,6 +114,41 @@ const RequestDetailsPage = () => {
               <p className="mt-3 text-xl font-bold leading-relaxed">{request.summary}</p>
               {request.budget && <p className="mt-4 font-semibold">Budget: <span>{request.budget}</span></p>}
             </div>
+
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 px-5 py-4">
+                <h2 className="flex items-center gap-2 font-black text-slate-950"><MessageCircle className="h-5 w-5 text-teal-700" /> Request conversation</h2>
+                <p className="mt-1 text-sm text-slate-600">Send updates and questions directly to the employer about this request.</p>
+              </div>
+              <div ref={conversationScrollRef} className="max-h-[420px] min-h-32 space-y-3 overflow-y-auto bg-slate-50 p-4">
+                {conversationQuery.isLoading || messagesQuery.isLoading ? (
+                  <p className="py-8 text-center text-sm text-slate-600"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading conversation…</p>
+                ) : conversationQuery.isError ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                    This request has no available conversation yet. Newly submitted requests create one automatically.
+                  </div>
+                ) : messagesQuery.isError ? (
+                  <p className="py-8 text-center text-sm text-rose-700">Could not load conversation messages. They will be retried automatically.</p>
+                ) : (messagesQuery.data ?? []).length === 0 ? (
+                  <p className="py-8 text-center text-sm text-slate-600">No messages yet. Send the employer an update.</p>
+                ) : (messagesQuery.data ?? []).map((message) => {
+                  const mine = message.senderType === "admin" || message.senderType === "staff";
+                  return <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[88%] rounded-2xl px-4 py-3 ${mine ? "rounded-br-md bg-teal-800 text-white" : message.senderType === "system" ? "border border-slate-200 bg-white text-slate-700" : "rounded-bl-md bg-white text-slate-900 shadow-sm"}`}>
+                      <p className={`text-xs font-bold ${mine ? "text-amber-200" : "text-slate-600"}`}>{mine ? "Agency" : message.senderType === "system" ? "Request update" : "Employer"}</p>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-sm">{message.message}</p>
+                      <p className={`mt-2 text-right text-[11px] ${mine ? "text-teal-100" : "text-slate-500"}`}>{new Date(message.createdAt).toLocaleString()}</p>
+                    </div>
+                  </div>;
+                })}
+              </div>
+              <form className="flex items-end gap-2 border-t border-slate-100 p-3" onSubmit={(event) => { event.preventDefault(); messageMutation.mutate(); }}>
+                <textarea value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} placeholder="Write an update to the employer…" aria-label="Message to employer" maxLength={5000} rows={2} className="min-h-12 flex-1 resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm text-slate-950 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" disabled={!conversationQuery.data?.id || messageMutation.isPending} />
+                <button type="submit" className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-800 px-4 font-bold text-white transition hover:bg-teal-900 disabled:cursor-not-allowed disabled:opacity-50" disabled={!messageDraft.trim() || !conversationQuery.data?.id || messageMutation.isPending}>
+                  {messageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send
+                </button>
+              </form>
+            </section>
 
             <div>
               <h2 className="text-2xl font-black text-black">Request requirements</h2>

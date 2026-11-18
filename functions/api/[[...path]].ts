@@ -564,8 +564,8 @@ interface AppData {
 
 type Bindings = {
   APP_DATA?: KVNamespace;
-  WHATSAPP_MEDIA?: R2Bucket;
   ASSETS: AssetsBinding;
+  APP_PUBLIC_URL?: string;
   MAID_PREVIEW_SAFE_MODE?: string;
   AI?: { run(model: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> };
   SUPABASE_URL?: string;
@@ -608,6 +608,7 @@ type Bindings = {
   WHATSAPP_AUTOMATION_SECRET?: string;
   WAHA_API_URL?: string;
   WAHA_API_KEY?: string;
+  WAHA_SESSION_NAME?: string;
   MAKE_TELEGRAM_BROADCAST_WEBHOOK_URL?: string;
   MAKE_TELEGRAM_CHATBOT_WEBHOOK_URL?: string;
   TELEGRAM_BOT_TOKEN?: string;
@@ -2844,6 +2845,7 @@ const ensureExternalSyncPrivateBucket = async (config: SupabaseStorageConfig) =>
 const createExternalSyncSignedUrl = async (
   config: SupabaseStorageConfig,
   objectPath: string,
+  expiresIn = 900,
 ) => {
   const encodedPath = objectPath.split("/").map(encodeURIComponent).join("/");
   const response = await fetch(
@@ -2851,7 +2853,7 @@ const createExternalSyncSignedUrl = async (
     {
       method: "POST",
       headers: supabaseStorageHeaders(config, { "content-type": "application/json" }),
-      body: JSON.stringify({ expiresIn: 900 }),
+      body: JSON.stringify({ expiresIn }),
     },
   );
   if (!response.ok) throw new Error("Could not create a temporary private download link");
@@ -3182,6 +3184,9 @@ const saveData = async (env: Bindings, data: AppData) => {
   }
   const supabase = getSupabaseAppDataConfig(env);
   if (supabase) {
+    const agencyAdminsBeforeWrite = JSON.stringify(
+      getSupabaseTrackedBase(data)?.agencyAdmins ?? data.agencyAdmins,
+    );
     if (isNormalizedSupabaseEnabled(env)) {
       try {
         await saveDataToSupabaseNormalized(supabase, data);
@@ -3192,11 +3197,11 @@ const saveData = async (env: Bindings, data: AppData) => {
       }
     }
     await saveDataToSupabase(supabase, data);
-    // Keep the separate agency-admin-auth cache blob in lock-step with main data.
-    // Login reads that blob first (see loadAgencyAdminAuthData); if it drifts from
-    // main data, valid passwords get rejected as 401. Awaited — not fire-and-forget —
-    // so the two stores can never diverge across a write.
-    await saveAgencyAdminAuthToSupabase(supabase, data.agencyAdmins);
+    // Keep the separate agency-admin-auth cache blob in lock-step when admin
+    // records change. Contract edits should not pay for a redundant second write.
+    if (JSON.stringify(data.agencyAdmins) !== agencyAdminsBeforeWrite) {
+      await saveAgencyAdminAuthToSupabase(supabase, data.agencyAdmins);
+    }
     putAppDataCache(data); // re-prime with saved data (includes new updated_at)
     return;
   }
@@ -3657,6 +3662,15 @@ const safeApi =
       }
       if (/consents/i.test(message) && /PGRST205|PGRST204|schema cache|could not find the table|column .* does not exist/i.test(message)) {
         return jsonError("Marketing consent storage is not installed yet. Apply supabase/20261116_marketing_consents.sql, then retry.", 503);
+      }
+      if (/whatsapp_marketing_(campaigns|recipients)/i.test(message) && /media_(type|url|mime_type|file_name)/i.test(message) && /PGRST204|schema cache|column .* does not exist|Could not find the .* column/i.test(message)) {
+        return jsonError("WhatsApp campaign media fields are missing from the database. Run supabase/20261125_whatsapp_campaign_media.sql in the Supabase SQL Editor, wait for the schema cache to refresh, then retry the launch.", 503);
+      }
+      if (/whatsapp_marketing_contacts/i.test(message) && /conversation_status/i.test(message) && /PGRST204|schema cache|column .* does not exist|Could not find the .* column/i.test(message)) {
+        return jsonError("WhatsApp handover storage is out of date. Run supabase/20261124_whatsapp_conversation_handover.sql in the Supabase SQL Editor, then retry.", 503);
+      }
+      if (/whatsapp_marketing_/i.test(message) && /PGRST205|could not find the table|schema cache/i.test(message)) {
+        return jsonError("WhatsApp broadcast tables are missing. Run supabase/20261123_whatsapp_broadcast.sql and the subsequent WhatsApp migrations in the Supabase SQL Editor, then retry.", 503);
       }
       if (/contractor_jobs/i.test(message) && /acknowledgement_token_hash|PGRST204|schema cache|could not find the table|column .* does not exist/i.test(message)) {
         return jsonError("Contractor acknowledgement storage is not installed yet. Apply supabase/20261101_contractor_self_service_acknowledgement.sql after the contractor assignment migration, then retry.", 503);
@@ -8984,10 +8998,39 @@ app.get(
   }),
 );
 
+app.delete("/api/employers", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
+  if (!admin) return c.json({ error: "Unauthorized" }, 401);
+  const body = await parseBody<{ refCodes?: unknown }>(c.req.raw);
+  const refs = Array.isArray(body?.refCodes)
+    ? [...new Set(body.refCodes.map((value) => toTrimmedString(value)).filter(Boolean))]
+    : [];
+  if (!refs.length || refs.length > 100) {
+    return c.json({ error: "Select between 1 and 100 contracts to delete" }, 400);
+  }
+
+  // Load and persist the shared app-data snapshot once for the whole selection.
+  const data = await loadData(c.env);
+  const selectedRecords = data.employers.filter(
+    (item) => refs.includes(item.refCode) && (item.agencyId ?? 1) === admin.agencyId,
+  );
+  if (selectedRecords.length !== refs.length) {
+    return c.json({ error: "One or more selected contracts could not be found. Refresh the list and try again." }, 404);
+  }
+
+  const deletedIds = new Set(selectedRecords.map((item) => item.id));
+  data.employers = data.employers.filter((item) => !deletedIds.has(item.id));
+  data.employmentContracts = data.employmentContracts.filter(
+    (item) => !deletedIds.has(item.employerId) && !refs.includes(item.refCode) && !refs.includes(item.employerRefCode),
+  );
+  await saveData(c.env, data);
+  return c.json({ message: "Contracts deleted successfully", deletedRefCodes: refs });
+}));
+
 app.delete(
   "/api/employers/:refCode",
   requireAgencyAdminAuth,
-  canAdministerAgencyRecords,
+  canManageAgencyRecords,
   safeApi(async (c) => {
     const admin = c.get("agencyAdmin") as AgencyAdminRecord | undefined;
     if (!admin) return c.json({ error: "Unauthorized" }, 401);
@@ -10950,16 +10993,18 @@ app.get("/api/operations-board/employer-login-accounts", requireAgencyAdminAuth,
     );
   });
   const loginAccounts = eligibleAccounts.map((account) => {
-    const client = clientsById.get(String(account.record_id))!;
     const email = normalizeEmail(toTrimmedString(account.email));
     const linkedEmployerIds = data.employers
       .filter((record) => (record.agencyId ?? 1) === (c.get("agencyAdmin") as AgencyAdminRecord).agencyId)
       .filter((record) => {
         const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
         const employerUserId = toTrimmedString(employer.supabaseUserId);
-        return account.supabase_user_id
-          ? employerUserId === account.supabase_user_id || (!employerUserId && normalizeEmail(toTrimmedString(employer.email)) === email)
-          : !employerUserId && normalizeEmail(toTrimmedString(employer.email)) === email;
+        const employerClientAccountId = toTrimmedString(employer.clientAccountId);
+        // A shared email is not proof that a manually entered contract belongs
+        // to a portal login. Only show a link after an explicit UID/account-ID
+        // association has been saved by the manual link action.
+        return (Boolean(account.supabase_user_id) && employerUserId === account.supabase_user_id) ||
+          employerClientAccountId === String(account.record_id);
       })
       .map((record) => ({ id: String(record.id), refCode: record.refCode, name: toTrimmedString(record.employer?.name) || record.refCode }));
     return {
@@ -10983,7 +11028,7 @@ app.post("/api/operations-board/employer-login-accounts/:clientId/employer-recor
   if (body?.confirmEmployerAccount !== true) return c.json({ error: "Confirm that the selected login belongs to an employer before creating an employer record" }, 400);
   const data = await loadData(c.env);
   const client = data.clients.find((item) => item.id === clientId);
-  if (!client || client.emailVerified === false || !client.password.trim()) return c.json({ error: "This client record is not an active verified login account" }, 404);
+  if (!client || client.emailVerified === false || (!client.supabaseUserId && !client.password.trim())) return c.json({ error: "This client record is not an active verified login account" }, 404);
   const accountRows = await fetchSupabaseTableRows<EmployerLoginDirectoryRow>(config, "helped_query_clients", {
     select: "record_id,supabase_user_id,email,name,company,phone,created_at",
     filters: { app_id: config.rowId, record_id: clientId }, limit: 1,
@@ -11020,7 +11065,11 @@ app.post("/api/operations-board/employer-login-accounts/:clientId/employer-recor
   const conflictingAccountLink = emailMatches.some((record) => {
     const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
     const linkedUserId = toTrimmedString(employer.supabaseUserId);
-    return Boolean(linkedUserId && linkedUserId !== (account.supabase_user_id ?? ""));
+    const linkedClientAccountId = toTrimmedString(employer.clientAccountId);
+    return Boolean(
+      (linkedUserId && linkedUserId !== (account.supabase_user_id ?? "")) ||
+      (linkedClientAccountId && linkedClientAccountId !== String(clientId))
+    );
   });
   if (conflictingAccountLink) return c.json({ error: "An employer record with this email is already linked to a different login UID. Resolve the account conflict before proceeding." }, 409);
   const matches = emailMatches;
@@ -11030,7 +11079,13 @@ app.post("/api/operations-board/employer-login-accounts/:clientId/employer-recor
     const employer = existing.employer && typeof existing.employer === "object" ? existing.employer as Record<string, unknown> : {};
     const linkedUserId = toTrimmedString(employer.supabaseUserId);
     if (linkedUserId && linkedUserId !== account.supabase_user_id) return c.json({ error: "The employer record is linked to a different Supabase account" }, 409);
-    existing.employer = { ...employer, supabaseUserId: account.supabase_user_id };
+    existing.employer = {
+      ...employer,
+      supabaseUserId: account.supabase_user_id ?? "",
+      clientAccountId: String(clientId),
+      accountLinkedBy: toTrimmedString(admin.username) || toTrimmedString(admin.email),
+      accountLinkedAt: now(),
+    };
     existing.updatedAt = now();
     await saveData(c.env, data);
     return c.json({ employer: { id: String(existing.id), refCode: existing.refCode, name: toTrimmedString(employer.name) || existing.refCode, email }, alreadyExisted: true });
@@ -11044,6 +11099,7 @@ app.post("/api/operations-board/employer-login-accounts/:clientId/employer-recor
       name: toTrimmedString(account.name) || email,
       company: toTrimmedString(account.company), phone: toTrimmedString(account.phone),
       email, ...(account.supabase_user_id ? { supabaseUserId: account.supabase_user_id } : {}),
+      clientAccountId: String(clientId),
       accountSource: "helped_query_clients", accountLinkedBy: toTrimmedString(admin.username) || toTrimmedString(admin.email),
       accountLinkedAt: now(),
     },
@@ -11057,16 +11113,24 @@ app.post("/api/operations-board/employer-login-accounts/:clientId/employer-recor
 app.get("/api/operations-board/employers", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const data = await loadData(c.env, { readOnly: true });
-  const loginAccountsByEmail = new Map<string, ClientRecord>();
+  const loginAccountsByUserId = new Map<string, ClientRecord>();
+  const loginAccountsByClientId = new Map<string, ClientRecord>();
   for (const client of data.clients) {
-    const email = normalizeEmail(client.email);
-    if (client.emailVerified !== false && email) loginAccountsByEmail.set(email, client);
+    if (client.emailVerified === false || (!client.supabaseUserId && !client.password.trim())) continue;
+    if (client.supabaseUserId) loginAccountsByUserId.set(client.supabaseUserId, client);
+    loginAccountsByClientId.set(String(client.id), client);
   }
   const employers = data.employers
     .filter((record) => (record.agencyId ?? 1) === admin.agencyId)
     .map((record) => {
       const employer = record.employer && typeof record.employer === "object" ? record.employer as Record<string, unknown> : {};
-      const loginAccount = loginAccountsByEmail.get(normalizeEmail(toTrimmedString(employer.email)));
+      const linkedUserId = toTrimmedString(employer.supabaseUserId);
+      const linkedClientAccountId = toTrimmedString(employer.clientAccountId);
+      const loginAccount = linkedUserId
+        ? loginAccountsByUserId.get(linkedUserId)
+        : linkedClientAccountId
+          ? loginAccountsByClientId.get(linkedClientAccountId)
+          : undefined;
       return {
         id: String(record.id), refCode: toTrimmedString(record.refCode),
         name: toTrimmedString(employer.name) || toTrimmedString(record.refCode),
@@ -23834,9 +23898,6 @@ app.post("/api/telegram/automation/delivery-result", async (c) => {
 });
 
 app.post("/api/whatsapp-broadcast/media", requireAgencyAdminAuth, async (c) => {
-  const bucket = c.env.WHATSAPP_MEDIA;
-  if (!bucket) return c.json({ error: "WhatsApp media storage is not configured. Add the WHATSAPP_MEDIA R2 binding and deploy." }, 503);
-
   let form: FormData;
   try { form = await c.req.formData(); } catch { return c.json({ error: "Upload a JPEG, PNG, MP4, or 3GP media file." }, 400); }
   const file = form.get("file");
@@ -23855,37 +23916,76 @@ app.post("/api/whatsapp-broadcast/media", requireAgencyAdminAuth, async (c) => {
     const limit = rule.type === "image" ? "5 MB" : "16 MB";
     return c.json({ error: `This ${rule.type} must be smaller than ${limit}.` }, 413);
   }
-
-  const key = `broadcast/${crypto.randomUUID()}`;
   try {
-    await bucket.put(key, file.stream(), {
-      httpMetadata: { contentType: file.type, cacheControl: "public, max-age=86400" },
-      customMetadata: { mediaType: rule.type, originalName: file.name.slice(0, 160), uploadedAt: new Date().toISOString() },
-    });
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+    const storage = getExternalSyncStorageConfig(c.env);
+    if (!storage) return c.json({ error: "WhatsApp media storage needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the Worker." }, 503);
+    await ensureExternalSyncPrivateBucket(storage);
+    const key = crypto.randomUUID();
+    const objectPath = `whatsapp-broadcast/agency-${admin.agencyId}/${key}`;
+    const uploaded = await fetch(`${storage.baseUrl}/storage/v1/object/${encodeURIComponent(storage.bucket)}/${objectPath.split("/").map(encodeURIComponent).join("/")}`, { method: "POST", headers: supabaseStorageHeaders(storage, { "content-type": file.type, "x-upsert": "false" }), body: await file.arrayBuffer(), signal: AbortSignal.timeout(20_000) });
+    if (!uploaded.ok) throw new Error("Private media upload failed. Check Supabase Storage configuration and quota.");
+    const publicOrigin = getWhatsAppMediaPublicOrigin(c.env);
+    if (!publicOrigin) return c.json({ error: "Set APP_PUBLIC_URL to the public HTTPS website address before sending media." }, 503);
     return c.json({
       mediaType: rule.type,
-      mediaUrl: `${new URL(c.req.url).origin}/api/whatsapp-broadcast/media/${key.split("/")[1]}`,
+      mediaMimeType: file.type.toLowerCase(),
+      mediaFileName: file.name.replace(/[^\w. -]/g, "_").slice(0, 160) || (rule.type === "image" ? "image" : "video"),
+      mediaUrl: `${publicOrigin}/api/whatsapp-broadcast/media/${admin.agencyId}/${key}`,
       fileName: file.name.slice(0, 160),
       size: file.size,
     });
   } catch (error) {
     console.error("WhatsApp media upload failed:", errMsg(error));
-    return c.json({ error: "Could not store this media file." }, 502);
+    return c.json({ error: error instanceof Error ? error.message : "Could not store this media file." }, 502);
   }
 });
 
-// Meta fetches these opaque, randomly keyed assets when Make sends each message.
-app.get("/api/whatsapp-broadcast/media/:key", async (c) => {
-  const key = c.req.param("key");
-  if (!/^[0-9a-f-]{36}$/i.test(key)) return c.notFound();
-  const object = await c.env.WHATSAPP_MEDIA?.get(`broadcast/${key}`);
-  if (!object?.body) return c.notFound();
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set("Cache-Control", "public, max-age=86400");
-  headers.set("X-Content-Type-Options", "nosniff");
-  return new Response(object.body, { headers });
+// WAHA fetches this opaque URL; the Worker proxies the private Supabase object.
+app.get("/api/whatsapp-broadcast/media/:agencyId/:key", async (c) => {
+  const agencyId = Number(c.req.param("agencyId")), key = c.req.param("key");
+  if (!Number.isSafeInteger(agencyId) || agencyId < 1 || !/^[0-9a-f-]{36}$/i.test(key)) return c.notFound();
+  const storage = getExternalSyncStorageConfig(c.env);
+  if (!storage) return c.text("Media storage unavailable", 503);
+  const objectPath = `whatsapp-broadcast/agency-${agencyId}/${key}`;
+  try {
+    const response = await fetch(`${storage.baseUrl}/storage/v1/object/${encodeURIComponent(storage.bucket)}/${objectPath.split("/").map(encodeURIComponent).join("/")}`, { headers: supabaseStorageHeaders(storage), signal: AbortSignal.timeout(20_000) });
+    if (!response.ok || !response.body) return c.notFound();
+    const headers = new Headers({
+      "Content-Type": response.headers.get("content-type") || "application/octet-stream",
+      "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
+    });
+    const size = response.headers.get("content-length"); if (size) headers.set("Content-Length", size);
+    return new Response(response.body, { headers });
+  } catch { return c.text("Media file could not be retrieved", 502); }
 });
+
+const getWhatsAppMediaPublicOrigin = (env: Bindings) => {
+  try {
+    const url = new URL(env.APP_PUBLIC_URL?.trim() || "https://rinzinagency.com");
+    return url.protocol === "https:" ? url.origin : null;
+  } catch { return null; }
+};
+
+const getWhatsAppMediaDescriptor = async (env: Bindings, rawUrl: unknown, agencyId: number, mediaType: "image" | "video") => {
+  try {
+    const parsed = new URL(String(rawUrl ?? ""));
+    const match = parsed.pathname.match(/^\/api\/whatsapp-broadcast\/media\/(\d+)\/([0-9a-f-]{36})$/i);
+    const publicOrigin = getWhatsAppMediaPublicOrigin(env);
+    if (!publicOrigin || parsed.origin !== publicOrigin || !match || Number(match[1]) !== agencyId) return null;
+    const storage = getExternalSyncStorageConfig(env);
+    if (!storage) return null;
+    const objectPath = `whatsapp-broadcast/agency-${agencyId}/${match[2]}`;
+    const response = await fetch(`${storage.baseUrl}/storage/v1/object/${encodeURIComponent(storage.bucket)}/${objectPath.split("/").map(encodeURIComponent).join("/")}`, { method: "HEAD", headers: supabaseStorageHeaders(storage), signal: AbortSignal.timeout(8000) });
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    const supported = mediaType === "image" ? ["image/jpeg", "image/png"] : ["video/mp4", "video/3gpp", "video/3gp"];
+    if (!response.ok || !supported.includes(contentType)) return null;
+    const extension = ({ "image/jpeg": "jpg", "image/png": "png", "video/mp4": "mp4", "video/3gpp": "3gp", "video/3gp": "3gp" } as Record<string, string>)[contentType];
+    const signedUrl = await createExternalSyncSignedUrl(storage, objectPath, 7 * 24 * 60 * 60);
+    return { mimeType: contentType, fileName: `whatsapp-${mediaType}.${extension}`, deliveryUrl: signedUrl };
+  } catch { return null; }
+};
 
 const whatsappMarketingDb = async (env: Bindings, path: string, init?: RequestInit) => {
   const config = getSupabaseAppDataConfig(env);
@@ -23913,14 +24013,23 @@ const resolveWhatsAppLidPhone = async (env: Bindings, session: string, lidJid: s
   const apiKey = env.WAHA_API_KEY?.trim();
   const lid = lidJid.split("@")[0].trim();
   if (!baseUrl || !apiKey || !session || !lid) return "";
+  const headers = { "X-Api-Key": apiKey };
   try {
-    const response = await fetch(`${baseUrl}/api/${encodeURIComponent(session)}/lids/${encodeURIComponent(lid)}`, {
-      headers: { "X-Api-Key": apiKey },
-      signal: AbortSignal.timeout(5000),
-    });
+    const response = await fetch(`${baseUrl}/api/${encodeURIComponent(session)}/lids/${encodeURIComponent(lid)}`, { headers, signal: AbortSignal.timeout(5000) });
+    if (response.ok) {
+      const result = await response.json() as { pn?: unknown };
+      const phone = whatsappPhoneFromJid(result.pn);
+      if (phone) return phone;
+    }
+  } catch { /* Fall through to the WAHA contact lookup. */ }
+  try {
+    const contactUrl = new URL(`${baseUrl}/api/contacts`);
+    contactUrl.searchParams.set("contactId", `${lid}@lid`);
+    contactUrl.searchParams.set("session", session);
+    const response = await fetch(contactUrl, { headers, signal: AbortSignal.timeout(5000) });
     if (!response.ok) return "";
-    const result = await response.json() as { pn?: string | null };
-    return whatsappPhoneFromJid(result.pn);
+    const contact = await response.json() as { number?: unknown; id?: unknown };
+    return whatsappPhoneFromJid(contact.number) || whatsappPhoneFromJid(contact.id);
   } catch {
     return "";
   }
@@ -23952,16 +24061,16 @@ const whatsappCampaignCounts = async (env: Bindings, campaignId: string, agencyI
 app.get("/api/whatsapp-broadcast/status", requireAgencyAdminAuth, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const [contacts, campaigns, settings] = await Promise.all([
-    whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id&agency_id=eq.${admin.agencyId}`),
+    whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id&agency_id=eq.${admin.agencyId}&tags=not.cs.{__archived_contact__}`),
     whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?select=id&agency_id=eq.${admin.agencyId}`),
     whatsappMarketingDb(c.env, `whatsapp_marketing_settings?select=ai_auto_reply_enabled&agency_id=eq.${admin.agencyId}`),
   ]);
-  return c.json({ configured: true, makeConfigured: Boolean(c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim()), automationSecretConfigured: Boolean(c.env.WHATSAPP_AUTOMATION_SECRET?.trim()), totalContacts: (await contacts.json() as unknown[]).length, totalCampaigns: (await campaigns.json() as unknown[]).length, aiAutoReplyEnabled: ((await settings.json() as Array<{ ai_auto_reply_enabled: boolean }>)[0]?.ai_auto_reply_enabled ?? false) });
+  return c.json({ configured: true, makeConfigured: Boolean(c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim()), automationSecretConfigured: Boolean(c.env.WHATSAPP_AUTOMATION_SECRET?.trim()), wahaConfigured: Boolean(c.env.WAHA_API_URL?.trim() && c.env.WAHA_API_KEY?.trim()), wahaSessionName: c.env.WAHA_SESSION_NAME?.trim() || "default", totalContacts: (await contacts.json() as unknown[]).length, totalCampaigns: (await campaigns.json() as unknown[]).length, aiAutoReplyEnabled: ((await settings.json() as Array<{ ai_auto_reply_enabled: boolean }>)[0]?.ai_auto_reply_enabled ?? false) });
 }));
 
 app.get("/api/whatsapp-broadcast/contacts", requireAgencyAdminAuth, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
-  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=*&agency_id=eq.${admin.agencyId}&order=created_at.desc&limit=1000`)).json();
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=*&agency_id=eq.${admin.agencyId}&tags=not.cs.{__archived_contact__}&order=created_at.desc&limit=1000`)).json();
   return c.json({ contacts: rows });
 }));
 
@@ -23976,7 +24085,7 @@ app.post("/api/whatsapp-broadcast/contacts", requireAgencyAdminAuth, safeApi(asy
     const consent_source = String(item.consent_source ?? item.consentSource ?? "").trim().slice(0, 240);
     if (consent_status === "subscribed" && consent_source.length < 5) return null;
     if (!phone_number) return null;
-    return { agency_id: admin.agencyId, full_name: String(item.full_name ?? item.name ?? "").trim().slice(0, 120), phone_number, email: String(item.email ?? "").trim().slice(0, 240), company: String(item.company ?? "").trim().slice(0, 160), tags: Array.isArray(item.tags) ? item.tags.map(String).slice(0, 30) : [], consent_status, consent_source, consent_timestamp: consent_status === "subscribed" ? item.consent_timestamp ?? item.consentTimestamp ?? now() : null, opted_out_at: consent_status === "opted_out" ? now() : null, updated_at: now() };
+    return { agency_id: admin.agencyId, full_name: String(item.full_name ?? item.name ?? "").trim().slice(0, 120), phone_number, email: String(item.email ?? "").trim().slice(0, 240), company: String(item.company ?? "").trim().slice(0, 160), tags: Array.isArray(item.tags) ? item.tags.map(String).filter(tag => tag !== "__archived_contact__").slice(0, 30) : [], consent_status, consent_source, consent_timestamp: consent_status === "subscribed" ? item.consent_timestamp ?? item.consentTimestamp ?? now() : null, opted_out_at: consent_status === "opted_out" ? now() : null, updated_at: now() };
   }).filter(Boolean);
   if (rows.length !== incoming.length) return c.json({ error: "Every phone must be valid and every subscribed contact must include a consent source of at least five characters." }, 400);
   const saved = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_contacts?on_conflict=agency_id,phone_number", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(rows) })).json();
@@ -23998,10 +24107,34 @@ app.patch("/api/whatsapp-broadcast/contacts/:id", requireAgencyAdminAuth, safeAp
   const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?id=eq.${c.req.param("id")}&agency_id=eq.${admin.agencyId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) })).json() as unknown[];
   return rows.length ? c.json({ contact: rows[0] }) : c.json({ error: "Contact not found." }, 404);
 }));
+app.post("/api/whatsapp-broadcast/contacts/consent", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<any>(c.req.raw);
+  const ids = Array.isArray(body?.contactIds) ? [...new Set(body.contactIds.map(String))] : [];
+  const consentStatus = String(body?.consent_status ?? "");
+  if (!ids.length || ids.length > 1000 || ids.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) return c.json({ error: "Select between 1 and 1,000 valid contacts." }, 400);
+  if (!["subscribed", "opted_out", "not_consented"].includes(consentStatus)) return c.json({ error: "Choose a valid permission status." }, 400);
+  const consentSource = String(body?.consent_source ?? "").trim().slice(0, 240);
+  if (consentStatus === "subscribed" && consentSource.length < 5) return c.json({ error: "A documented shared opt-in source is required." }, 400);
+  const patch: Record<string, unknown> = { consent_status: consentStatus, updated_at: now() };
+  if (consentStatus === "subscribed") Object.assign(patch, { consent_source: consentSource, consent_timestamp: now(), opted_out_at: null });
+  else if (consentStatus === "opted_out") patch.opted_out_at = now();
+  else patch.opted_out_at = null;
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?id=in.(${ids.join(",")})&agency_id=eq.${admin.agencyId}&tags=not.cs.{__archived_contact__}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) })).json() as unknown[];
+  return c.json({ updatedCount: rows.length });
+}));
+app.post("/api/whatsapp-broadcast/contacts/archive-imported", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?agency_id=eq.${admin.agencyId}&and=(tags.cs.{Imported},tags.not.cs.{__archived_contact__})`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ tags: ["Imported", "__archived_contact__"], consent_status: "opted_out", opted_out_at: now(), updated_at: now() }) })).json() as unknown[];
+  return c.json({ archivedCount: rows.length });
+}));
 app.delete("/api/whatsapp-broadcast/contacts/:id", requireAgencyAdminAuth, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
-  await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?id=eq.${c.req.param("id")}&agency_id=eq.${admin.agencyId}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
-  return c.json({ deleted: true });
+  const contactRows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,tags&id=eq.${c.req.param("id")}&agency_id=eq.${admin.agencyId}&limit=1`)).json() as Array<{ id: string; tags?: string[] }>;
+  if (!contactRows[0]) return c.json({ error: "Contact not found." }, 404);
+  const tags = [...new Set([...(contactRows[0].tags ?? []), "__archived_contact__"])];
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?id=eq.${c.req.param("id")}&agency_id=eq.${admin.agencyId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ tags, consent_status: "opted_out", opted_out_at: now(), updated_at: now() }) })).json() as unknown[];
+  return rows.length ? c.json({ deleted: true, archived: true }) : c.json({ error: "Contact not found." }, 404);
 }));
 
 app.get("/api/whatsapp-broadcast/campaigns", requireAgencyAdminAuth, safeApi(async (c) => {
@@ -24014,22 +24147,33 @@ app.post("/api/whatsapp-broadcast/campaigns", requireAgencyAdminAuth, safeApi(as
   const body = await parseBody<any>(c.req.raw);
   const name = String(body?.campaign_name ?? "").trim().slice(0, 160), message = String(body?.message_content ?? "").trim();
   if (!name || !message || message.length > 4096) return c.json({ error: "Campaign name and a message of 1–4,096 characters are required." }, 400);
-  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,full_name,phone_number,company,consent_status,opted_out_at&agency_id=eq.${admin.agencyId}&consent_status=eq.subscribed&opted_out_at=is.null&limit=2000`)).json() as Array<Record<string, any>>;
+  const mediaType = body?.mediaType === "image" || body?.mediaType === "video" ? body.mediaType : null;
+  const mediaDescriptor = mediaType ? await getWhatsAppMediaDescriptor(c.env, body.mediaUrl, admin.agencyId, mediaType) : null;
+  if (mediaType && !mediaDescriptor) return c.json({ error: "The uploaded image/video is unavailable from the public website. Upload it again after deploying the media route." }, 400);
+  const mediaMimeType = mediaDescriptor?.mimeType ?? null;
+  const mediaFileName = mediaDescriptor?.fileName ?? null;
+  let mediaUrl: string | null = null;
+  if (mediaType) {
+    mediaUrl = String(body.mediaUrl);
+  } else if (body?.mediaUrl) return c.json({ error: "Choose a supported image or video attachment." }, 400);
+  if (mediaType && message.length > 1024) return c.json({ error: "WhatsApp image/video captions must be no longer than 1,024 characters." }, 400);
+  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,full_name,phone_number,company,consent_status,opted_out_at&agency_id=eq.${admin.agencyId}&tags=not.cs.{__archived_contact__}&consent_status=eq.subscribed&opted_out_at=is.null&limit=2000`)).json() as Array<Record<string, any>>;
   const requested = Array.isArray(body.contact_ids) && body.contact_ids.length ? new Set(body.contact_ids.map(String)) : null;
   const eligible = contacts.filter(contact => !requested || requested.has(String(contact.id)));
   if (requested && eligible.length !== requested.size) return c.json({ error: "Some selected contacts are not actively opted in." }, 409);
   if (body.launch && !eligible.length) return c.json({ error: "No actively opted-in recipients are available." }, 409);
   const status = body.launch ? "queued" : "draft";
-  const campaignRows = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_campaigns", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ agency_id: admin.agencyId, campaign_name: name, description: String(body.description ?? "").slice(0, 1000), message_content: message, campaign_status: status, total_recipients: body.launch ? eligible.length : 0, pending_count: body.launch ? eligible.length : 0, created_by: String((c.get("agencyAdmin") as AgencyAdminRecord).email ?? "") }) })).json() as Array<Record<string, any>>;
+  const campaignRows = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_campaigns", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ agency_id: admin.agencyId, campaign_name: name, description: String(body.description ?? "").slice(0, 1000), message_content: message, media_type: mediaType, media_url: mediaUrl, campaign_status: status, total_recipients: body.launch ? eligible.length : 0, pending_count: body.launch ? eligible.length : 0, created_by: String((c.get("agencyAdmin") as AgencyAdminRecord).email ?? "") }) })).json() as Array<Record<string, any>>;
   const campaign = campaignRows[0];
   if (!campaign) return c.json({ error: "Could not save the campaign." }, 502);
   if (body.launch && eligible.length) {
-    const recipients = eligible.map(contact => ({ campaign_id: campaign.id, agency_id: admin.agencyId, contact_id: contact.id, phone_number: contact.phone_number, personalized_message: whatsappTemplate(message, contact), delivery_status: "pending" }));
+    const recipients = eligible.map(contact => ({ campaign_id: campaign.id, agency_id: admin.agencyId, contact_id: contact.id, phone_number: contact.phone_number, personalized_message: whatsappTemplate(message, contact), media_type: mediaType, media_url: mediaUrl, delivery_status: "pending" }));
     const savedRecipients = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_recipients", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(recipients) })).json() as Array<Record<string, any>>;
     if (status === "queued") {
       const hook = c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim();
       if (!hook || !/^https:\/\/[^/]*\.make\.com\//i.test(hook)) return c.json({ campaign, warning: "Campaign saved as queued. Configure the Make webhook before delivery." }, 201);
-      const hookResponse = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "whatsapp_broadcast", campaignId: campaign.id, agencyId: admin.agencyId, recipients: savedRecipients.map(row => { const contact = eligible.find(item => item.id === row.contact_id); return { recipientId: row.id, contactId: row.contact_id, name: contact?.full_name ?? "", phone: row.phone_number, company: contact?.company ?? "", message: row.personalized_message }; }) }), signal: AbortSignal.timeout(12_000) });
+      const deliveryMediaUrl = mediaDescriptor?.deliveryUrl ?? mediaUrl;
+      const hookResponse = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "whatsapp_broadcast", campaignId: campaign.id, agencyId: admin.agencyId, mediaType, mediaUrl: deliveryMediaUrl, mediaMimeType, mediaFileName, recipients: savedRecipients.map(row => { const contact = eligible.find(item => item.id === row.contact_id); return { recipientId: row.id, contactId: row.contact_id, name: contact?.full_name ?? "", phone: row.phone_number, company: contact?.company ?? "", message: row.personalized_message, mediaType, mediaUrl: deliveryMediaUrl, mediaMimeType, mediaFileName }; }) }), signal: AbortSignal.timeout(12_000) });
       if (!hookResponse.ok) return c.json({ campaign, warning: "Campaign is saved but Make did not accept the dispatch." }, 502);
       await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?id=eq.${campaign.id}&agency_id=eq.${admin.agencyId}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ campaign_status: "sending", started_at: now(), dispatched_at: now(), dispatch_key: crypto.randomUUID(), updated_at: now() }) });
       campaign.campaign_status = "sending";
@@ -24046,34 +24190,88 @@ app.patch("/api/whatsapp-broadcast/campaigns/:id", requireAgencyAdminAuth, safeA
 }));
 app.post("/api/whatsapp-broadcast/campaigns/:id/retry-failed", requireAgencyAdminAuth, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
-  const campaignRows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?select=id,campaign_name,message_content,campaign_status&agency_id=eq.${admin.agencyId}&id=eq.${c.req.param("id")}&limit=1`)).json() as Array<Record<string, any>>;
+  const campaignRows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?select=id,campaign_name,message_content,campaign_status,media_type,media_url&agency_id=eq.${admin.agencyId}&id=eq.${c.req.param("id")}&limit=1`)).json() as Array<Record<string, any>>;
   const campaign = campaignRows[0];
   if (!campaign || campaign.campaign_status === "cancelled") return c.json({ error: "This campaign is not eligible for retries." }, 409);
-  const failedRows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?select=id,contact_id,phone_number,personalized_message,contact:whatsapp_marketing_contacts(full_name,company,consent_status,opted_out_at)&agency_id=eq.${admin.agencyId}&campaign_id=eq.${campaign.id}&delivery_status=eq.failed&limit=1000`)).json() as Array<any>;
-  const eligible = failedRows.filter(row => row.contact?.consent_status === "subscribed" && !row.contact?.opted_out_at);
+  const failedRows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?select=id,contact_id,phone_number,personalized_message,contact:whatsapp_marketing_contacts(full_name,company,consent_status,opted_out_at,tags)&agency_id=eq.${admin.agencyId}&campaign_id=eq.${campaign.id}&delivery_status=eq.failed&limit=1000`)).json() as Array<any>;
+  const eligible = failedRows.filter(row => row.contact?.consent_status === "subscribed" && !row.contact?.opted_out_at && !row.contact?.tags?.includes("__archived_contact__"));
   if (!eligible.length) return c.json({ retried: 0, warning: "No failed recipients still have active consent." });
   const hook = c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim();
   if (!hook || !/^https:\/\/[^/]*\.make\.com\//i.test(hook)) return c.json({ error: "Configure the Make sender webhook before retrying failed messages." }, 503);
   for (const row of eligible) await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?id=eq.${row.id}&delivery_status=eq.failed`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ delivery_status: "pending", attempt_count: 0, last_error: "", updated_at: now() }) });
   await whatsappMarketingDb(c.env, `whatsapp_marketing_campaigns?id=eq.${campaign.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ campaign_status: "queued", completed_at: null, updated_at: now() }) });
-  const response = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "whatsapp_broadcast", campaignId: campaign.id, agencyId: admin.agencyId, recipients: eligible.map(row => ({ recipientId: row.id, contactId: row.contact_id, name: row.contact.full_name, company: row.contact.company, phone: row.phone_number, message: row.personalized_message })) }), signal: AbortSignal.timeout(12_000) });
+  const mediaDescriptor = campaign.media_type && campaign.media_url ? await getWhatsAppMediaDescriptor(c.env, campaign.media_url, admin.agencyId, campaign.media_type) : null;
+  const deliveryMediaUrl = mediaDescriptor?.deliveryUrl ?? campaign.media_url ?? null;
+  const response = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "whatsapp_broadcast", campaignId: campaign.id, agencyId: admin.agencyId, mediaType: campaign.media_type ?? "text", mediaUrl: deliveryMediaUrl, mediaMimeType: mediaDescriptor?.mimeType ?? null, mediaFileName: mediaDescriptor?.fileName ?? null, recipients: eligible.map(row => ({ recipientId: row.id, contactId: row.contact_id, name: row.contact.full_name, company: row.contact.company, phone: row.phone_number, message: row.personalized_message, mediaType: campaign.media_type ?? "text", mediaUrl: deliveryMediaUrl, mediaMimeType: mediaDescriptor?.mimeType ?? null, mediaFileName: mediaDescriptor?.fileName ?? null })) }), signal: AbortSignal.timeout(12_000) });
   return response.ok ? c.json({ retried: eligible.length }) : c.json({ error: "Make did not accept failed-message retries." }, 502);
 }));
 app.post("/api/whatsapp-broadcast/campaigns/:id/test", requireAgencyAdminAuth, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord, body = await parseBody<any>(c.req.raw);
   const contactId = String(body?.contact_id ?? ""), text = String(body?.message ?? "").trim();
   if (!contactId || !text || text.length > 4096) return c.json({ error: "Choose a test contact and provide a message." }, 400);
-  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,phone_number,consent_status,opted_out_at&agency_id=eq.${admin.agencyId}&id=eq.${contactId}&limit=1`)).json() as Array<Record<string, any>>;
+  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,phone_number,consent_status,opted_out_at&agency_id=eq.${admin.agencyId}&id=eq.${contactId}&tags=not.cs.{__archived_contact__}&limit=1`)).json() as Array<Record<string, any>>;
   const contact = contacts[0];
   if (!contact || contact.consent_status !== "subscribed" || contact.opted_out_at) return c.json({ error: "Test messages require an actively opted-in contact." }, 409);
+  const mediaType = body?.mediaType === "image" || body?.mediaType === "video" ? body.mediaType : null;
+  const mediaDescriptor = mediaType ? await getWhatsAppMediaDescriptor(c.env, body.mediaUrl, admin.agencyId, mediaType) : null;
+  if (mediaType && !mediaDescriptor) return c.json({ error: "The test attachment is unavailable from the public website. Upload it again after deploying the media route." }, 400);
+  const mediaMimeType = mediaDescriptor?.mimeType ?? null;
+  const mediaFileName = mediaDescriptor?.fileName ?? null;
+  let mediaUrl: string | null = null;
+  if (mediaType) {
+    mediaUrl = String(body.mediaUrl);
+  }
+  if (mediaType && text.length > 1024) return c.json({ error: "WhatsApp image/video captions must be no longer than 1,024 characters." }, 400);
   const hook = c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim();
   if (!hook || !/^https:\/\/[^/]*\.make\.com\//i.test(hook)) return c.json({ error: "Configure the WhatsApp Make sender webhook first." }, 503);
-  const sent = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "whatsapp_test_message", agencyId: admin.agencyId, contactId: contact.id, phone: contact.phone_number, message: text }), signal: AbortSignal.timeout(12_000) });
+  const sent = await fetch(hook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario: "whatsapp_test_message", agencyId: admin.agencyId, contactId: contact.id, phone: contact.phone_number, message: text, mediaType: mediaType ?? "text", mediaUrl: mediaDescriptor?.deliveryUrl ?? mediaUrl, mediaMimeType, mediaFileName }), signal: AbortSignal.timeout(12_000) });
   return sent.ok ? c.json({ accepted: true }) : c.json({ error: "Make did not accept the test message." }, 502);
 }));
 app.get("/api/whatsapp-broadcast/messages", requireAgencyAdminAuth, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
-  return c.json({ messages: await (await whatsappMarketingDb(c.env, `whatsapp_marketing_message_logs?select=*,contact:whatsapp_marketing_contacts(full_name)&agency_id=eq.${admin.agencyId}&order=created_at.desc&limit=200`)).json() });
+  return c.json({ messages: await (await whatsappMarketingDb(c.env, `whatsapp_marketing_message_logs?select=*,contact:whatsapp_marketing_contacts(full_name,conversation_status)&agency_id=eq.${admin.agencyId}&order=created_at.desc&limit=500`)).json() });
+}));
+app.patch("/api/whatsapp-broadcast/messages/:contactId", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const status = String((await parseBody<any>(c.req.raw))?.conversation_status ?? "");
+  if (!["active", "human"].includes(status)) return c.json({ error: "Conversation status must be active or human." }, 400);
+  const contactId = encodeURIComponent(c.req.param("contactId"));
+  const result = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?id=eq.${contactId}&agency_id=eq.${admin.agencyId}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ conversation_status: status, updated_at: now() }) })).json() as unknown[];
+  return result.length ? c.json({ updated: true, conversation_status: status }) : c.json({ error: "WhatsApp contact not found." }, 404);
+}));
+app.post("/api/whatsapp-broadcast/messages/:contactId/reply", requireAgencyAdminAuth, safeApi(async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<any>(c.req.raw);
+  const message = String(body?.message ?? "").trim();
+  if (!message || message.length > 4000) return c.json({ error: "Write a reply up to 4,000 characters." }, 400);
+  const contactId = encodeURIComponent(c.req.param("contactId"));
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,phone_number,full_name,consent_status,conversation_status&agency_id=eq.${admin.agencyId}&id=eq.${contactId}&limit=1`)).json() as Array<Record<string, any>>;
+  const contact = rows[0];
+  if (!contact) return c.json({ error: "WhatsApp contact not found." }, 404);
+  if (contact.conversation_status !== "human") return c.json({ error: "Take over this conversation before sending a staff reply." }, 409);
+  if (contact.consent_status === "opted_out") return c.json({ error: "This contact opted out. No reply was sent." }, 409);
+  const baseUrl = c.env.WAHA_API_URL?.trim().replace(/\/+$/, ""), apiKey = c.env.WAHA_API_KEY?.trim();
+  const session = c.env.WAHA_SESSION_NAME?.trim() || "default";
+  if (!baseUrl || !apiKey) return c.json({ error: "Configure WAHA_API_URL and WAHA_API_KEY on the Worker before sending staff replies." }, 503);
+  const phone = whatsappPhone(contact.phone_number);
+  if (!phone) return c.json({ error: "This contact does not have a valid WhatsApp phone number." }, 409);
+  let wahaMessageId: string | null = null;
+  try {
+    const response = await fetch(`${baseUrl}/api/sendText`, { method: "POST", headers: { "Content-Type": "application/json", "X-Api-Key": apiKey }, body: JSON.stringify({ session, chatId: `${phone.replace(/\D/g, "")}@c.us`, text: message }), signal: AbortSignal.timeout(15000) });
+    const result = await response.json().catch(() => ({})) as any;
+    if (!response.ok) return c.json({ error: String(result?.message || result?.error || "WAHA could not send the reply.").slice(0, 300) }, 502);
+    wahaMessageId = typeof result?.id === "string" ? result.id : result?.id?._serialized || null;
+  } catch (error) {
+    console.error("WhatsApp staff reply failed:", errMsg(error));
+    return c.json({ error: "Could not connect to WAHA. No reply was confirmed as sent." }, 502);
+  }
+  try {
+    await whatsappMarketingDb(c.env, "whatsapp_marketing_message_logs", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ agency_id: admin.agencyId, contact_id: contact.id, phone_number: phone, direction: "outgoing", message_content: message, message_status: "sent", waha_message_id: wahaMessageId }) });
+  } catch (error) {
+    console.error("WhatsApp staff reply history save failed:", errMsg(error));
+    return c.json({ sent: true, historySaved: false, warning: "Reply was sent, but history could not be saved. Do not resend it." });
+  }
+  return c.json({ sent: true, historySaved: true });
 }));
 app.get("/api/whatsapp-broadcast/automation/inbox", safeApi(async (c) => {
   if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation request." }, 401);
@@ -24139,19 +24337,41 @@ app.post("/api/whatsapp-broadcast/automation/incoming", safeApi(async (c) => {
   const alternateFrom = event?.fromAlt ?? event?.remoteJidAlt ?? event?._data?.key?.remoteJidAlt ?? event?._data?.Info?.SenderAlt ?? "";
   let phone = whatsappPhoneFromJid(alternateFrom) || whatsappPhoneFromJid(rawFrom);
   const text = String(event?.body ?? event?.text ?? event?.message?.text ?? "").trim().slice(0, 4000);
-  if (!messageId || !text || event?.fromMe === true || event?.from_me === true) return c.json({ accepted: true, ignored: true });
+  const fromMe = event?.fromMe === true || event?.from_me === true || event?.key?.fromMe === true;
+  if (!messageId || !text) return c.json({ accepted: true, ignored: true });
+  if (fromMe) {
+    const destination = String(event?.to ?? event?.chatId ?? event?.toNumber ?? event?.key?.remoteJid ?? "").trim();
+    phone = whatsappPhoneFromJid(destination) || phone;
+    if (!phone) return c.json({ accepted: true, ignored: true, reason: "outgoing_phone_unavailable" });
+    // The WAHA message event is the send confirmation when the Make scenario
+    // has no delivery-result callback. Match the active recipient by destination
+    // and exact rendered text to avoid attributing unrelated manual messages.
+    const candidates = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?select=id,campaign_id,agency_id,contact_id,phone_number,personalized_message,media_type,delivery_status&phone_number=eq.${encodeURIComponent(phone)}&delivery_status=eq.sending&limit=10`)).json() as Array<Record<string, any>>;
+    // Media campaigns send the text and attachment as separate messages. They
+    // are marked sent only after Make confirms the attachment was accepted.
+    const matches = candidates.filter((row) => !row.media_type && String(row.personalized_message ?? "").trim() === text);
+    if (matches.length !== 1) return c.json({ accepted: true, outgoing: true, matched: false });
+    const recipient = matches[0];
+    const updated = await whatsappMarketingDb(c.env, `whatsapp_marketing_recipients?id=eq.${recipient.id}&delivery_status=eq.sending`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ delivery_status: "sent", waha_message_id: messageId, sent_at: now(), last_error: "", updated_at: now() }) });
+    const changed = await updated.json().catch(() => []);
+    if (!Array.isArray(changed) || changed.length === 0) return c.json({ accepted: true, outgoing: true, matched: false, reason: "recipient_already_updated" });
+    await whatsappMarketingDb(c.env, "whatsapp_marketing_message_logs", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ agency_id: recipient.agency_id, campaign_id: recipient.campaign_id, contact_id: recipient.contact_id, phone_number: phone, direction: "outgoing", message_content: text, message_status: "sent", waha_message_id: messageId }) });
+    await whatsappCampaignCounts(c.env, recipient.campaign_id, recipient.agency_id);
+    return c.json({ accepted: true, outgoing: true, matched: true, status: "sent" });
+  }
   if (!phone && /@lid$/i.test(rawFrom)) phone = await resolveWhatsAppLidPhone(c.env, String(body?.session ?? ""), rawFrom);
   if (!phone) return c.json({ accepted: true, knownContact: false, autoReply: false, reason: /@lid$/i.test(rawFrom) ? "sender_lid_unresolved" : "sender_phone_unavailable" });
-  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,full_name,consent_status,agency_id&phone_number=eq.${encodeURIComponent(phone)}&limit=1`)).json() as Array<Record<string, any>>;
+  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,full_name,consent_status,conversation_status,agency_id&phone_number=eq.${encodeURIComponent(phone)}&tags=not.cs.{__archived_contact__}&limit=1`)).json() as Array<Record<string, any>>;
   const contact = contacts[0];
   const inserted = await (await whatsappMarketingDb(c.env, "whatsapp_marketing_message_logs?on_conflict=waha_message_id", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify({ agency_id: Number(contact?.agency_id ?? 1), contact_id: contact?.id ?? null, phone_number: phone, direction: "incoming", message_content: text, message_status: "received", waha_message_id: messageId }) })).json() as unknown[];
   if (!inserted.length) return c.json({ accepted: true, duplicate: true });
   if (!contact) return c.json({ accepted: true, knownContact: false, autoReply: false, reason: "contact_not_found" });
-  const optOut = /\b(stop|unsubscribe|cancel|opt\s*out|optout)\b/i.test(text);
+  const optOut = /\b(stop|unsubscribe|cancel|end|quit|opt\s*out|optout|no\s+more\s+messages|remove\s+me|do\s+not\s+(?:message|contact)\s+me|don't\s+(?:message|contact)\s+me)\b/i.test(text);
   if (optOut) {
     await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?id=eq.${contact.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ consent_status: "opted_out", opted_out_at: now(), updated_at: now() }) });
     return c.json({ accepted: true, optedOut: true, autoReply: false, contactId: contact.id });
   }
+  if (contact.conversation_status === "human") return c.json({ accepted: true, optedOut: false, knownContact: true, humanHandover: true, autoReplyEnabled: false, autoReply: false, contactId: contact.id, contactName: contact.full_name, phone, inboundText: text });
   const settings = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_settings?select=ai_auto_reply_enabled,ai_reply_instructions&agency_id=eq.${contact.agency_id}`)).json() as Array<{ ai_auto_reply_enabled: boolean; ai_reply_instructions: string }>;
   const autoReply = settings[0]?.ai_auto_reply_enabled === true;
   let knowledge: Array<{ title: string; category: string; content: string; sourceKey: string }> = [];
@@ -24176,8 +24396,48 @@ app.post("/api/whatsapp-broadcast/automation/incoming", safeApi(async (c) => {
     if (profile?.contact_website?.trim()) profileFacts.push(`AGENCY PROFILE WEBSITE: ${profile.contact_website.trim()}`);
   } catch (error) { console.error("WhatsApp auto-reply could not load the current agency profile", errMsg(error)); }
   const knowledgeContext = [profileFacts.join("\n"), ...knowledge.map((item) => `[${item.category}] ${item.title}\n${item.content}`)].join("\n\n").slice(0, 7000);
-  return c.json({ accepted: true, optedOut: false, knownContact: true, autoReplyEnabled: autoReply, autoReply, contactId: contact.id, contactName: contact.full_name, phone, inboundText: text, instructions: settings[0]?.ai_reply_instructions ?? "", knowledgeContext, knowledgeSources: knowledge.map(({ title, sourceKey }) => ({ title, sourceKey })) });
+  return c.json({ accepted: true, optedOut: false, knownContact: true, autoReplyEnabled: autoReply, autoReply, ...(!autoReply ? { reason: "ai_auto_reply_disabled" } : {}), contactId: contact.id, contactName: contact.full_name, phone, replyChatId: rawFrom, inboundText: text, instructions: settings[0]?.ai_reply_instructions ?? "", knowledgeContext, knowledgeSources: knowledge.map(({ title, sourceKey }) => ({ title, sourceKey })) });
 }));
+app.post("/api/whatsapp-broadcast/automation/send-auto-reply", safeApi(async (c) => {
+  if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation request." }, 401);
+  const body = await parseBody<any>(c.req.raw);
+  const phone = whatsappPhone(body?.phone);
+  const session = String(body?.session ?? "").trim();
+  const chatId = String(body?.chatId ?? "").trim();
+  const inboundMessageId = String(body?.inboundMessageId ?? "").trim();
+  const message = String(body?.reply ?? "").trim();
+  if (!phone || !session || session.length > 200 || !/^[-\w]+$/.test(session) || !/^\d+@(c\.us|lid)$/i.test(chatId) || !inboundMessageId || inboundMessageId.length > 300 || !message || message.length > 2000) {
+    return c.json({ error: "A valid contact, WAHA session, WhatsApp chat ID, inbound message ID, and reply are required." }, 400);
+  }
+  const contacts = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,agency_id,consent_status,conversation_status&phone_number=eq.${encodeURIComponent(phone)}&tags=not.cs.{__archived_contact__}&limit=1`)).json() as Array<Record<string, any>>;
+  const contact = contacts[0];
+  if (!contact) return c.json({ error: "WhatsApp contact not found; no reply was sent." }, 404);
+  const inbound = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_message_logs?select=id&contact_id=eq.${encodeURIComponent(contact.id)}&direction=eq.incoming&waha_message_id=eq.${encodeURIComponent(inboundMessageId)}&limit=1`)).json() as unknown[];
+  if (!inbound.length) return c.json({ error: "The inbound WhatsApp message could not be verified; no reply was sent." }, 409);
+  if (contact.consent_status === "opted_out") return c.json({ error: "This contact opted out; no reply was sent." }, 409);
+  if (contact.conversation_status === "human") return c.json({ error: "A staff member owns this conversation; no AI reply was sent." }, 409);
+  const settings = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_settings?select=ai_auto_reply_enabled&agency_id=eq.${contact.agency_id}`)).json() as Array<{ ai_auto_reply_enabled: boolean }>;
+  if (settings[0]?.ai_auto_reply_enabled !== true) return c.json({ error: "AI auto-reply is disabled; no reply was sent." }, 409);
+  const baseUrl = c.env.WAHA_API_URL?.trim().replace(/\/+$/, ""), apiKey = c.env.WAHA_API_KEY?.trim();
+  if (!baseUrl || !apiKey) return c.json({ error: "WAHA is not configured on the Worker." }, 503);
+  try {
+    const response = await fetch(`${baseUrl}/api/sendText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Api-Key": apiKey },
+      body: JSON.stringify({ session, chatId, text: message }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const result = await response.json().catch(() => ({})) as any;
+    if (!response.ok) return c.json({ error: String(result?.message || result?.error || `WAHA returned HTTP ${response.status}.`).slice(0, 300) }, 502);
+    const messageId = typeof result?.id === "string" ? result.id : result?.id?._serialized || result?.id?.id || "";
+    if (!messageId) return c.json({ error: "WAHA accepted the request but returned no message ID; check WAHA before retrying." }, 502);
+    return c.json({ id: messageId, sent: true });
+  } catch (error) {
+    console.error("WhatsApp AI auto-reply send failed:", errMsg(error));
+    return c.json({ error: "The Worker could not connect to WAHA. No reply was confirmed as sent." }, 502);
+  }
+}));
+
 app.post("/api/whatsapp-broadcast/automation/auto-reply-result", safeApi(async (c) => {
   if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation callback." }, 401);
   const body = await parseBody<any>(c.req.raw), phone = whatsappPhone(body?.phone), reply = String(body?.reply ?? "").trim().slice(0, 2000), messageId = String(body?.wahaMessageId ?? "");
@@ -24192,7 +24452,7 @@ app.post("/api/whatsapp-broadcast/automation/authorize-test", safeApi(async (c) 
   if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation request." }, 401);
   const body = await parseBody<any>(c.req.raw), phone = whatsappPhone(body?.phone), contactId = String(body?.contactId ?? "");
   if (!phone || !contactId) return c.json({ canSend: false });
-  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,phone_number,consent_status,opted_out_at&agency_id=eq.${Number(body.agencyId)}&id=eq.${contactId}&limit=1`)).json() as Array<Record<string, any>>;
+  const rows = await (await whatsappMarketingDb(c.env, `whatsapp_marketing_contacts?select=id,phone_number,consent_status,opted_out_at&agency_id=eq.${Number(body.agencyId)}&id=eq.${contactId}&tags=not.cs.{__archived_contact__}&limit=1`)).json() as Array<Record<string, any>>;
   const contact = rows[0];
   return c.json({ canSend: Boolean(contact && contact.phone_number === phone && contact.consent_status === "subscribed" && !contact.opted_out_at) });
 }));
@@ -24213,7 +24473,11 @@ app.get("/api/whatsapp-broadcast/automation/recipient-status/:id", safeApi(async
 app.post("/api/whatsapp-broadcast/automation/claim/:id", safeApi(async (c) => {
   if (!whatsappAutomationAuthorized(c)) return c.json({ error: "Unauthorized automation request." }, 401);
   const rows = await (await whatsappMarketingDb(c.env, "rpc/claim_whatsapp_marketing_recipient", { method: "POST", body: JSON.stringify({ p_recipient_id: c.req.param("id") }) })).json() as Array<Record<string, any>>;
-  return c.json(rows[0] ? { claimed: true, phone: rows[0].phone_number, message: rows[0].personalized_message, campaignId: rows[0].campaign_id, recipientId: rows[0].id } : { claimed: false });
+  const row = rows[0];
+  if (!row) return c.json({ claimed: false });
+  const mediaType = row.media_type === "image" || row.media_type === "video" ? row.media_type : null;
+  const mediaDescriptor = mediaType && row.media_url ? await getWhatsAppMediaDescriptor(c.env, row.media_url, Number(row.agency_id), mediaType) : null;
+  return c.json({ claimed: true, phone: row.phone_number, message: row.personalized_message, mediaType: mediaType ?? "text", mediaUrl: mediaDescriptor?.deliveryUrl ?? row.media_url ?? "", mediaMimeType: mediaDescriptor?.mimeType ?? "", mediaFileName: mediaDescriptor?.fileName ?? "", campaignId: row.campaign_id, recipientId: row.id });
 }));
 
 
@@ -24228,6 +24492,7 @@ app.get("/api/whatsapp-broadcast/status-legacy", requireAgencyAdminAuth, (c) =>
 );
 
 app.post("/api/whatsapp-broadcast/legacy", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   if (c.req.method === "POST") return c.json({ error: "WhatsApp broadcasting has been retired. Use the Telegram broadcast dashboard." }, 410);
   // Retained below only as migration history; legacy phone-list delivery is unreachable.
   const webhookUrl = c.env.MAKE_WHATSAPP_BROADCAST_WEBHOOK_URL?.trim();
@@ -24249,20 +24514,8 @@ app.post("/api/whatsapp-broadcast/legacy", requireAgencyAdminAuth, async (c) => 
   }
   let mediaUrl = "";
   if (mediaType !== "text") {
-    try {
-      const parsedMediaUrl = new URL(String(body.mediaUrl ?? ""));
-      const keyMatch = parsedMediaUrl.pathname.match(/^\/api\/whatsapp-broadcast\/media\/([0-9a-f-]{36})$/i);
-      if (parsedMediaUrl.origin !== new URL(c.req.url).origin || !keyMatch || !c.env.WHATSAPP_MEDIA) {
-        return c.json({ error: "Upload your image or video in this broadcast before sending." }, 400);
-      }
-      const storedMedia = await c.env.WHATSAPP_MEDIA.head(`broadcast/${keyMatch[1]}`);
-      if (!storedMedia || storedMedia.customMetadata?.mediaType !== mediaType) {
-        return c.json({ error: "The uploaded media is missing or does not match its selected type. Upload it again." }, 400);
-      }
-      mediaUrl = parsedMediaUrl.toString();
-    } catch {
-      return c.json({ error: "The media URL is invalid. Upload the media again." }, 400);
-    }
+    if (!await getWhatsAppMediaDescriptor(c.env, body.mediaUrl, admin.agencyId, mediaType)) return c.json({ error: "The uploaded media is unavailable from the public website or does not match its selected type. Upload it again after deploying the WhatsApp media route." }, 400);
+    mediaUrl = String(body.mediaUrl);
   }
 
   const contacts: Array<{ name: string; phone: string; language: string; whatsappConsent: boolean; consentSource: string }> = [];
@@ -24288,7 +24541,6 @@ app.post("/api/whatsapp-broadcast/legacy", requireAgencyAdminAuth, async (c) => 
   if (!c.env.APP_DATA) {
     return c.json({ error: "WhatsApp reply language storage is unavailable. No messages were sent." }, 503);
   }
-  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const referralLeads = await loadAtsReferralLeadsForAgency(c.env, admin.agencyId);
   const referralByPhone = new Map(referralLeads.map((lead) => [canonicalReferralPhone(lead.phone).replace(/\D/g, ""), lead]));
   const whatsappConsentContacts = await getMarketingConsentFlags(

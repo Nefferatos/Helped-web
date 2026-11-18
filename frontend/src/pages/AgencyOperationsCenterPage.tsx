@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowRight, BookOpen, Check, CheckCircle2, ChevronsUpDown, ExternalLink, FileAudio, FolderSync, Search, ShieldCheck, Sparkles, UsersRound, Plane, Stethoscope, HeartHandshake, ClipboardList, Trash2 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -154,6 +154,11 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [selectedLoginAccountId, setSelectedLoginAccountId] = useState('')
   const [employerPickerOpen, setEmployerPickerOpen] = useState(false)
   const [creatingEmployerRecord, setCreatingEmployerRecord] = useState(false)
+  const creatingEmployerRecordRef = useRef(false)
+  const [manualLinkAccountId, setManualLinkAccountId] = useState('')
+  const [manualLinkPickerOpen, setManualLinkPickerOpen] = useState(false)
+  const [manualLinkBusy, setManualLinkBusy] = useState(false)
+  const [manualLinkMessage, setManualLinkMessage] = useState('')
   const [requestEmployerChoices, setRequestEmployerChoices] = useState<EmployerLoginAccount[]>([])
   const [requestClientLabel, setRequestClientLabel] = useState('')
   const [requestEmployerResolution, setRequestEmployerResolution] = useState('')
@@ -216,21 +221,31 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   }, [])
 
   const selectedLoginAccount = employerLoginAccounts.find((account) => account.id === selectedLoginAccountId)
+  const manualLinkAccount = employerLoginAccounts.find((account) => account.id === manualLinkAccountId)
 
-  const chooseEmployerAccount = async (accountId: string) => {
+  const chooseEmployerAccount = useCallback(async (
+    accountId: string,
+    availableAccounts: EmployerLoginAccount[] = employerLoginAccounts,
+    quiet = false,
+  ): Promise<string | null> => {
     setSelectedLoginAccountId(accountId)
     setMatches(null)
     setPlacementCandidate(null)
-    if (!accountId) { setEmployerId(''); return }
-    const account = employerLoginAccounts.find((item) => item.id === accountId)
+    if (!accountId) { setEmployerId(''); return null }
+    const account = availableAccounts.find((item) => item.id === accountId)
     setEmployerId('')
-    if (!account || creatingEmployerRecord) return
-    if (account.linkedEmployers.length > 1) return setNotice('This employer has more than one record. Please resolve the duplicate before continuing.')
-    if (account.linkedEmployers.length === 1) {
-      setEmployerId(account.linkedEmployers[0].id)
-      setNotice('Employer selected.')
-      return
+    if (!account || creatingEmployerRecordRef.current) return null
+    if (account.linkedEmployers.length > 1) {
+      if (!quiet) setNotice('This employer has more than one record. Please resolve the duplicate before continuing.')
+      return null
     }
+    if (account.linkedEmployers.length === 1) {
+      const linkedEmployerId = account.linkedEmployers[0].id
+      setEmployerId(linkedEmployerId)
+      if (!quiet) setNotice('Employer selected.')
+      return linkedEmployerId
+    }
+    creatingEmployerRecordRef.current = true
     setCreatingEmployerRecord(true)
     try {
       const result = await api<{ employer: { id: string; refCode: string; name: string; email: string } }>(`/api/operations-board/employer-login-accounts/${encodeURIComponent(account.id)}/employer-record`, {
@@ -239,10 +254,39 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
       const { loginAccounts } = await api<{ loginAccounts?: EmployerLoginAccount[] }>('/api/operations-board/employer-login-accounts')
       setEmployerLoginAccounts(loginAccounts ?? [])
       setEmployerId(result.employer.id)
-      setNotice('Employer selected.')
+      if (!quiet) setNotice('Employer selected.')
+      return result.employer.id
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Unable to link employer login')
-    } finally { setCreatingEmployerRecord(false) }
+      const message = error instanceof Error ? error.message : 'Unable to link employer login'
+      setNotice(message)
+      if (quiet) setRequestEmployerResolution(message)
+      return null
+    } finally {
+      creatingEmployerRecordRef.current = false
+      setCreatingEmployerRecord(false)
+    }
+  }, [employerLoginAccounts])
+
+  const linkSelectedEmployerAccount = async () => {
+    const account = employerLoginAccounts.find((item) => item.id === manualLinkAccountId)
+    if (!account || manualLinkBusy) return
+    setManualLinkBusy(true)
+    setManualLinkMessage('')
+    try {
+      const result = await api<{ employer: { id: string; refCode: string; name: string }; alreadyExisted?: boolean }>(`/api/operations-board/employer-login-accounts/${encodeURIComponent(account.id)}/employer-record`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmEmployerAccount: true }),
+      })
+      const { loginAccounts } = await api<{ loginAccounts?: EmployerLoginAccount[] }>('/api/operations-board/employer-login-accounts')
+      setEmployerLoginAccounts(loginAccounts ?? [])
+      const resultText = result.alreadyExisted
+        ? `${account.name || account.email} is linked to this agency through employer record ${result.employer.refCode}.`
+        : `Created employer record ${result.employer.refCode} for ${account.name || account.email} and linked it to this agency.`
+      setManualLinkMessage(resultText)
+    } catch (error) {
+      setManualLinkMessage(error instanceof Error ? error.message : 'Could not link this employer account.')
+    } finally {
+      setManualLinkBusy(false)
+    }
   }
 
   useEffect(() => {
@@ -269,8 +313,27 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
         setRequestClientLabel(request.client?.name || 'Client on request')
         const emailMatches = (loginAccounts ?? []).filter((employer) => clientEmail && employer.email.trim().toLowerCase() === clientEmail)
         setRequestEmployerChoices(emailMatches)
+        // A request email can identify the account, but placement APIs require
+        // the agency's numeric employer-record ID. Preselect only when the
+        // email maps to exactly one account and that account to exactly one
+        // employer record; ambiguous or unlinked accounts still need staff action.
+        setSelectedLoginAccountId('')
+        setEmployerId('')
         if (emailMatches.length === 1) {
-          setRequestEmployerResolution(`One employer account matches the request email. Select it from the Employer list.`)
+          const matchingAccount = emailMatches[0]
+          if (matchingAccount.linkedEmployers.length === 1) {
+            setSelectedLoginAccountId(matchingAccount.id)
+            setEmployerId(matchingAccount.linkedEmployers[0].id)
+            setRequestEmployerResolution(`Employer account matched by email: ${matchingAccount.name || matchingAccount.email}.`)
+          } else if (matchingAccount.linkedEmployers.length === 0) {
+            setRequestEmployerResolution('One verified employer login matches this request. Linking its agency employer record…')
+            void chooseEmployerAccount(matchingAccount.id, loginAccounts ?? [], true).then((linkedEmployerId) => {
+              if (cancelled || !linkedEmployerId) return
+              setRequestEmployerResolution(`Employer account linked and ready: ${matchingAccount.name || matchingAccount.email}.`)
+            })
+          } else {
+            setRequestEmployerResolution(`This employer login has multiple agency records. Select the correct employer record before starting placement.`)
+          }
         } else if (emailMatches.length > 1) {
           setRequestEmployerResolution('Several employer accounts match this email. Select the correct account from the Employer list.')
         } else {
@@ -286,7 +349,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
       })
       .catch((error) => { if (!cancelled) setNotice(error instanceof Error ? error.message : 'Unable to load the preferred helper') })
     return () => { cancelled = true }
-  }, [preferredCandidateReference, sourceRequestId])
+  }, [chooseEmployerAccount, preferredCandidateReference, sourceRequestId])
 
   const removePlacement = async (placement: Placement) => {
     const reference = placement.maid_reference_code || placement.id
@@ -387,7 +450,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const startPlacement = async (candidate: MatchCandidate) => {
     const numericEmployerId = getPositiveEmployerId(employerId)
     if (!numericEmployerId) {
-      setNotice('Enter a valid employer number before starting placement steps.')
+      setNotice('Select an employer account with one linked agency employer record before starting placement steps.')
       return
     }
 
@@ -588,6 +651,35 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
         {/* ── Matching tab ─────────────────────────────────────────── */}
         {activeTab === 'matching' ? (
           <Card icon={UsersRound} title="Find a helper for an employer" description="Save the employer's needs, then generate a shortlist for staff review.">
+            <div className="space-y-3 rounded-2xl border border-teal-200 bg-teal-50 p-4">
+              <div><p className="font-semibold text-teal-950">Link an employer account to this agency</p><p className="mt-1 text-sm text-teal-900">Choose one verified employer login. It will be linked to an existing matching employer record or get a new agency record.</p></div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Popover open={manualLinkPickerOpen} onOpenChange={setManualLinkPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" role="combobox" aria-expanded={manualLinkPickerOpen} aria-label="Search employer accounts to link" disabled={manualLinkBusy || employerLoginAccounts.length === 0} className={`${fieldClass} flex h-11 min-w-0 flex-1 items-center justify-between font-normal`}>
+                      <span className="truncate text-left">{manualLinkAccount ? `${manualLinkAccount.name || 'Name not set'} · ${manualLinkAccount.email}${manualLinkAccount.linkedEmployers.length ? ` · ${manualLinkAccount.linkedEmployers.length} linked record${manualLinkAccount.linkedEmployers.length === 1 ? '' : 's'}` : ' · Not linked'}` : employerLoginAccounts.length ? 'Search or select an employer account' : 'No verified employer accounts available'}</span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search name, email, or phone…" aria-label="Search employer accounts" />
+                      <CommandList>
+                        <CommandEmpty>No employer accounts match that search.</CommandEmpty>
+                        <CommandGroup>
+                          {employerLoginAccounts.map((account) => <CommandItem key={account.id} value={`${account.name} ${account.company} ${account.email} ${account.phone}`} onSelect={() => { setManualLinkAccountId(account.id); setManualLinkMessage(''); setManualLinkPickerOpen(false) }}>
+                            <Check className={`mr-2 h-4 w-4 ${manualLinkAccountId === account.id ? 'opacity-100' : 'opacity-0'}`} />
+                            <span className="min-w-0"><span className="block truncate font-medium">{account.name || 'Name not set'}{account.company ? ` · ${account.company}` : ''}</span><span className="block truncate text-xs text-slate-600">{account.email}{account.phone ? ` · ${account.phone}` : ''}{account.linkedEmployers.length ? ` · ${account.linkedEmployers.length} linked record${account.linkedEmployers.length === 1 ? '' : 's'}` : ' · Not linked'}</span></span>
+                          </CommandItem>)}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <Button type="button" onClick={() => void linkSelectedEmployerAccount()} disabled={!manualLinkAccountId || manualLinkBusy} className="shrink-0 bg-teal-800 text-white hover:bg-teal-900">{manualLinkBusy ? 'Linking account…' : 'Link selected account'}</Button>
+              </div>
+              {manualLinkMessage && <p role="status" className="text-sm font-medium text-teal-950">{manualLinkMessage}</p>}
+            </div>
             <form onSubmit={saveRequirements} className="space-y-4">
               {preferredCandidateReference && <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm"><p className="font-semibold text-violet-950">Request handoff · {sourceRequestId.slice(0, 8)}</p><p className="mt-1 text-violet-900">Client: {requestClientLabel || "Loading request details…"}. Preferred helper: {preferredCandidateReference}.</p>{requestEmployerResolution && <p className="mt-2 text-xs font-medium text-violet-900">{requestEmployerResolution}</p>}</div>}
               <div className="grid gap-2 rounded-2xl bg-muted p-4 text-sm sm:grid-cols-3">
@@ -733,8 +825,8 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
                               <p className="font-semibold text-black">Has the employer confirmed this helper?</p>
                               <p className="mt-1 text-sm text-black">Only continue after the employer has chosen this profile. This creates the placement record and opens its checklist.</p>
                               <div className="mt-3 flex flex-wrap gap-2">
-                                <button type="button" onClick={() => void startPlacement(match)} disabled={startingPlacementId === match.maidId} className={primaryButton}>
-                                  {startingPlacementId === match.maidId ? 'Starting placement…' : 'Yes, start placement steps'}
+                                <button type="button" onClick={() => void startPlacement(match)} disabled={startingPlacementId === match.maidId || creatingEmployerRecord || !getPositiveEmployerId(employerId)} className={primaryButton}>
+                                  {creatingEmployerRecord ? 'Linking employer account…' : startingPlacementId === match.maidId ? 'Starting placement…' : 'Yes, start placement steps'}
                                 </button>
                                 <button type="button" onClick={() => setPlacementCandidate(null)} disabled={startingPlacementId === match.maidId} className={secondaryButton}>Not yet</button>
                               </div>

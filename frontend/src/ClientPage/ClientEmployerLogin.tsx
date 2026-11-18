@@ -512,7 +512,7 @@ const ClientEmployerLogin = () => {
             </div>
 
             <div>
-              <SocialOAuthButtons disabled={isSubmitting} enableFacebook redirectTo={redirectTo} />
+              <SocialOAuthButtons disabled={isSubmitting} redirectTo={redirectTo} />
 
               <div className="cel-divider">
                 <div className="cel-divider-line" />

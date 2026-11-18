@@ -8,7 +8,6 @@ import {
   Home,
   Menu,
   MessageCircle,
-  MessageSquarePlus,
   Search,
   Star,
   X,
@@ -45,15 +44,15 @@ type NavTab = { label: string; to: string; icon: LucideIcon };
 const allTabs: NavTab[] = [
   { label: "Home",        to: "/client/home",         icon: Home },
   { label: "Search Maid", to: "/client/maids",         icon: Search },
+  { label: "Requests",    to: "/client/requests",      icon: FileText },
   { label: "Messages",    to: "/client/support-chat",  icon: MessageCircle },
   { label: "Documents",   to: "/client/placement-documents", icon: FileText },
   { label: "FAQ",         to: "/client/faq",           icon: HelpCircle },
-  { label: "Enquiry",     to: "/client/enquiry",       icon: MessageSquarePlus },
 ];
 
 // Enquiry is a secondary action — shown as its own CTA button in the
 // mobile drawer instead of occupying a grid tile.
-const mobileGridTabs = allTabs.filter((t) => t.to !== "/client/enquiry");
+const mobileGridTabs = allTabs;
 
 // Horizontal padding baked into each desktop tab link (px-2.5 = 10px).
 // Used to inset the sliding underline so it lines up with the label
@@ -560,7 +559,7 @@ const ClientPortalNavbar = () => {
             {/* CTAs */}
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Button asChild className="rounded-2xl">
-                <Link to="/client/maids?intent=request">Find a Maid</Link>
+                <Link to="/client/requests">My Requests</Link>
               </Button>
               <Button asChild variant="outline" className="rounded-2xl">
                 <Link to="/client/enquiry">Ask a Question</Link>
