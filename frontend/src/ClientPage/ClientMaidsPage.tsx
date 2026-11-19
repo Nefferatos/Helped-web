@@ -364,8 +364,8 @@ export const GLOBAL_CSS = `
   --white:      #ffffff;
   --ink:        #091c22;
   --ink-2:      #1a3a44;
-  --ink-3:      #4a6a74;
-  --ink-4:      #8aaab4;
+  --ink-3:      #000000;
+  --ink-4:      #000000;
   --rule:       #cde0e6;
   --rule-2:     #ddeef2;
   --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px;
@@ -1322,8 +1322,8 @@ export const GLOBAL_CSS = `
   font-size:16px;
   color:#091c22;
   --ink-2:#091c22;
-  --ink-3:#19353d;
-  --ink-4:#294952;
+  --ink-3:#000000;
+  --ink-4:#000000;
 }
 .cm-classic-filter,
 .cm-classic-input,.cm-classic-select,

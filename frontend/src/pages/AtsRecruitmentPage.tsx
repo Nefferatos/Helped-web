@@ -91,6 +91,7 @@ type WorkflowActivity = {
   title: string;
   detail: string;
   meetingLink?: string;
+  calendarEventUrl?: string;
 };
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -495,6 +496,8 @@ const AtsRecruitmentPage = () => {
     date: string;
     time?: string;
     meetingLink?: string;
+    calendarEventId?: string;
+    calendarEventUrl?: string;
   } | null>(null);
   const [activeDocumentIndex, setActiveDocumentIndex] = useState(0);
   const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
@@ -634,13 +637,17 @@ const AtsRecruitmentPage = () => {
     meetingUrl?: string;
     interviewMode?: string;
     applicationId?: string;
-  }): Promise<{ meetLink?: string; eventUrl?: string; eventId?: string }> => {
+    interviewId?: string;
+    durationMinutes?: number;
+    calendarEventId?: string;
+    sheetRowNumber?: number;
+  }): Promise<{ meetLink?: string; eventUrl?: string; eventId?: string; sheetRowNumber?: number; calendarSynced?: boolean }> => {
     const response = await fetch("/api/ai/hr-interview/email", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       body: JSON.stringify({ ...payload, position: "Domestic helper recruitment" }),
     });
-    const data = await response.json().catch(() => ({})) as { error?: string; meetLink?: string; eventUrl?: string; eventId?: string };
+    const data = await response.json().catch(() => ({})) as { error?: string; meetLink?: string; eventUrl?: string; eventId?: string; sheetRowNumber?: number; calendarSynced?: boolean };
     if (!response.ok) throw new Error(data.error || "Email could not be sent. Check the interview email Make workflow.");
     return data;
   };
@@ -707,37 +714,51 @@ const AtsRecruitmentPage = () => {
           sendEmployerInvitation,
         }),
       });
-      const scheduleData = await scheduleResponse.json().catch(() => ({})) as { error?: string; interview?: { id?: number | string } };
+      const scheduleData = await scheduleResponse.json().catch(() => ({})) as { error?: string; interview?: { id?: number | string; calendar_event_id?: string | null; calendar_event_url?: string | null; calendar_sheet_row_number?: number | null } };
       if (!scheduleResponse.ok) throw new Error(scheduleData.error || "Could not save the interview schedule");
       interviewSaved = true;
       await updateAtsStage(interviewTarget.id, "Screening Interview", `Interview scheduled for ${interviewDateTime.replace("T", " ")}`);
       applicantStageUpdated = true;
       setActiveStageTab((current) => current === interviewTarget.status ? "Screening Interview" : current);
-      setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: interviewMeetingLink.trim() || undefined });
+      setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: interviewMeetingLink.trim() || undefined, calendarEventId: interviewTarget.scheduledInterview?.calendarEventId || undefined, calendarEventUrl: interviewTarget.scheduledInterview?.calendarEventUrl || undefined });
+      let calendarSyncConfirmed = false;
+      let calendarEventUrl = interviewTarget.scheduledInterview?.calendarEventUrl || undefined;
       if (sendApplicantEmail && interviewTarget.email) {
         const makeResult = await deliverApplicantEmail({
           to: interviewTarget.email,
           candidateName: interviewTarget.name,
           type: "interview_invitation",
           subject: "Interview invitation",
-          // WEBSITE AI WORKFLOW's Google Calendar module parses these as
-          // `YYYY-MM-DD HH:mm` in Asia/Singapore. Do not use locale-formatted
-          // values such as 9/30/2026 or 2:00 AM here.
+          // Keep an ISO-like date and explicit 24-hour time for Make mappings.
           scheduledDate,
           scheduledTime,
           scheduledTime24,
           meetingUrl: interviewMeetingLink.trim() || undefined,
           interviewMode,
           applicationId: interviewTarget.id,
+          interviewId: String(scheduleData.interview.id),
+          durationMinutes: 30,
+          calendarEventId: scheduleData.interview.calendar_event_id || interviewTarget.scheduledInterview?.calendarEventId || undefined,
+          sheetRowNumber: scheduleData.interview.calendar_sheet_row_number || interviewTarget.scheduledInterview?.calendarSheetRowNumber || undefined,
           body: `Dear ${interviewTarget.name},\n\nWe would like to invite you to an interview on ${new Date(interviewDateTime).toLocaleString()}. Interview format: ${{ video: "Video call", phone: "Phone call", in_person: "In-person" }[interviewMode] ?? interviewMode}.${interviewMeetingLink.trim() ? `\nMeeting link: ${interviewMeetingLink.trim()}` : " Our recruitment team will send the joining details."}\n\nBest regards,\nRecruitment Team`,
         });
         const makeMeetLink = makeResult.meetLink?.trim();
+        calendarSyncConfirmed = makeResult.calendarSynced === true;
+        calendarEventUrl = makeResult.eventUrl || calendarEventUrl;
         if (makeMeetLink) {
           generatedMeetLink = makeMeetLink;
           meetingLinkToSave = makeMeetLink;
           setInterviewMeetingLink(makeMeetLink);
-          setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: makeMeetLink });
+          setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: makeMeetLink, calendarEventId: makeResult.eventId, calendarEventUrl: makeResult.eventUrl });
         }
+        if (!scheduleData.interview.id) throw new Error("The interview invitation was sent but the saved interview ID is missing. Contact the agency before retrying.");
+        const invitationRecordResponse = await fetch(`/api/ats/interviews/${encodeURIComponent(String(scheduleData.interview.id))}/invitation-sent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+          body: JSON.stringify({ applicationId: interviewTarget.id }),
+        });
+        const invitationRecordData = await invitationRecordResponse.json().catch(() => ({})) as { error?: string };
+        if (!invitationRecordResponse.ok) throw new Error(invitationRecordData.error || "The invitation was sent but its delivery record could not be saved. Do not resend; contact the agency.");
       }
       if (meetingLinkToSave && scheduleData.interview?.id) {
         const saveMeetResponse = await fetch(`/api/ai/hr-interview/schedule/${encodeURIComponent(String(scheduleData.interview.id))}/meeting-link`, {
@@ -769,15 +790,18 @@ const AtsRecruitmentPage = () => {
       }
       setWorkflowActivity({
         tone: "success",
-        title: sendApplicantEmail && interviewTarget.email ? "Interview booked and invitation sent" : "Interview schedule saved",
+        title: sendApplicantEmail && interviewTarget.email ? calendarSyncConfirmed ? "Interview booked and invitation sent" : "Interview saved and invitation sent" : "Interview schedule saved",
         detail: sendApplicantEmail && interviewTarget.email
           ? meetingLinkToSave
-            ? `The Google Meet link is ready for ${interviewTarget.name}. Use “Join Google Meet” now, or find it later in Recruiter Calendar.`
-            : `Make created the interview workflow for ${interviewTarget.name}. Check the applicant's email and your selected Google Calendar.`
+            ? `The meeting link is ready for ${interviewTarget.name}. Open it now, or find it later in Recruiter Calendar.`
+            : calendarSyncConfirmed
+              ? `The invitation and calendar event were created, and the interview sheet row was saved for ${interviewTarget.name}.`
+              : `The interview invitation was sent to ${interviewTarget.name}. The email includes an importable calendar file; no connected Calendar and Sheets sync was confirmed.`
           : meetingLinkToSave
-            ? `The interview for ${interviewTarget.name} is saved with its Google Meet link.`
+            ? `The interview for ${interviewTarget.name} is saved with its meeting link.`
             : `The interview for ${interviewTarget.name} is saved. You can send the invitation later when the email workflow is ready.`,
         meetingLink: meetingLinkToSave || undefined,
+        calendarEventUrl,
       });
       toast.success(interviewTarget.scheduledInterview
         ? "Interview rescheduled"
@@ -1297,8 +1321,8 @@ const AtsRecruitmentPage = () => {
       <section className="grid gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 md:grid-cols-3">
         {[
           { step: "1", title: "Review the profile", detail: "Check experience, documents, score, and contact details before making a decision." },
-          { step: "2", title: "Schedule & invite", detail: "Pick a date and time. The website saves it, then Make creates the calendar booking and invitation." },
-          { step: "3", title: "Approve or reject", detail: "Choose the decision. The website updates the stage, then Make sends the matching applicant email." },
+          { step: "2", title: "Schedule & invite", detail: "The website saves the interview and sends an invitation. Calendar event creation depends on the dedicated Make workflow; the direct email fallback includes an importable calendar file." },
+          { step: "3", title: "Approve or reject", detail: "Choose the decision. The website updates the stage, then sends the matching applicant email through the configured agency email route." },
         ].map((item) => (
           <div key={item.step} className="flex gap-3 rounded-xl bg-white/80 p-3">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-black text-white">{item.step}</span>
@@ -1313,7 +1337,7 @@ const AtsRecruitmentPage = () => {
       {workflowActivity && (
         <section className={`flex items-start gap-3 rounded-2xl border p-4 ${workflowActivity.tone === "success" ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
           {workflowActivity.tone === "success" ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" /> : <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />}
-          <div className="min-w-0 flex-1"><p className="text-sm font-bold text-slate-900">{workflowActivity.title}</p><p className="mt-0.5 text-sm text-slate-600">{workflowActivity.detail}</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" className="bg-white" onClick={() => setCalendarDialogOpen(true)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Open Recruiter Calendar</Button>{workflowActivity.meetingLink && <a href={workflowActivity.meetingLink} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center rounded-md bg-violet-700 px-3 text-xs font-bold text-white hover:bg-violet-800"><Video className="mr-1.5 h-3.5 w-3.5" />Join Google Meet</a>}</div></div>
+          <div className="min-w-0 flex-1"><p className="text-sm font-bold text-slate-900">{workflowActivity.title}</p><p className="mt-0.5 text-sm text-slate-600">{workflowActivity.detail}</p><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" className="bg-white" onClick={() => setCalendarDialogOpen(true)}><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Open Recruiter Calendar</Button>{workflowActivity.meetingLink && <a href={workflowActivity.meetingLink} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center rounded-md bg-violet-700 px-3 text-xs font-bold text-white hover:bg-violet-800"><Video className="mr-1.5 h-3.5 w-3.5" />Join Google Meet</a>}{workflowActivity.calendarEventUrl && <a href={workflowActivity.calendarEventUrl} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center rounded-md border border-emerald-300 bg-white px-3 text-xs font-bold text-emerald-800 hover:bg-emerald-50"><ExternalLink className="mr-1.5 h-3.5 w-3.5" />Open Google Calendar event</a>}</div></div>
           <button type="button" onClick={() => setWorkflowActivity(null)} className="text-slate-400 hover:text-slate-700" aria-label="Dismiss workflow status"><X className="h-4 w-4" /></button>
         </section>
       )}
@@ -2306,21 +2330,21 @@ const AtsRecruitmentPage = () => {
         <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border-slate-200 bg-white p-0">
           <div className="border-b border-violet-100 bg-violet-50 px-6 py-5">
             <DialogTitle className="flex items-center gap-2 text-lg font-black text-slate-950"><CalendarDays className="h-5 w-5 text-violet-700" />Schedule interview</DialogTitle>
-            <DialogDescription className="mt-1 text-sm text-slate-600">Set the time, save it to the applicant record, then create the calendar booking and send the invitation in one step.</DialogDescription>
+            <DialogDescription className="mt-1 text-sm text-slate-600">Set the time to save the interview record and send the invitation. A dedicated Make calendar workflow can create a calendar event; otherwise the direct email includes an importable calendar file.</DialogDescription>
           </div>
           <div className="min-h-0 space-y-4 overflow-y-auto px-6 py-5">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Applicant</p><p className="mt-0.5 text-sm font-bold text-slate-900">{interviewTarget?.name}</p></div>
-            <div className="grid gap-2 sm:grid-cols-2"><div className="rounded-xl border border-violet-100 bg-violet-50 p-3"><p className="text-xs font-bold text-violet-900">1. Save interview</p><p className="mt-0.5 text-xs leading-5 text-violet-700">The selected date, time, and format are saved to this applicant.</p></div><div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3"><p className="text-xs font-bold text-emerald-900">2. Send to Make</p><p className="mt-0.5 text-xs leading-5 text-emerald-700">Make creates the calendar event, Google Meet link, and invitation email.</p></div></div>
+            <div className="grid gap-2 sm:grid-cols-2"><div className="rounded-xl border border-violet-100 bg-violet-50 p-3"><p className="text-xs font-bold text-violet-900">1. Save interview</p><p className="mt-0.5 text-xs leading-5 text-violet-700">The selected date, time, and format are saved to this applicant.</p></div><div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3"><p className="text-xs font-bold text-emerald-900">2. Send invitation</p><p className="mt-0.5 text-xs leading-5 text-emerald-700">The dedicated Make workflow creates the calendar event and sends its guest invitation. Provide a verified meeting URL for video interviews unless the connected Calendar module is confirmed to return one. Without the workflow, the email service sends an invitation with an importable calendar file.</p></div></div>
             <label className="block text-sm font-semibold text-slate-800">Interview date and time<Input type="datetime-local" required aria-invalid={Boolean(interviewDateTime && (!Number.isFinite(new Date(interviewDateTime).getTime()) || new Date(interviewDateTime).getTime() <= Date.now()))} className="mt-1.5" value={interviewDateTime} min={toDateTimeLocalInput(new Date())} onChange={(event) => setInterviewDateTime(event.target.value)} />{interviewDateTime && Number.isFinite(new Date(interviewDateTime).getTime()) && new Date(interviewDateTime).getTime() <= Date.now() && <span className="mt-1 block text-xs font-medium text-rose-700">Choose a future date and time.</span>}</label>
             <label className="block text-sm font-semibold text-slate-800">Interview format<select className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={interviewMode} onChange={(event) => setInterviewMode(event.target.value)}><option value="video">Video call</option><option value="phone">Phone call</option><option value="in_person">In-person</option></select></label>
-            <label className="block text-sm font-semibold text-slate-800">Use an existing meeting link <span className="font-normal text-slate-400">(optional)</span><Input className="mt-1.5" type="url" placeholder="Leave blank to let Make create a Google Meet link" value={interviewMeetingLink} onChange={(event) => setInterviewMeetingLink(event.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">Leave this blank for a new Google Meet link from the Make calendar workflow.</span></label>
+            <label className="block text-sm font-semibold text-slate-800">Meeting link <span className="font-normal text-slate-400">(optional)</span><Input className="mt-1.5" type="url" placeholder="Paste an existing HTTPS meeting link" value={interviewMeetingLink} onChange={(event) => setInterviewMeetingLink(event.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-500">For video interviews, provide a verified meeting link unless your connected calendar workflow returns one.</span></label>
             <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <p className="text-sm font-bold text-slate-900">Employer participant <span className="font-normal text-slate-500">(optional)</span></p>
               <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium text-slate-800">Name<Input className="mt-1" maxLength={120} value={employerParticipantName} onChange={(event) => setEmployerParticipantName(event.target.value)} placeholder="Employer contact" /></label><label className="text-sm font-medium text-slate-800">Email<Input className="mt-1" type="email" maxLength={254} value={employerParticipantEmail} onChange={(event) => { setEmployerParticipantEmail(event.target.value); setEmployerContactVerified(false); setSendEmployerInvitation(false); }} placeholder="name@example.com" /></label></div>
               {employerParticipantEmail.trim() && <label className="flex items-start gap-2 text-xs text-slate-700"><input className="mt-0.5" type="checkbox" checked={employerContactVerified} onChange={(event) => setEmployerContactVerified(event.target.checked)} /><span>I checked this address with the employer and may send interview details to it.</span></label>}
               <label className="flex items-start gap-2 text-sm text-slate-800"><input className="mt-0.5" type="checkbox" checked={sendEmployerInvitation} disabled={!employerParticipantEmail.trim() || !employerContactVerified} onChange={(event) => setSendEmployerInvitation(event.target.checked)} /><span><span className="font-bold">Send employer invitation</span><span className="mt-0.5 block text-xs text-slate-600">Sent through the agency email service and logged on the interview.</span></span></label>
             </div>
-            <label className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={sendApplicantEmail} disabled={!interviewTarget?.email} onChange={(event) => setSendApplicantEmail(event.target.checked)} /><span><span className="font-bold">Create calendar event and send invitation</span><span className="mt-0.5 block text-xs text-emerald-700">{interviewTarget?.email ? `Make will send the interview invitation to ${interviewTarget.email}.` : "No email is saved for this applicant, so only the interview record can be saved."}</span></span></label>
+            <label className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={sendApplicantEmail} disabled={!interviewTarget?.email || Boolean(interviewTarget.scheduledInterview?.calendarEventId)} onChange={(event) => setSendApplicantEmail(event.target.checked)} /><span><span className="font-bold">{interviewTarget?.scheduledInterview?.calendarEventId ? "Update calendar event and send invitation" : "Send interview invitation"}</span><span className="mt-0.5 block text-xs text-emerald-700">{interviewTarget?.email ? interviewTarget.scheduledInterview?.calendarEventId ? `Required because this interview already has a linked calendar event. Rescheduling updates it and the matching sheet row, then notifies ${interviewTarget.email}.` : `Send to ${interviewTarget.email}. Calendar event creation and Google Meet depend on the dedicated Make workflow.` : "No email is saved for this applicant, so only the interview record can be saved."}</span></span></label>
             <label className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={sendInterviewReminders} disabled={!interviewTarget?.email} onChange={(event) => setSendInterviewReminders(event.target.checked)} /><span><span className="font-bold">Enable automatic interview reminders</span><span className="mt-0.5 block text-xs text-blue-800">{interviewTarget?.email ? `Send reminders to ${interviewTarget.email}: 24 hours before, interview morning, and 2 hours before. Requires the agency email service.` : "Add an applicant email before enabling reminders."}</span></span></label>
           </div>
           <div className="flex justify-end gap-2 border-t border-slate-100 bg-white px-6 py-4"><Button variant="outline" onClick={() => setInterviewTarget(null)} disabled={workflowSaving}>Cancel</Button><Button className="bg-violet-600 hover:bg-violet-700" onClick={() => void saveInterviewAndInvitation()} disabled={workflowSaving || !interviewDateTime || (Number.isFinite(new Date(interviewDateTime).getTime()) && new Date(interviewDateTime).getTime() <= Date.now()) || Boolean(employerParticipantEmail.trim() && (!employerContactVerified || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(employerParticipantEmail.trim())))}>{workflowSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}{sendApplicantEmail && interviewTarget?.email ? "Schedule, book & send" : "Save interview"}</Button></div>
@@ -2337,7 +2361,7 @@ const AtsRecruitmentPage = () => {
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Applicant</p><p className="mt-0.5 text-sm font-bold text-slate-900">{decisionTarget?.name}</p></div>
             <div className={`rounded-xl border p-3 ${decisionTarget?.decision === "approve" ? "border-emerald-100 bg-emerald-50" : "border-rose-100 bg-rose-50"}`}><p className="text-xs font-bold text-slate-900">What happens when you confirm?</p><ol className="mt-1.5 space-y-1 text-xs leading-5 text-slate-600"><li>1. The applicant stage changes to <strong>{decisionTarget?.decision === "approve" ? "Approved" : "Rejected"}</strong>.</li><li>2. {decisionTarget?.decision === "approve" ? "Make receives a pass result and sends the shortlisted email." : "Make receives a fail result and sends the application-update email."}</li></ol></div>
             <label className="block text-sm font-semibold text-slate-800">Note for the email <span className="font-normal text-slate-400">(optional)</span><textarea className="mt-1.5 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder={decisionTarget?.decision === "approve" ? "For example: Please prepare your documents for the next step." : "For example: We will keep your details for future opportunities."} value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} /></label>
-            <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={sendApplicantEmail} disabled={!decisionTarget?.email} onChange={(event) => setSendApplicantEmail(event.target.checked)} /><span><span className="font-bold">Send applicant email through Make</span><span className="mt-0.5 block text-xs text-slate-500">{decisionTarget?.email ? `Make will send the ${decisionTarget?.decision === "approve" ? "approval" : "rejection"} email to ${decisionTarget.email}.` : "No email is saved for this applicant."}</span></span></label>
+            <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={sendApplicantEmail} disabled={!decisionTarget?.email} onChange={(event) => setSendApplicantEmail(event.target.checked)} /><span><span className="font-bold">Send applicant email</span><span className="mt-0.5 block text-xs text-slate-500">{decisionTarget?.email ? `Send the ${decisionTarget?.decision === "approve" ? "approval" : "rejection"} email to ${decisionTarget.email} using the configured agency email route.` : "No email is saved for this applicant."}</span></span></label>
           </div>
           <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4"><Button variant="outline" onClick={() => setDecisionTarget(null)} disabled={workflowSaving}>Cancel</Button><Button variant={decisionTarget?.decision === "reject" ? "destructive" : "default"} className={decisionTarget?.decision === "approve" ? "bg-emerald-600 hover:bg-emerald-700" : ""} onClick={() => void saveDecisionAndEmail()} disabled={workflowSaving}>{workflowSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}{decisionTarget?.decision === "approve" ? "Approve" : "Reject"}{sendApplicantEmail && decisionTarget?.email ? " & send" : ""}</Button></div>
         </DialogContent>

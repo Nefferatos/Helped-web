@@ -1,0 +1,70 @@
+/* Keep muted employer portal copy readable in black without affecting public pages. */
+.client-portal-shell {
+  --foreground: 0 0% 0%;
+  --muted-foreground: 0 0% 0%;
+  color: #000;
+}
+
+.client-portal-shell [class*="text-slate-"],
+.client-portal-shell [class*="text-gray-"],
+.client-portal-shell [class*="text-zinc-"],
+.client-portal-shell [class*="text-neutral-"],
+.client-portal-shell [class*="text-stone-"],
+.client-portal-shell [class*="text-muted-foreground"] {
+  color: #000 !important;
+}
+
+/* Several portal pages use inline styles for muted explanatory copy. */
+.client-portal-shell [style*="color: #374151"],
+.client-portal-shell [style*="color:#374151"],
+.client-portal-shell [style*="color: #1f2937"],
+.client-portal-shell [style*="color:#1f2937"],
+.client-portal-shell [style*="color: #4b5563"],
+.client-portal-shell [style*="color:#4b5563"],
+.client-portal-shell [style*="color: #526072"],
+.client-portal-shell [style*="color:#526072"],
+.client-portal-shell [style*="color: #555"],
+.client-portal-shell [style*="color:#555"],
+.client-portal-shell [style*="color: #64748b"],
+.client-portal-shell [style*="color:#64748b"],
+.client-portal-shell [style*="color: #6b7280"],
+.client-portal-shell [style*="color:#6b7280"],
+.client-portal-shell [style*="color: #476F79"],
+.client-portal-shell [style*="color:#476F79"],
+.client-portal-shell [style*="color: #668892"],
+.client-portal-shell [style*="color:#668892"],
+.client-portal-shell [style*="color: #517984"],
+.client-portal-shell [style*="color:#517984"],
+.client-portal-shell [style*="color: #7AAABB"],
+.client-portal-shell [style*="color:#7AAABB"],
+.client-portal-shell [style*="color: #6AAABB"],
+.client-portal-shell [style*="color:#6AAABB"],
+.client-portal-shell [style*="color: #8ABBC8"],
+.client-portal-shell [style*="color:#8ABBC8"],
+.client-portal-shell [style*="color: #3A7A8A"],
+.client-portal-shell [style*="color:#3A7A8A"],
+.client-portal-shell [style*="color: #9BBFC8"],
+.client-portal-shell [style*="color:#9BBFC8"],
+.client-portal-shell [style*="color: rgb(55, 65, 81)"],
+.client-portal-shell [style*="color: rgb(31, 41, 55)"],
+.client-portal-shell [style*="color: rgb(75, 85, 99)"],
+.client-portal-shell [style*="color: rgb(82, 96, 114)"],
+.client-portal-shell [style*="color: rgb(85, 85, 85)"],
+.client-portal-shell [style*="color: rgb(100, 116, 139)"],
+.client-portal-shell [style*="color: rgb(107, 114, 128)"],
+.client-portal-shell [style*="color: rgb(71, 111, 121)"],
+.client-portal-shell [style*="color: rgb(102, 136, 146)"],
+.client-portal-shell [style*="color: rgb(81, 121, 132)"],
+.client-portal-shell [style*="color: rgb(122, 170, 187)"],
+.client-portal-shell [style*="color: rgb(106, 170, 187)"],
+.client-portal-shell [style*="color: rgb(138, 187, 200)"],
+.client-portal-shell [style*="color: rgb(58, 122, 138)"],
+.client-portal-shell [style*="color: rgb(155, 191, 200)"] {
+  color: #000 !important;
+}
+
+.client-portal-shell input::placeholder,
+.client-portal-shell textarea::placeholder {
+  color: #000 !important;
+  opacity: 1;
+}

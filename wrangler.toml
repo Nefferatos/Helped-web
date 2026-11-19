@@ -143,6 +143,10 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 # Set with: npx wrangler secret put MAKE_AI_ENGINE_WEBHOOK_URL
 # Use the webhook created from make/helped-ai-gateway.blueprint.json.
 
+# Interview Calendar + Google Sheets sync (distinct from the staff alert webhook).
+# Set after importing, configuring, and activating the dedicated Make scenario:
+#   npx wrangler secret put MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE
+
 # Email confirmations — requires Resend account + verified domain.
 # Steps: 1) Sign up at resend.com  2) Verify your domain  3) Run:
 #   npx wrangler secret put RESEND_API_KEY

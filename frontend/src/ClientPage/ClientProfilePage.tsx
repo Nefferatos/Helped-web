@@ -428,7 +428,7 @@ const styles = `
     --off:         #f5f9fa;
     --border:      rgba(14,78,94,0.12);
     --text-main:   #0d2f38;
-    --text-muted:  #5b7d88;
+    --text-muted:  #000000;
     --radius-lg:   22px;
     --radius-md:   14px;
   }

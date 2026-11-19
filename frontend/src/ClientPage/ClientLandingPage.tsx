@@ -1529,7 +1529,7 @@ const ClientLandingPage = ({ embedded = false }: ClientLandingPageProps) => {
     const query = buildParams().toString();
     navigate(`${maidSearchResultsHref}${query ? `?${query}` : ""}`);
   };
-  const handleRequestMaid = () => setRequestModalOpen(true);
+  const handleRequestMaid = () => navigate(isLoggedIn ? "/client/requests" : "/enquiry2");
   const clearFilters = () => {
     setKeyword(""); setMaidTypes([]); setNationality("No Preference"); setLanguage("No Preference"); setCurrentPage(1);
   };

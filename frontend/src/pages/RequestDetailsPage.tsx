@@ -17,6 +17,20 @@ const visibleDetails = (details: Record<string, unknown>) =>
     key !== "agencyViewedAt" && value !== null && value !== undefined && String(value).trim() !== "",
   );
 
+const displayRequestDetail = (key: string, value: unknown) => {
+  if (key === "hiringContext") {
+    const labels: Record<string, string> = {
+      first_time_hiring: "First time hiring a helper",
+      previous_helper_no_longer_employed: "Hired a helper before; none currently employed",
+      replacing_current_helper: "Replacing a current helper",
+      additional_helper: "Hiring an additional helper",
+      recently_cancelled_or_transfer: "Recent cancellation or transfer case",
+    };
+    return labels[String(value)] ?? String(value);
+  }
+  return String(value);
+};
+
 const statusIcons = { pending: Clock, interested: Sparkles, direct_hire: CheckCircle2, rejected: XCircle } as const;
 
 const RequestDetailsPage = () => {
@@ -159,7 +173,8 @@ const RequestDetailsPage = () => {
                   {visibleDetails(request.details).map(([key, value]) => (
                     <div key={key} className="rounded-xl border border-slate-200 bg-white p-5">
                       <p className="font-black uppercase tracking-widest">{labelFor(key)}</p>
-                      <p className="mt-2 text-lg font-semibold leading-relaxed">{String(value)}</p>
+                      <p className="mt-2 text-lg font-semibold leading-relaxed">{displayRequestDetail(key, value)}</p>
+                      {key === "hiringContext" && <p className="mt-1 text-xs text-slate-600">Confirm the applicable employer document checklist with the employer before requesting documents.</p>}
                     </div>
                   ))}
                 </div>

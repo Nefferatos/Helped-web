@@ -70,6 +70,9 @@ export interface AtsApplicationListItem {
     employerName: string;
     employerEmail: string;
     employerContactVerified: boolean;
+    calendarEventId?: string | null;
+    calendarEventUrl?: string | null;
+    calendarSheetRowNumber?: number | null;
   } | null;
   clientMatchScore?: number;
   source?: string;

@@ -5105,7 +5105,7 @@ const verifyPassword = async (password: string, stored: string): Promise<boolean
 const shouldExposeDevConfirmationCode = (env: Bindings) =>
   env.DEV_EXPOSE_CONFIRMATION_CODE?.trim().toLowerCase() === "true";
 
-type ResendInlineAttachment = { filename: string; content: string; content_type: string; content_id: string };
+type ResendEmailAttachment = { filename: string; content: string; content_type: string; content_id?: string };
 
 const sendEmailViaResend = async (
   env: Bindings,
@@ -5114,7 +5114,7 @@ const sendEmailViaResend = async (
   text: string,
   idempotencyKey?: string,
   html?: string,
-  attachments?: ResendInlineAttachment[],
+  attachments?: ResendEmailAttachment[],
 ) => {
   const apiKey = env.RESEND_API_KEY?.trim();
   const from = env.RESEND_FROM?.trim();
@@ -5146,6 +5146,37 @@ const sendEmailViaResend = async (
   }
 
   return { ok: true as const };
+};
+
+const createInterviewCalendarAttachment = (interview: {
+  id: string; scheduledAt: string; durationMinutes: number; mode: string; meetingUrl: string | null;
+}): ResendEmailAttachment => {
+  const startMs = Date.parse(interview.scheduledAt);
+  const safeDuration = Number.isFinite(interview.durationMinutes) && interview.durationMinutes > 0
+    ? Math.min(interview.durationMinutes, 240)
+    : 30;
+  const toIcsDate = (milliseconds: number) => new Date(milliseconds).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const escapeIcsText = (value: string) => value.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+  const description = [
+    `Interview format: ${interview.mode.replace(/_/g, " ")}`,
+    interview.meetingUrl ? `Meeting link: ${interview.meetingUrl}` : "Contact At The Agency for joining details.",
+  ].join("\\n");
+  const stamp = new Date().toISOString();
+  const ics = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//At The Agency//Interview Calendar//EN",
+    "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
+    `UID:${interview.id}@rinzinagency.com`, `DTSTAMP:${toIcsDate(Date.parse(stamp))}`,
+    `DTSTART:${toIcsDate(startMs)}`, `DTEND:${toIcsDate(startMs + safeDuration * 60_000)}`,
+    `SEQUENCE:${Math.floor(Date.now() / 1000)}`,
+    "SUMMARY:Interview with At The Agency", `DESCRIPTION:${escapeIcsText(description)}`,
+    ...(interview.meetingUrl ? [`URL:${interview.meetingUrl}`] : []),
+    "STATUS:CONFIRMED", "END:VEVENT", "END:VCALENDAR", "",
+  ].join("\r\n");
+  return {
+    filename: "interview.ics",
+    content: encodeBase64(new TextEncoder().encode(ics)),
+    content_type: "text/calendar; method=PUBLISH; charset=UTF-8",
+  };
 };
 
 const sendConfirmationCodeEmail = async (
@@ -6948,6 +6979,15 @@ const buildMakeAutomationInventory = (env: Bindings) => {
       purpose: "Sends interview scheduling notifications through Make.",
       trigger: "An interview is scheduled by the website workflow.",
       ...makeHook(env.MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT, "MAKE_WEBHOOK_URL_INTERVIEW_SCHEDULED_ALERT", undefined, "7525352"),
+    },
+    {
+      id: "maid-interview-invitations", name: "Maid Interview Invitations", mode: "staff initiated",
+      purpose: "Sends the maid an interview invitation through the dedicated Make interview pipeline, or Resend with an importable calendar file when that pipeline is not configured.",
+      trigger: "Agency staff sends an upcoming maid interview invitation.",
+      blueprintUrl: "/make/helped-interview-calendar-sheet.blueprint.json",
+      ...makeHook(env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE, "MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE"),
+      emailFallbackConfigured: Boolean(env.RESEND_API_KEY?.trim() && isValidResendFrom(env.RESEND_FROM)),
+      setupInstructions: "Import /make/helped-interview-calendar-sheet.blueprint.json, reconnect Google Calendar and Sheets, select the agency calendar and restricted Interviews sheet, then set the scenario webhook as MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE. Apply supabase/20261118_interview_calendar_sheet_sync.sql first. The Worker does not fall back to generic MAKE_WEBHOOK_URL.",
     },
     {
       id: "arrival-alerts", name: "Contractor Arrival Alerts", mode: "automatic",
@@ -9972,6 +10012,8 @@ const deploymentTaskTemplates = [
   { task_key: "work_permit_issuance", task_group: "Work permit", title: "Verify Work Permit issuance", description: "Record the actual issuance result and evidence." },
   { task_key: "fingerprint_photo_registration", task_group: "Work permit", title: "Track fingerprint and photo registration", description: "Record completion only when required and verify the official outcome." },
   { task_key: "employer_handover", task_group: "Handover", title: "Complete employer handover", description: "Confirm required conditions and record the handover date." },
+  { task_key: "post_handover_employer_followup", task_group: "Post-handover", title: "Check in with employer", description: "Agency staff contacts the employer within one month after handover and records the outcome." },
+  { task_key: "post_handover_helper_welfare", task_group: "Post-handover", title: "Check helper welfare", description: "Agency staff contacts the helper within three months after handover and records the outcome." },
 ] as const;
 
 const deploymentTaskStatuses = new Set([
@@ -9996,6 +10038,60 @@ const fetchDeploymentTasks = async (config: SupabaseAppDataConfig, placementId: 
     select: "id,agency_id,placement_id,task_key,task_group,title,description,status,assigned_to,planned_at,due_at,completed_at,evidence_document_id,verification_note,verified_at,verified_by,notes,employer_visible_note,created_at,updated_at",
     filters: { placement_id: placementId, agency_id: agencyId }, orderBy: "created_at.asc", limit: 100,
   });
+
+const syncArrivalTaskDeadlines = async (config: SupabaseAppDataConfig, placementId: string, agencyId: number, actor: string) => {
+  const [, flights] = await Promise.all([
+    initializeDeploymentTasks(config, placementId, agencyId, actor),
+    fetchSupabaseTableRows<{ id: string; arrival_at: string | null; status: string }>(config, "flights", {
+      select: "id,arrival_at,status", filters: { placement_id: placementId }, orderBy: "arrival_at.asc.nullslast", limit: 100,
+    }),
+  ]);
+  const arrival = flights
+    .filter((flight) => ["PENDING", "SCHEDULED", "IN_PROGRESS", "BLOCKED"].includes(flight.status) && flight.arrival_at && Number.isFinite(Date.parse(flight.arrival_at)))
+    .sort((left, right) => Date.parse(left.arrival_at!) - Date.parse(right.arrival_at!))[0]?.arrival_at;
+  const tasks = await fetchSupabaseTableRows<{ id: string; task_key: string; status: string; planned_at: string | null; due_at: string | null; auto_due_at: string | null; auto_due_rule: string | null }>(config, "deployment_tasks", {
+    select: "id,task_key,status,planned_at,due_at,auto_due_at,auto_due_rule", filters: { placement_id: placementId, agency_id: agencyId }, limit: 100,
+  });
+  const handoverDate = tasks.find((task) => task.task_key === "employer_handover")?.due_at
+    || tasks.find((task) => task.task_key === "employer_handover")?.planned_at
+    || null;
+  const rules = [
+    { taskKey: "insurance", daysBefore: 10, rule: "arrival_minus_10_days", baseDate: arrival },
+    { taskKey: "personal_accident_insurance", daysBefore: 10, rule: "arrival_minus_10_days", baseDate: arrival },
+    { taskKey: "sg_arrival_card", daysBefore: 3, rule: "arrival_minus_3_days", baseDate: arrival },
+    { taskKey: "flight_booking", daysBefore: 5, rule: "handover_minus_5_days", baseDate: handoverDate },
+  ];
+  let updated = 0;
+  let preservedManual = 0;
+  for (const rule of rules) {
+    const task = tasks.find((item) => item.task_key === rule.taskKey);
+    if (!task || ["VERIFIED", "NOT_APPLICABLE"].includes(task.status)) continue;
+    const ownsExistingDueDate = Boolean(task.auto_due_at && task.due_at === task.auto_due_at);
+    if (!rule.baseDate) {
+      if (ownsExistingDueDate && task.auto_due_rule === rule.rule) {
+        const cleared = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(task.id)}&agency_id=eq.${agencyId}&placement_id=eq.${encodeURIComponent(placementId)}&auto_due_at=eq.${encodeURIComponent(task.auto_due_at!)}`, {
+          method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
+          body: JSON.stringify({ due_at: null, auto_due_at: null, auto_due_rule: null, updated_by: actor, updated_at: now() }),
+        });
+        if (!cleared.ok) throw new Error(`Unable to clear stale generated deadline (${cleared.status}): ${await readSupabaseError(cleared)}`);
+      }
+      continue;
+    }
+    if (task.due_at && !ownsExistingDueDate) { preservedManual += 1; continue; }
+    const dueAt = new Date(Date.parse(rule.baseDate) - rule.daysBefore * 24 * 60 * 60_000).toISOString();
+    if (task.due_at === dueAt && task.auto_due_rule === rule.rule) continue;
+    const response = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(task.id)}&agency_id=eq.${agencyId}&placement_id=eq.${encodeURIComponent(placementId)}&status=not.in.(VERIFIED,NOT_APPLICABLE)`, {
+      method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+      body: JSON.stringify({ status: task.status === "NOT_STARTED" ? "PLANNED" : task.status, due_at: dueAt, auto_due_at: dueAt, auto_due_rule: rule.rule, updated_by: actor, updated_at: now() }),
+    });
+    if (!response.ok) throw new Error(`Unable to schedule ${rule.taskKey} deadline (${response.status}): ${await readSupabaseError(response)}`);
+    const [saved] = await response.json() as Array<Record<string, unknown>>;
+    if (!saved) continue;
+    updated += 1;
+    await recordDeploymentTaskEvent(config, { agencyId, placementId, taskId: task.id, taskKey: task.task_key, actor, fromStatus: task.status, toStatus: String(saved.status ?? task.status) }).catch((error) => console.error("Automatic deadline audit event failed", errMsg(error)));
+  }
+  return { updated, preservedManual };
+};
 
 type PlacementDocumentRow = {
   id: string; agency_id: number; entity_type: string; entity_id: string; category: string;
@@ -10272,18 +10368,25 @@ app.post("/api/operations-board/placements/:placementId/flights", requireAgencyA
   const flights = await response.json() as PlacementFlightRow[];
   const flight = flights[0];
   let pickupTaskSynced = true;
+  let arrivalDeadlinesSynced = true;
   try {
     await syncAirportPickupTaskWithFlightSchedule(config, placementId, admin.agencyId, admin.username || admin.email || "Agency staff", true);
   } catch (error) {
     pickupTaskSynced = false;
     console.error("Flight saved but airport pickup task synchronization failed", errMsg(error));
   }
+  try {
+    await syncArrivalTaskDeadlines(config, placementId, admin.agencyId, admin.username || admin.email || "Agency staff");
+  } catch (error) {
+    arrivalDeadlinesSynced = false;
+    console.error("Flight saved but automatic arrival deadlines could not be synchronized", errMsg(error));
+  }
   const eventWebhook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
   if (flight && status === "SCHEDULED" && eventWebhook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `arrival:${flight.id}:scheduled:${flight.arrival_at}`, admin.agencyId, {
     event_type: "arrival.scheduled", agency_id: admin.agencyId, flight_id: flight.id, placement_id: placementId,
     arrival_at: flight.arrival_at, airline: flight.airline, flight_number: flight.flight_number, arrival_airport: flight.arrival_airport,
   }).catch((error) => console.error("Arrival schedule Make event could not be queued", errMsg(error))));
-  return c.json({ flight, pickupTaskSynced, arrivalEventQueued: Boolean(eventWebhook && status === "SCHEDULED") }, 201);
+  return c.json({ flight, pickupTaskSynced, arrivalDeadlinesSynced, arrivalEventQueued: Boolean(eventWebhook && status === "SCHEDULED") }, 201);
 }));
 
 app.patch("/api/operations-board/flights/:flightId", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
@@ -10322,11 +10425,18 @@ app.patch("/api/operations-board/flights/:flightId", requireAgencyAdminAuth, can
   const updated = await response.json() as PlacementFlightRow[];
   const flight = updated[0] ?? null;
   let pickupTaskSynced = true;
+  let arrivalDeadlinesSynced = true;
   try {
     await syncAirportPickupTaskWithFlightSchedule(config, current.placement_id, admin.agencyId, admin.username || admin.email || "Agency staff", body?.status !== undefined || body?.arrivalAt !== undefined);
   } catch (error) {
     pickupTaskSynced = false;
     console.error("Flight updated but airport pickup task synchronization failed", errMsg(error));
+  }
+  try {
+    await syncArrivalTaskDeadlines(config, current.placement_id, admin.agencyId, admin.username || admin.email || "Agency staff");
+  } catch (error) {
+    arrivalDeadlinesSynced = false;
+    console.error("Flight updated but automatic arrival deadlines could not be synchronized", errMsg(error));
   }
   const eventWebhook = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
   if (flight && eventWebhook && (body?.status !== undefined || body?.arrivalAt !== undefined) && ["SCHEDULED", "COMPLETED"].includes(flight.status)) {
@@ -10337,7 +10447,7 @@ app.patch("/api/operations-board/flights/:flightId", requireAgencyAdminAuth, can
       arrival_at: flight.arrival_at, airline: flight.airline, flight_number: flight.flight_number, arrival_airport: flight.arrival_airport,
     }).catch((error) => console.error("Arrival status Make event could not be queued", errMsg(error))));
   }
-  return c.json({ flight, pickupTaskSynced });
+  return c.json({ flight, pickupTaskSynced, arrivalDeadlinesSynced });
 }));
 
 const initializeDeploymentTasks = async (config: SupabaseAppDataConfig, placementId: string, agencyId: number, actor: string) => {
@@ -10762,6 +10872,23 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
     if (!deploymentTaskStatuses.has(status)) return c.json({ error: "Choose a valid task status" }, 400);
     update.status = status;
   }
+  const nextStatus = String(update.status ?? existing.status);
+  if (existing.task_key === "employer_handover" && existing.status !== "VERIFIED" && nextStatus === "VERIFIED") {
+    const prerequisiteKeys = ["medical_exam", "sip", "work_permit_issuance"];
+    const prerequisites = await fetchDeploymentTasks(config, existing.placement_id, admin.agencyId);
+    const missing = prerequisiteKeys.filter((taskKey) => {
+      const task = prerequisites.find((item) => item.task_key === taskKey);
+      return !task || !["VERIFIED", "NOT_APPLICABLE"].includes(task.status);
+    });
+    if (missing.length) {
+      const taskNames: Record<string, string> = {
+        medical_exam: "medical examination outcome",
+        sip: "SIP completion or recorded non-applicability",
+        work_permit_issuance: "Work Permit issuance or recorded non-applicability",
+      };
+      return c.json({ error: `Complete and staff-verify these prerequisites before handover: ${missing.map((key) => taskNames[key]).join(", ")}.` }, 409);
+    }
+  }
   if (Object.hasOwn(body, "assignedTo")) {
     const assignedTo = toTrimmedString(body.assignedTo);
     if (assignedTo.length > 120) return c.json({ error: "Assignee must be 120 characters or fewer" }, 400);
@@ -10812,7 +10939,6 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
     update.evidence_document_id = documentId || null;
   }
 
-  const nextStatus = String(update.status ?? existing.status);
   if (nextStatus === "VERIFIED") {
     const proofNote = String(update.verification_note ?? existing.verification_note ?? "").trim();
     const evidenceId = Object.hasOwn(update, "evidence_document_id") ? update.evidence_document_id : existing.evidence_document_id;
@@ -10862,6 +10988,58 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
   if (!saved[0]) return c.json({ error: "Deployment task not found" }, 404);
   const taskBecameVerified = existing.status !== "VERIFIED" && nextStatus === "VERIFIED";
   const deploymentEventsUrl = makeWebhookUrlForOutbox(c.env, "deployment_task_event");
+  let handoverDeadlineSynced = true;
+  if (existing.task_key === "employer_handover" && ((plannedAt.present && plannedAt.value !== existing.planned_at) || (dueAt.present && dueAt.value !== existing.due_at))) {
+    try {
+      await syncArrivalTaskDeadlines(config, existing.placement_id, admin.agencyId, actor);
+    } catch (error) {
+      handoverDeadlineSynced = false;
+      console.error("Handover date saved but the flight-booking deadline could not be synchronized", errMsg(error));
+    }
+  }
+  let postHandoverFollowUpsScheduled = true;
+  if (existing.task_key === "employer_handover" && nextStatus === "VERIFIED") {
+    // A verified handover starts the two agency follow-up windows from the
+    // user's operational policy. These are reminders for staff to make calls;
+    // they do not contact either party or mark the calls complete.
+    const handoverAt = toTrimmedString(saved[0].verified_at) || now();
+    const followUpTasks = await initializeDeploymentTasks(config, existing.placement_id, admin.agencyId, actor).catch((error) => {
+      console.error("Handover was recorded but post-handover follow-ups could not be loaded", errMsg(error));
+      postHandoverFollowUpsScheduled = false;
+      return [];
+    });
+    const followUps = [
+      { taskKey: "post_handover_employer_followup", days: 30 },
+      { taskKey: "post_handover_helper_welfare", days: 90 },
+    ];
+    for (const followUp of followUps) {
+      const followUpTask = followUpTasks.find((task) => task.task_key === followUp.taskKey);
+      if (!followUpTask || !["NOT_STARTED", "PLANNED"].includes(followUpTask.status)) continue;
+      const dueAt = new Date(Date.parse(handoverAt) + followUp.days * 24 * 60 * 60_000).toISOString();
+      const followUpUpdate = await fetch(`${config.baseUrl}/rest/v1/deployment_tasks?id=eq.${encodeURIComponent(followUpTask.id)}&agency_id=eq.${admin.agencyId}&placement_id=eq.${encodeURIComponent(existing.placement_id)}&status=in.(NOT_STARTED,PLANNED)`, {
+        method: "PATCH",
+        headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+        body: JSON.stringify({ status: "PLANNED", planned_at: dueAt, due_at: dueAt, updated_by: actor, updated_at: now() }),
+      });
+      if (!followUpUpdate.ok) {
+        postHandoverFollowUpsScheduled = false;
+        console.error("Handover was recorded but a post-handover follow-up could not be scheduled", followUp.taskKey, await readSupabaseError(followUpUpdate));
+        continue;
+      }
+      const [scheduledTask] = await followUpUpdate.json() as Array<Record<string, unknown>>;
+      if (!scheduledTask) continue; // Another staff request changed this task; preserve that state.
+      await recordDeploymentTaskEvent(config, { agencyId: admin.agencyId, placementId: existing.placement_id, taskId: followUpTask.id, taskKey: followUp.taskKey, actor, fromStatus: followUpTask.status, toStatus: "PLANNED" }).catch((eventError) => console.error("Post-handover follow-up audit event failed", errMsg(eventError)));
+      if (deploymentEventsUrl) {
+        const eventId = `deployment-task:${followUpTask.id}:scheduled:${handoverAt}`;
+        runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", eventId, admin.agencyId, {
+          event_type: "deployment.task.updated", agency_id: admin.agencyId, placement_id: existing.placement_id,
+          task_id: followUpTask.id, task_key: followUp.taskKey, title: followUpTask.title,
+          from_status: followUpTask.status, status: "PLANNED", due_at: dueAt, planned_at: dueAt,
+          trigger: "employer_handover.verified",
+        }).catch((error) => console.error("Post-handover follow-up Make event could not be queued", errMsg(error))));
+      }
+    }
+  }
   if (taskBecameVerified && deploymentEventsUrl) {
     const verifiedAt = toTrimmedString(saved[0].verified_at) || now();
     const eventBase = { agency_id: admin.agencyId, placement_id: existing.placement_id, task_id: existing.id, task_key: existing.task_key, task_group: existing.task_group, title: existing.title, verified_at: verifiedAt, verified_by: actor, evidence_document_id: toTrimmedString(saved[0].evidence_document_id) || null };
@@ -10901,7 +11079,7 @@ app.patch("/api/operations-board/deployment-tasks/:taskId", requireAgencyAdminAu
     agencyId: admin.agencyId, placementId: existing.placement_id, taskId, taskKey: existing.task_key,
     actor, fromStatus: existing.status, toStatus: nextStatus,
   }).catch((eventError) => { console.error("Deployment task audit event failed", errMsg(eventError)); return false; });
-  return c.json({ task: saved[0], auditLogged });
+  return c.json({ task: saved[0], auditLogged, postHandoverFollowUpsScheduled, handoverDeadlineSynced });
 }));
 
 // Operations Center board. Placement and milestone state are both read from
@@ -12078,12 +12256,15 @@ app.post("/api/contractor/placements/:placementId/tasks", requireAgencyAdminAuth
   if (!config) return c.json({ error: "Contractor assignment requires Supabase storage" }, 503);
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const placementId = toTrimmedString(c.req.param("placementId"));
-  const body = await parseBody<{ contractorId?: unknown; taskType?: unknown; dueAt?: unknown; note?: unknown }>(c.req.raw);
+  const body = await parseBody<{ contractorId?: unknown; taskType?: unknown; dueAt?: unknown; note?: unknown; sendContractorEmail?: unknown; contractorEmail?: unknown }>(c.req.raw);
   const contractorId = toTrimmedString(body?.contractorId);
   const taskType = toTrimmedString(body?.taskType).slice(0, 120);
   const dueAt = toTrimmedString(body?.dueAt);
+  const sendContractorEmail = body?.sendContractorEmail === true;
+  const contractorEmail = normalizeEmail(toTrimmedString(body?.contractorEmail));
   if (!taskType) return c.json({ error: "Enter a task description" }, 400);
   if (dueAt && Number.isNaN(Date.parse(dueAt))) return c.json({ error: "Enter a valid due date" }, 400);
+  if (sendContractorEmail && !isEmailLike(contractorEmail)) return c.json({ error: "Enter a valid contractor email before sending the assignment" }, 400);
   if (!await fetchAgencyPlacement(config, placementId, admin.agencyId)) return c.json({ error: "Placement not found" }, 404);
   const contractor = await fetchSupabaseTableRows<{ id: string; name: string }>(config, "contractors", {
     select: "id,name", filters: { id: contractorId, agency_id: admin.agencyId, active: true }, limit: 1,
@@ -12099,7 +12280,24 @@ app.post("/api/contractor/placements/:placementId/tasks", requireAgencyAdminAuth
   const task = ((await response.json()) as ContractorTaskRow[])[0];
   if (!task) throw new Error("Contractor task was created but no task record was returned");
   await writeContractorWorkflowEvent(config, { eventType: "contractor.task_assigned", placementId, agencyId: admin.agencyId, actor: `user:${actor}`, payload: { contractorJobId: task.id, contractorName: contractor[0].name, taskType, dueAt: task.due_at } });
-  return c.json({ task, acknowledgementUrl: acknowledgement.url, acknowledgementExpiresAt: acknowledgement.expiresAt }, 201);
+  let notificationStatus: "not_requested" | "sent" | "not_configured" | "failed" = "not_requested";
+  if (sendContractorEmail) {
+    try {
+      const taskDueText = task.due_at ? `\nDue: ${new Date(task.due_at).toLocaleString("en-SG", { timeZone: "Asia/Singapore" })} Singapore time` : "";
+      const mail = await sendEmailViaResend(
+        c.env,
+        contractorEmail,
+        "New placement task from At The Agency",
+        `Hello ${contractor[0].name},\n\nYou have been assigned a placement task.\nTask: ${taskType}${taskDueText}\n\nOpen this secure link to acknowledge the assignment and later report completion:\n${acknowledgement.url}\n\nThis link expires ${new Date(acknowledgement.expiresAt).toLocaleString("en-SG", { timeZone: "Asia/Singapore" })} Singapore time. If you were not expecting this assignment, contact the agency.\n\nAt The Agency`,
+        `contractor-assignment:${task.id}`,
+      );
+      notificationStatus = mail.ok ? "sent" : mail.error === "RESEND_NOT_CONFIGURED" ? "not_configured" : "failed";
+    } catch (error) {
+      console.error("Contractor assignment email failed", errMsg(error));
+      notificationStatus = "failed";
+    }
+  }
+  return c.json({ task, acknowledgementUrl: acknowledgement.url, acknowledgementExpiresAt: acknowledgement.expiresAt, notificationStatus }, 201);
 }));
 
 app.post("/api/contractor/tasks/:taskId/acknowledgement-link", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
@@ -15087,6 +15285,7 @@ app.post(
   "/api/ai/hr-interview/email",
   requireAgencyAdminAuth,
   safeApi(async (c) => {
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const body = await parseBody<{
       to?: string;
       subject?: string;
@@ -15101,6 +15300,10 @@ app.post(
       meetingUrl?: string;
       interviewMode?: string;
       applicationId?: string;
+      interviewId?: string;
+      calendarEventId?: string;
+      sheetRowNumber?: number | string;
+      durationMinutes?: number;
       rating?: number;
       strengthsHtml?: string;
       weaknessesHtml?: string;
@@ -15116,43 +15319,107 @@ app.post(
     // Non-interview HR messages may use Resend as a plain-text fallback.
     const subject = toTrimmedString(body?.subject);
     const text = toTrimmedString(body?.body);
-    // Interview invitations must go through the Make calendar workflow first
-    // so it can create the event/Meet link and return that link to the page.
+    // Keep interview invitations on their dedicated pipeline. The generic
+    // webhook may be the orchestrator and must not receive this payload.
     if (emailType === "interview_invitation") {
-      const makeUrl =
-        c.env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim() ||
-        c.env.MAKE_WEBHOOK_URL?.trim();
-      if (!makeUrl) return c.json({ error: "Interview calendar workflow is not configured. Set MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE or MAKE_WEBHOOK_URL." }, 503);
-      try {
-        const makeResponse = await fetch(makeUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scenario: "interview_pipeline", ...body }),
-          signal: AbortSignal.timeout(30_000),
-        });
-        const responseText = await makeResponse.text();
-        let responseData: Record<string, unknown> = {};
-        try {
-          const parsed = JSON.parse(responseText) as unknown;
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) responseData = parsed as Record<string, unknown>;
-        } catch {
-          // Some Make responses are plain text; keep the successful send result.
+      const makeUrl = c.env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim();
+      if (makeUrl) {
+        const interviewId = toTrimmedString(body?.interviewId);
+        const calendarEventId = toTrimmedString(body?.calendarEventId);
+        const sheetRowNumber = body?.sheetRowNumber == null || body.sheetRowNumber === "" ? null : Number(body.sheetRowNumber);
+        if (!interviewId) return c.json({ error: "A saved interview record is required before creating a calendar booking" }, 409);
+        if (Boolean(calendarEventId) !== (sheetRowNumber !== null) || (sheetRowNumber !== null && (!Number.isInteger(sheetRowNumber) || sheetRowNumber < 2))) {
+          return c.json({ error: "The saved calendar event and interview sheet row are incomplete. Contact the agency before resending this invitation." }, 409);
         }
-        if (!makeResponse.ok) return c.json({ error: "Make.com failed to create the interview invitation" }, 502);
-        return c.json({
-          ok: true,
-          message: "Interview invitation and calendar workflow accepted by Make.com",
-          to,
-          type: emailType,
-          provider: "make.com",
-          meetLink: toTrimmedString(responseData.meetLink ?? responseData.googleMeetLink ?? responseData.hangoutLink) || undefined,
-          eventUrl: toTrimmedString(responseData.eventUrl ?? responseData.htmlLink) || undefined,
-          eventId: toTrimmedString(responseData.eventId ?? responseData.id) || undefined,
-        });
-      } catch (error) {
-        console.error("Make interview invitation failed:", error);
-        return c.json({ error: "Could not reach the Make interview calendar workflow" }, 502);
+        try {
+          const makeResponse = await fetch(makeUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scenario: "interview_pipeline", ...body }),
+            signal: AbortSignal.timeout(30_000),
+          });
+          const responseText = await makeResponse.text();
+          let responseData: Record<string, unknown> = {};
+          try {
+            const parsed = JSON.parse(responseText) as unknown;
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) responseData = parsed as Record<string, unknown>;
+          } catch {
+            // Some Make responses are plain text; keep the successful send result.
+          }
+          if (!makeResponse.ok) return c.json({ error: "The dedicated Make interview pipeline could not send the invitation" }, 502);
+          const responseInterviewId = toTrimmedString(responseData.interviewId);
+          if (responseInterviewId !== interviewId) return c.json({ error: "The Make workflow did not confirm the saved interview reference. Check Make history before retrying this invitation." }, 502);
+          const savedEventId = toTrimmedString(responseData.eventId ?? responseData.id);
+          const savedEventUrl = toTrimmedString(responseData.eventUrl ?? responseData.htmlLink);
+          const savedMeetLink = toTrimmedString(responseData.meetLink ?? responseData.googleMeetLink ?? responseData.hangoutLink);
+          const savedSheetRowNumber = responseData.sheetRowNumber == null ? null : Number(responseData.sheetRowNumber);
+          const calendarSynced = Boolean(savedEventId && savedSheetRowNumber !== null && Number.isInteger(savedSheetRowNumber) && savedSheetRowNumber >= 2);
+          if ((savedEventId || savedSheetRowNumber !== null) && !calendarSynced) {
+            console.error("Make interview workflow returned incomplete calendar/sheet references", { interviewId, hasEventId: Boolean(savedEventId), hasSheetRowNumber: savedSheetRowNumber !== null });
+            return c.json({ error: "The invitation workflow ran but did not return both calendar and sheet references. Do not retry; check the interview calendar and sheet, then contact the agency." }, 502);
+          }
+          if (!calendarSynced) {
+            console.error("Make interview workflow returned success without calendar/sheet references", { interviewId });
+            return c.json({ error: "The workflow may have run, but did not confirm its calendar event and sheet row. Check Make history, Calendar, and the sheet before retrying." }, 502);
+          }
+          if (calendarSynced) {
+            const config = getSupabaseAppDataConfig(c.env);
+            if (!config) return c.json({ error: "The calendar event was created but the website could not save its reference. Do not retry; contact the agency." }, 503);
+            const saveParams = new URLSearchParams({ id: `eq.${interviewId}`, agency_id: `eq.${admin.agencyId}`, select: "id" });
+            const saveResponse = await fetch(`${config.baseUrl}/rest/v1/interviews?${saveParams}`, {
+              method: "PATCH",
+              headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+              body: JSON.stringify({ calendar_event_id: savedEventId, calendar_event_url: savedEventUrl || null, calendar_sheet_row_number: savedSheetRowNumber, calendar_sync_updated_at: now(), ...(savedMeetLink ? { meeting_url: savedMeetLink } : {}), updated_at: now() }),
+            });
+            if (!saveResponse.ok) {
+              console.error("Make created an interview event but the website could not save its references", { interviewId, details: await readSupabaseError(saveResponse) });
+              return c.json({ error: "The calendar event was created but its references were not saved to the interview. Do not retry; contact the agency." }, 502);
+            }
+            const savedRows = await saveResponse.json() as Array<{ id: string }>;
+            if (!savedRows[0]) return c.json({ error: "The calendar event was created but its interview record was not found. Do not retry; contact the agency." }, 502);
+          }
+          return c.json({
+            ok: true,
+            message: "Interview invitation accepted by the dedicated Make pipeline",
+            to,
+            type: emailType,
+            provider: "make.com",
+            meetLink: savedMeetLink || undefined,
+            eventUrl: savedEventUrl || undefined,
+            eventId: savedEventId || undefined,
+            sheetRowNumber: savedSheetRowNumber ?? undefined,
+            calendarSynced,
+          });
+        } catch (error) {
+          console.error("Make interview invitation failed:", errMsg(error));
+          return c.json({ error: "Could not reach the dedicated Make interview pipeline" }, 502);
+        }
       }
+
+      const scheduledDate = toTrimmedString(body?.scheduledDate);
+      const rawScheduledTime = toTrimmedString(body?.scheduledTime24 || body?.scheduledTime);
+      let scheduledTime = rawScheduledTime;
+      const twelveHourTime = rawScheduledTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if (twelveHourTime) {
+        const hour = (Number(twelveHourTime[1]) % 12) + (twelveHourTime[3].toUpperCase() === "PM" ? 12 : 0);
+        scheduledTime = `${String(hour).padStart(2, "0")}:${twelveHourTime[2]}`;
+      }
+      if (/^\d:\d{2}$/.test(scheduledTime)) scheduledTime = `0${scheduledTime}`;
+      const scheduledAt = scheduledDate && scheduledTime ? parseSingaporeDateTime(`${scheduledDate}T${scheduledTime}`) : null;
+      if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) return c.json({ error: "A valid interview date and time are required" }, 400);
+      if (!isEmailLike(to)) return c.json({ error: "Enter a valid interview recipient email" }, 400);
+      if (!c.env.RESEND_API_KEY?.trim() || !isValidResendFrom(c.env.RESEND_FROM)) return c.json({ error: "Configure MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE or the agency email service to send interview invitations" }, 503);
+      const meetingUrl = toTrimmedString(body?.meetingUrl);
+      if (meetingUrl && !/^https:\/\/\S+$/i.test(meetingUrl)) return c.json({ error: "Meeting link must use HTTPS" }, 400);
+      const interviewId = toTrimmedString(body?.applicationId) || crypto.randomUUID();
+      const candidateName = toTrimmedString(body?.candidateName) || "Applicant";
+      const mode = toTrimmedString(body?.interviewMode) || "unspecified";
+      const invitationText = text || `Dear ${candidateName},\n\nYou are invited to an interview on ${scheduledDate} at ${scheduledTime} Singapore time. Interview format: ${mode.replace(/_/g, " ")}.${meetingUrl ? `\nMeeting link: ${meetingUrl}` : "\nThe agency will share joining details separately."}\n\nA calendar file is attached so you can add this event to your calendar. Contact At The Agency if you need to change the time.\n\nAt The Agency`;
+      const result = await sendEmailViaResend(c.env, to, subject || "Interview invitation", invitationText,
+        `hr-interview:${interviewId}:${scheduledAt.toISOString()}`, undefined,
+        [createInterviewCalendarAttachment({ id: interviewId, scheduledAt: scheduledAt.toISOString(), durationMinutes: 30, mode, meetingUrl: meetingUrl || null })]);
+      if (!result.ok) return c.json({ error: result.error === "RESEND_NOT_CONFIGURED" ? "Configure the agency email service before sending interview invitations" : "The interview invitation could not be sent" }, 502);
+      return c.json({ ok: true, message: "Interview invitation sent with an importable calendar file", to, type: emailType, provider: "resend", calendarAttachment: true });
     }
 
     if (subject && text) {
@@ -15235,7 +15502,7 @@ const sendInterviewScheduledStaffAlert = async (
 };
 
 const interviewLifecycleColumns = [
-  "outcome", "cancellation_reason", "reschedule_reason", "candidate_name", "candidate_email",
+  "outcome", "cancellation_reason", "reschedule_reason", "candidate_name", "candidate_email", "candidate_invitation_sent_at",
   "reminders_enabled", "reminder_24h_sent_at", "reminder_morning_sent_at", "reminder_2h_sent_at",
   "employer_name", "employer_email", "employer_contact_verified_at", "employer_invitation_sent_at",
   "employer_confirmed_at", "applicant_confirmed_at", "employer_reminder_24h_sent_at",
@@ -15309,9 +15576,9 @@ app.post(
       return c.json({ error: "Configure RESEND_API_KEY and a valid, verified RESEND_FROM address before enabling automatic interview reminders" }, 503);
     }
     const interviewUrl = new URL(`${config.baseUrl}/rest/v1/interviews`);
-    interviewUrl.searchParams.set("select", "id,scheduled_at,application_id,placement_id,mode,meeting_url,status");
+    interviewUrl.searchParams.set("select", "id,scheduled_at,application_id,placement_id,mode,meeting_url,status,calendar_event_id,calendar_event_url,calendar_sheet_row_number");
     const scheduledAtIso = new Date(scheduledAt).toISOString();
-    const lifecycleDataRequested = remindersEnabled || Boolean(employerName || employerEmail || body?.sendEmployerInvitation === true);
+    const lifecycleDataRequested = remindersEnabled || Boolean(interviewId || employerName || employerEmail || body?.sendEmployerInvitation === true);
     const fullInterviewData = {
       agency_id: admin.agencyId,
       application_id: applicationId || null,
@@ -15341,6 +15608,7 @@ app.post(
       reminder_24h_sent_at: null,
       reminder_morning_sent_at: null,
       reminder_2h_sent_at: null,
+      candidate_invitation_sent_at: null,
       employer_reminder_24h_sent_at: null,
       employer_reminder_morning_sent_at: null,
       employer_reminder_2h_sent_at: null,
@@ -15370,6 +15638,9 @@ app.post(
     });
     if (!response.ok) {
       const details = await readSupabaseError(response);
+      if (isMissingSupabaseSchemaObject(details) && /interviews\.(calendar_event_id|calendar_event_url|calendar_sheet_row_number)/i.test(details)) {
+        return c.json({ error: "Interview calendar sync storage is not installed. Apply supabase/20261118_interview_calendar_sheet_sync.sql, then retry scheduling." }, 503);
+      }
       if (!isMissingInterviewLifecycleColumn(details)) {
         throw new Error(`Could not save interview (${response.status}): ${details}`);
       }
@@ -15394,6 +15665,32 @@ app.post(
     return c.json({ interview }, interviewId ? 200 : 201);
   }),
 );
+
+app.post("/api/ats/interviews/:interviewId/invitation-sent", requireAgencyAdminAuth, canManageAgencyRecords, safeApi(async (c) => {
+  const config = getSupabaseAppDataConfig(c.env);
+  if (!config) return c.json({ error: "Interview delivery tracking requires Supabase storage" }, 503);
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const interviewId = toTrimmedString(c.req.param("interviewId"));
+  const body = await parseBody<{ applicationId?: unknown }>(c.req.raw);
+  const applicationId = toTrimmedString(body?.applicationId);
+  if (!interviewId || !applicationId) return c.json({ error: "Interview and applicant references are required" }, 400);
+  const params = new URLSearchParams({ id: `eq.${interviewId}`, agency_id: `eq.${admin.agencyId}`, application_id: `eq.${applicationId}`, select: "id,scheduled_at" });
+  const response = await fetch(`${config.baseUrl}/rest/v1/interviews?${params}`, {
+    method: "PATCH",
+    headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+    body: JSON.stringify({ candidate_invitation_sent_at: now(), updated_at: now() }),
+  });
+  if (!response.ok) {
+    const details = await readSupabaseError(response);
+    if (/candidate_invitation_sent_at/i.test(details) && isMissingSupabaseSchemaObject(details)) {
+      return c.json({ error: "Apply supabase/20261117_maid_profile_interviews.sql and the interview lifecycle migrations to track invitations safely." }, 503);
+    }
+    throw new Error(`Could not record interview invitation (${response.status}): ${details}`);
+  }
+  const saved = await response.json() as Array<{ id: string; scheduled_at: string }>;
+  if (!saved[0]) return c.json({ error: "Interview was not found for this applicant and agency" }, 404);
+  return c.json({ recorded: true, interviewId: saved[0].id, sentAt: now() });
+}));
 
 app.patch(
   "/api/ai/hr-interview/schedule/:interviewId/meeting-link",
@@ -15461,13 +15758,13 @@ const sendEmployerInterviewInvitation = safeApi(async (c) => {
   const interviewId = toTrimmedString(c.req.param("interviewId"));
   const maidInterview = c.req.path.startsWith("/api/operations-board/maid-interviews/");
   const params = new URLSearchParams({
-    select: "id,application_id,maid_reference_code,agency_id,scheduled_at,mode,meeting_url,status,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at",
+    select: "id,application_id,maid_reference_code,agency_id,scheduled_at,duration_minutes,mode,meeting_url,status,employer_name,employer_email,employer_contact_verified_at,employer_invitation_sent_at",
     id: "eq." + interviewId, agency_id: "eq." + admin.agencyId, limit: "1",
   });
   const readResponse = await fetch(config.baseUrl + "/rest/v1/interviews?" + params, { headers: supabaseHeaders(config, { accept: "application/json" }) });
   if (!readResponse.ok) throw new Error("Unable to load interview (" + readResponse.status + "): " + await readSupabaseError(readResponse));
   const [interview] = await readResponse.json() as Array<{
-    id: string; application_id: string | null; maid_reference_code: string | null; agency_id: number; scheduled_at: string; mode: string; meeting_url: string | null; status: string;
+    id: string; application_id: string | null; maid_reference_code: string | null; agency_id: number; scheduled_at: string; duration_minutes: number; mode: string; meeting_url: string | null; status: string;
     employer_name: string; employer_email: string; employer_contact_verified_at: string | null; employer_invitation_sent_at: string | null;
   }>;
   if (!interview) return c.json({ error: "Interview was not found" }, 404);
@@ -15503,7 +15800,11 @@ const sendEmployerInterviewInvitation = safeApi(async (c) => {
   confirmationUrl.searchParams.set("token", confirmationToken);
   const text = greeting + ",\n\nYou are invited to an interview scheduled for " + when + " (Singapore time).\nFormat: " + interview.mode.replace(/_/g, " ") + meeting + "\n\nConfirm attendance securely: " + confirmationUrl.toString() + "\nThis link expires seven days after the scheduled interview time. Contact the agency if you need to change the time.\n\nAt The Agency";
   const idempotencyKey = "interview:" + interview.id + ":employer-invitation:" + confirmationTokenHash;
-  const result = await sendEmailViaResend(c.env, interview.employer_email, "Interview invitation", text, idempotencyKey);
+  const calendarAttachment = createInterviewCalendarAttachment({
+    id: interview.id, scheduledAt: interview.scheduled_at, durationMinutes: interview.duration_minutes,
+    mode: interview.mode, meetingUrl: interview.meeting_url,
+  });
+  const result = await sendEmailViaResend(c.env, interview.employer_email, "Interview invitation", text, idempotencyKey, undefined, [calendarAttachment]);
   if (!result.ok) {
     await fetch(config.baseUrl + "/rest/v1/workflow_events", {
       method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
@@ -15523,7 +15824,7 @@ const sendEmployerInterviewInvitation = safeApi(async (c) => {
     method: "POST", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=minimal" }),
     body: JSON.stringify({ event_type: "interview.employer_invitation_sent", entity_type: "interview", entity_id: interview.id, actor: "user:" + (admin.username || admin.email || "Agency Staff"), status: "completed", payload: { agencyId: admin.agencyId, scheduled_at: interview.scheduled_at } }),
   });
-  return c.json({ sent: true, sentAt: savedAt, auditLogged: eventResponse.ok });
+  return c.json({ sent: true, sentAt: savedAt, auditLogged: eventResponse.ok, calendarAttachment: true });
 });
 
 app.post("/api/operations-board/interviews/:interviewId/employer-invitation", requireAgencyAdminAuth, canManageAgencyRecords, sendEmployerInterviewInvitation);
@@ -15847,7 +16148,7 @@ app.post("/api/operations-board/maid-interviews/:interviewId/invitation", requir
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const interviewId = toTrimmedString(c.req.param("interviewId"));
   const params = new URLSearchParams({
-    select: "id,maid_reference_code,scheduled_at,mode,status,meeting_url,candidate_name,candidate_email,candidate_invitation_sent_at",
+    select: "id,maid_reference_code,scheduled_at,duration_minutes,mode,status,meeting_url,candidate_name,candidate_email,candidate_invitation_sent_at,calendar_event_id,calendar_event_url,calendar_sheet_row_number",
     id: `eq.${interviewId}`,
     agency_id: `eq.${admin.agencyId}`,
     limit: "1",
@@ -15859,8 +16160,8 @@ app.post("/api/operations-board/maid-interviews/:interviewId/invitation", requir
     throw new Error(`Unable to load maid interview (${readResponse.status}): ${details}`);
   }
   const [interview] = await readResponse.json() as Array<{
-    id: string; maid_reference_code: string | null; scheduled_at: string; mode: string; status: string; meeting_url: string | null;
-    candidate_name: string; candidate_email: string; candidate_invitation_sent_at: string | null;
+    id: string; maid_reference_code: string | null; scheduled_at: string; duration_minutes: number; mode: string; status: string; meeting_url: string | null;
+    candidate_name: string; candidate_email: string; candidate_invitation_sent_at: string | null; calendar_event_id: string | null; calendar_event_url: string | null; calendar_sheet_row_number: number | null;
   }>;
   if (!interview?.maid_reference_code) return c.json({ error: "Maid interview was not found" }, 404);
   if (interview.candidate_invitation_sent_at) return c.json({ sent: true, alreadySent: true, sentAt: interview.candidate_invitation_sent_at });
@@ -15868,8 +16169,7 @@ app.post("/api/operations-board/maid-interviews/:interviewId/invitation", requir
   if (!["SCHEDULED", "CONFIRMED"].includes(interview.status) || Date.parse(interview.scheduled_at) <= Date.now()) {
     return c.json({ error: "Only upcoming scheduled interviews can be invited" }, 409);
   }
-  const webhookUrl = c.env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim() || c.env.MAKE_WEBHOOK_URL?.trim();
-  if (!webhookUrl) return c.json({ error: "The interview calendar workflow is not configured" }, 503);
+  const webhookUrl = c.env.MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE?.trim();
 
   const dateParts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Singapore", year: "numeric", month: "2-digit", day: "2-digit" })
     .formatToParts(new Date(interview.scheduled_at));
@@ -15881,54 +16181,87 @@ app.post("/api/operations-board/maid-interviews/:interviewId/invitation", requir
   const scheduledTime24 = `${timePart("hour")}:${timePart("minute")}`;
   const scheduledTime = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit", hour12: true })
     .format(new Date(interview.scheduled_at));
-  let makeResponse: Response;
-  try {
-    makeResponse = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        scenario: "interview_pipeline",
-        to: normalizeEmail(interview.candidate_email),
-        candidateName: interview.candidate_name,
-        position: "Domestic helper recruitment",
-        type: "interview_invitation",
-        subject: "Interview invitation",
-        body: `Dear ${interview.candidate_name},\n\nWe would like to invite you to an interview on ${scheduledDate} at ${scheduledTime} Singapore time. Interview format: ${interview.mode.replace(/_/g, " ")}.${interview.meeting_url ? `\nMeeting link: ${interview.meeting_url}` : ""}\n\nBest regards,\nAt The Agency`,
-        scheduledDate,
-        scheduledTime,
-        scheduledTime24,
-        meetingUrl: interview.meeting_url || undefined,
-        interviewMode: interview.mode,
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-  } catch (error) {
-    console.error("Maid interview invitation Make request failed", errMsg(error));
-    return c.json({ error: "Could not reach the interview calendar workflow" }, 502);
-  }
-  const responseText = await makeResponse.text();
+  let meetingUrl = interview.meeting_url;
+  let deliveryPath: "make" | "resend_with_calendar_file" = "make";
   let makeResult: Record<string, unknown> = {};
-  try {
-    const parsed = JSON.parse(responseText) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) makeResult = parsed as Record<string, unknown>;
-  } catch {
-    // Make may return plain text after accepting the workflow.
+  if (webhookUrl) {
+    let makeResponse: Response;
+    try {
+      makeResponse = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          scenario: "interview_pipeline",
+          to: normalizeEmail(interview.candidate_email),
+          candidateName: interview.candidate_name,
+          position: "Domestic helper recruitment",
+          type: "interview_invitation",
+          subject: "Interview invitation",
+          body: `Dear ${interview.candidate_name},\n\nWe would like to invite you to an interview on ${scheduledDate} at ${scheduledTime} Singapore time. Interview format: ${interview.mode.replace(/_/g, " ")}.${interview.meeting_url ? `\nMeeting link: ${interview.meeting_url}` : ""}\n\nBest regards,\nAt The Agency`,
+          scheduledDate,
+          scheduledTime,
+          scheduledTime24,
+          meetingUrl: interview.meeting_url || undefined,
+          interviewMode: interview.mode,
+          interviewId: interview.id,
+          durationMinutes: interview.duration_minutes,
+          calendarEventId: interview.calendar_event_id || undefined,
+          sheetRowNumber: interview.calendar_sheet_row_number || undefined,
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch (error) {
+      console.error("Maid interview invitation Make request failed", errMsg(error));
+      return c.json({ error: "Could not reach the configured interview pipeline" }, 502);
+    }
+    const responseText = await makeResponse.text();
+    try {
+      const parsed = JSON.parse(responseText) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) makeResult = parsed as Record<string, unknown>;
+    } catch {
+      // Make may return plain text after accepting the workflow.
+    }
+    if (!makeResponse.ok) return c.json({ error: "The configured interview pipeline could not send the invitation" }, 502);
+    const responseInterviewId = toTrimmedString(makeResult.interviewId);
+    if (responseInterviewId !== interview.id) return c.json({ error: "The interview workflow did not confirm the saved interview reference. Check Make history before retrying." }, 502);
+    meetingUrl = toTrimmedString(makeResult.meetLink ?? makeResult.googleMeetLink ?? makeResult.hangoutLink) || interview.meeting_url;
+    const eventId = toTrimmedString(makeResult.eventId ?? makeResult.id);
+    const eventUrl = toTrimmedString(makeResult.eventUrl ?? makeResult.htmlLink);
+    const sheetRowNumber = makeResult.sheetRowNumber == null ? null : Number(makeResult.sheetRowNumber);
+    const calendarSynced = Boolean(eventId && Number.isInteger(sheetRowNumber) && sheetRowNumber! >= 2);
+    if ((eventId || sheetRowNumber !== null) && !calendarSynced) return c.json({ error: "The interview workflow returned incomplete calendar/sheet references. Check the event and sheet before retrying." }, 502);
+    if (!calendarSynced) return c.json({ error: "The workflow may have run, but did not confirm its calendar event and sheet row. Check Make history, Calendar, and the sheet before retrying." }, 502);
+    if (calendarSynced) {
+      const syncParams = new URLSearchParams({ id: `eq.${interview.id}`, agency_id: `eq.${admin.agencyId}`, maid_reference_code: `eq.${interview.maid_reference_code}`, select: "id" });
+      const syncResponse = await fetch(`${config.baseUrl}/rest/v1/interviews?${syncParams}`, {
+        method: "PATCH", headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
+        body: JSON.stringify({ calendar_event_id: eventId, calendar_event_url: eventUrl || null, calendar_sheet_row_number: sheetRowNumber, calendar_sync_updated_at: now(), updated_at: now() }),
+      });
+      if (!syncResponse.ok) return c.json({ error: "Calendar and sheet were updated, but their references could not be saved to the interview. Do not retry; contact the agency." }, 502);
+    }
+  } else {
+    if (!c.env.RESEND_API_KEY?.trim() || !isValidResendFrom(c.env.RESEND_FROM)) {
+      return c.json({ error: "Configure MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE or the agency email service to send maid invitations" }, 503);
+    }
+    deliveryPath = "resend_with_calendar_file";
+    const text = `Dear ${interview.candidate_name},\n\nYou are invited to an interview on ${scheduledDate} at ${scheduledTime} Singapore time. Interview format: ${interview.mode.replace(/_/g, " ")}.${meetingUrl ? `\nMeeting link: ${meetingUrl}` : "\nThe agency will share joining details separately."}\n\nA calendar file is attached so you can add this event to your calendar. Contact At The Agency if you need to change the time.\n\nAt The Agency`;
+    const result = await sendEmailViaResend(c.env, interview.candidate_email, "Interview invitation", text,
+      `interview:${interview.id}:maid-invitation:${interview.scheduled_at}`, undefined,
+      [createInterviewCalendarAttachment({ id: interview.id, scheduledAt: interview.scheduled_at, durationMinutes: interview.duration_minutes, mode: interview.mode, meetingUrl })]);
+    if (!result.ok) return c.json({ error: result.error === "RESEND_NOT_CONFIGURED" ? "Configure the agency email service before sending maid invitations" : "The maid interview invitation could not be sent" }, 502);
   }
-  if (!makeResponse.ok) return c.json({ error: "The interview calendar workflow could not send the invitation" }, 502);
-
-  const meetingUrl = toTrimmedString(makeResult.meetLink ?? makeResult.googleMeetLink ?? makeResult.hangoutLink) || interview.meeting_url;
   const sentAt = now();
   const saveParams = new URLSearchParams({ id: `eq.${interview.id}`, agency_id: `eq.${admin.agencyId}`, maid_reference_code: `eq.${interview.maid_reference_code}`, select: "id" });
   const saveResponse = await fetch(`${config.baseUrl}/rest/v1/interviews?${saveParams}`, {
     method: "PATCH",
     headers: supabaseHeaders(config, { "content-type": "application/json", prefer: "return=representation" }),
-    body: JSON.stringify({ candidate_invitation_sent_at: sentAt, meeting_url: meetingUrl || null, updated_at: sentAt }),
+    body: JSON.stringify({ candidate_invitation_sent_at: sentAt, meeting_url: meetingUrl || null, ...(webhookUrl && makeResult.eventId ? { calendar_event_id: toTrimmedString(makeResult.eventId), calendar_event_url: toTrimmedString(makeResult.eventUrl ?? makeResult.htmlLink) || null, calendar_sheet_row_number: Number(makeResult.sheetRowNumber), calendar_sync_updated_at: sentAt } : {}), updated_at: sentAt }),
   });
   if (!saveResponse.ok) {
     console.error("Maid interview invitation sent, but record update failed", await readSupabaseError(saveResponse));
     return c.json({ error: "The invitation was sent, but its delivery status could not be saved. Refresh before retrying." }, 502);
   }
-  return c.json({ sent: true, sentAt, meetingUrl: meetingUrl || null });
+  return c.json({ sent: true, sentAt, meetingUrl: meetingUrl || null, deliveryPath, calendarAttachment: deliveryPath === "resend_with_calendar_file", calendarSynced: Boolean(webhookUrl && makeResult.eventId && makeResult.sheetRowNumber) });
 }));
 
 app.get("/api/operations-board/interviews", requireAgencyAdminAuth, canReviewAgencyRecords, safeApi(async (c) => {
@@ -16872,7 +17205,7 @@ const encodeBase64 = (bytes: Uint8Array) => {
   return btoa(binary);
 };
 
-const imageDataUrlAttachment = (value: string, filename: string, contentId: string): ResendInlineAttachment | null => {
+const imageDataUrlAttachment = (value: string, filename: string, contentId: string): ResendEmailAttachment | null => {
   const match = value.trim().match(/^data:(image\/(?:png|jpe?g|webp|gif));base64,([a-z\d+/=\s]+)$/i);
   if (!match) return null;
   const content = match[2].replace(/\s/g, "");
@@ -16880,7 +17213,7 @@ const imageDataUrlAttachment = (value: string, filename: string, contentId: stri
   return { filename, content, content_type: match[1].toLowerCase(), content_id: contentId };
 };
 
-const getMarketingPhotoAttachment = async (env: Bindings, maid: MaidRecord, index: number): Promise<ResendInlineAttachment | null> => {
+const getMarketingPhotoAttachment = async (env: Bindings, maid: MaidRecord, index: number): Promise<ResendEmailAttachment | null> => {
   const source = (Array.isArray(maid.photoDataUrls) ? maid.photoDataUrls.find(Boolean) : "") || maid.photoDataUrl || "";
   const contentId = `maid-photo-${index}`;
   const inline = imageDataUrlAttachment(source, `${maid.referenceCode}.jpg`, contentId);
@@ -17121,7 +17454,7 @@ app.post("/api/ai/direct-marketing/send-email", requireAgencyAdminAuth, requireA
     ? campaignMaids.filter((maid) => campaignMaidRefs.includes(maid.referenceCode))
     : campaignMaids;
   const featuredEmailMaids = emailMaids.slice(0, 3);
-  const emailAttachments: ResendInlineAttachment[] = [];
+  const emailAttachments: ResendEmailAttachment[] = [];
   const logoAttachment = imageDataUrlAttachment(emailData.companyProfile?.logo_data_url || "", "agency-logo", "agency-logo");
   if (logoAttachment) emailAttachments.push(logoAttachment);
   const photoResults = await Promise.all(featuredEmailMaids.map((maid, index) => getMarketingPhotoAttachment(c.env, maid, index)));
@@ -22293,7 +22626,7 @@ app.get("/api/ats/applications", requireAgencyAdminAuth, canReviewAgencyRecords,
   const supabaseConfig = getSupabaseAppDataConfig(c.env);
   if (paged.length && supabaseConfig) {
     const interviewQuery = {
-      select: "id,application_id,scheduled_at,mode,status,meeting_url,outcome,reminders_enabled,employer_name,employer_email,employer_contact_verified_at",
+      select: "id,application_id,scheduled_at,mode,status,meeting_url,outcome,reminders_enabled,employer_name,employer_email,employer_contact_verified_at,calendar_event_id,calendar_event_url,calendar_sheet_row_number",
       filters: { agency_id: admin.agencyId },
       orderBy: "scheduled_at.desc",
       limit: 500,
@@ -22343,6 +22676,9 @@ app.get("/api/ats/applications", requireAgencyAdminAuth, canReviewAgencyRecords,
               employerName: interview.employer_name ?? "",
               employerEmail: interview.employer_email ?? "",
               employerContactVerified: Boolean(interview.employer_contact_verified_at),
+              calendarEventId: interview.calendar_event_id ?? null,
+              calendarEventUrl: interview.calendar_event_url ?? null,
+              calendarSheetRowNumber: interview.calendar_sheet_row_number ?? null,
             }
           : null,
       };
@@ -24110,7 +24446,7 @@ app.patch("/api/whatsapp-broadcast/contacts/:id", requireAgencyAdminAuth, safeAp
 app.post("/api/whatsapp-broadcast/contacts/consent", requireAgencyAdminAuth, safeApi(async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   const body = await parseBody<any>(c.req.raw);
-  const ids = Array.isArray(body?.contactIds) ? [...new Set(body.contactIds.map(String))] : [];
+  const ids: string[] = Array.isArray(body?.contactIds) ? [...new Set<unknown>(body.contactIds.map((value: unknown) => String(value)))].map(String) : [];
   const consentStatus = String(body?.consent_status ?? "");
   if (!ids.length || ids.length > 1000 || ids.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) return c.json({ error: "Select between 1 and 1,000 valid contacts." }, 400);
   if (!["subscribed", "opted_out", "not_consented"].includes(consentStatus)) return c.json({ error: "Choose a valid permission status." }, 400);

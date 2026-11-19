@@ -54,7 +54,7 @@ const C = {
   darkCard:     "#0D2E3A",
 
   text:         "#07181E",
-  textMuted:    "#3A6374",
+  textMuted:    "#000000",
   border:       "#B6D9E4",
   surface:      "#EEF8FB",
   white:        "#FFFFFF",
@@ -90,7 +90,7 @@ const defaultRequirements: RequirementsState = {
 };
 
 const requestFormFromSearch = (raw: string | null) => {
-  const form = { agencyId: "", nationality: "No Preference", primaryDuty: "No Preference", ageGroup: "No Preference", language: "No Preference", budget: "", otherRequirements: "" };
+  const form = { agencyId: "", nationality: "No Preference", primaryDuty: "No Preference", ageGroup: "No Preference", language: "No Preference", hiringContext: "", budget: "", otherRequirements: "" };
   const requirements = { ...defaultRequirements };
   if (!raw) return { form, requirements };
   try {
@@ -671,6 +671,7 @@ const ClientRequestsPage = () => {
           primaryDuty: form.primaryDuty,
           ageGroup: form.ageGroup,
           language: form.language,
+          ...(form.hiringContext && { hiringContext: form.hiringContext }),
           ...(form.budget.trim() && { budget: form.budget.trim() }),
           ...(form.otherRequirements.trim() && { otherRequirements: form.otherRequirements.trim() }),
           ...(requirementsList.length > 0 && { requirements: requirementsList.join(", ") }),
@@ -700,7 +701,7 @@ const ClientRequestsPage = () => {
       setRequirements(defaultRequirements);
       setForm({
         agencyId: "", nationality: "No Preference", primaryDuty: "No Preference",
-        ageGroup: "No Preference", language: "No Preference", budget: "", otherRequirements: "",
+        ageGroup: "No Preference", language: "No Preference", hiringContext: "", budget: "", otherRequirements: "",
       });
       toast.success("Your request is now in review.");
     },
@@ -1022,6 +1023,19 @@ const ClientRequestsPage = () => {
                       </StyledSelect>
                     </div>
                   ))}
+                </div>
+
+                <div className="grid gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.textMuted }}>Hiring situation</label>
+                  <StyledSelect value={form.hiringContext} onChange={(value) => setForm((current) => ({ ...current, hiringContext: value }))}>
+                    <option value="">Choose the closest option</option>
+                    <option value="first_time_hiring">First time hiring a helper</option>
+                    <option value="previous_helper_no_longer_employed">Hired a helper before; none currently employed</option>
+                    <option value="replacing_current_helper">Replacing a current helper</option>
+                    <option value="additional_helper">Hiring an additional helper</option>
+                    <option value="recently_cancelled_or_transfer">Recent cancellation or transfer case</option>
+                  </StyledSelect>
+                  <p className="text-xs" style={{ color: C.textMuted }}>This helps the agency prepare the right document checklist. Staff will confirm applicable requirements with you.</p>
                 </div>
 
                 {/* Budget + Notes */}

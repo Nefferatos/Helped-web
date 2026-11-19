@@ -842,7 +842,7 @@ const CSS = `
   position: absolute;
   left: 15px; top: 50%; transform: translateY(-50%);
   width: 15px; height: 15px;
-  color: rgba(255,255,255,.28);
+  color: #000;
   pointer-events: none;
   transition: color .2s;
 }
@@ -850,19 +850,19 @@ const CSS = `
 .fq-search-input {
   width: 100%;
   padding: 14px 44px 14px 44px;
-  background: rgba(255,255,255,.07);
-  border: 1.5px solid rgba(255,255,255,.12);
+  background: #fff;
+  border: 1.5px solid #d1d5db;
   border-radius: var(--r);
-  color: #fff;
+  color: #000;
   font-size: 14px;
   font-family: var(--sans);
   outline: none;
   transition: border-color .2s, background .2s, box-shadow .2s;
 }
-.fq-search-input::placeholder { color: rgba(255,255,255,.28); }
+.fq-search-input::placeholder { color: #000; opacity: 1; }
 .fq-search-input:focus {
   border-color: var(--gold);
-  background: rgba(255,255,255,.10);
+  background: #fff;
   box-shadow: 0 0 0 4px rgba(252,211,77,.10);
 }
 .fq-search-clear {

@@ -161,9 +161,11 @@ const MaidInterviewsPage = () => {
         }),
       });
       let invitationError = "";
+      let employerCalendarAttachment = false;
       if (sendEmployerInvitation) {
         try {
-          await api(`/api/operations-board/maid-interviews/${encodeURIComponent(result.interview.id)}/employer-invitation`, { method: "POST" });
+          const invitation = await api<{ calendarAttachment?: boolean }>(`/api/operations-board/maid-interviews/${encodeURIComponent(result.interview.id)}/employer-invitation`, { method: "POST" });
+          employerCalendarAttachment = Boolean(invitation.calendarAttachment);
         } catch (sendError) {
           invitationError = sendError instanceof Error ? sendError.message : "Unable to send employer invitation";
         }
@@ -172,7 +174,7 @@ const MaidInterviewsPage = () => {
         setError(`Interview scheduled, but the employer invitation was not sent: ${invitationError}`);
       } else {
         setNotice(sendEmployerInvitation
-          ? `Interview scheduled and employer invitation sent to ${employerEmail}.`
+          ? `Interview scheduled and employer invitation sent to ${employerEmail}.${employerCalendarAttachment ? " An .ics calendar file is attached." : ""}`
           : `Interview scheduled for ${result.interview.candidate_name}.`);
       }
       setCandidateEmail("");
@@ -234,13 +236,14 @@ const MaidInterviewsPage = () => {
     setError("");
     setNotice("");
     try {
-      const result = await api<{ sent: boolean; meetingUrl?: string | null }>(
+      const result = await api<{ sent: boolean; meetingUrl?: string | null; calendarAttachment?: boolean }>(
         `/api/operations-board/maid-interviews/${encodeURIComponent(interview.id)}/invitation`,
         { method: "POST" },
       );
+      const calendarMessage = result.calendarAttachment ? " An .ics calendar file is attached." : "";
       setNotice(result.meetingUrl
-        ? `Invitation sent to ${interview.candidate_email}; the meeting link was saved.`
-        : `Invitation sent to ${interview.candidate_email}.`);
+        ? `Invitation sent to ${interview.candidate_email}; the meeting link was saved.${calendarMessage}`
+        : `Invitation sent to ${interview.candidate_email}.${calendarMessage}`);
       await loadPage();
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Unable to send interview invitation");
@@ -254,8 +257,8 @@ const MaidInterviewsPage = () => {
     setError("");
     setNotice("");
     try {
-      await api(`/api/operations-board/maid-interviews/${encodeURIComponent(interviewId)}/employer-invitation`, { method: "POST" });
-      setNotice(`Employer invitation sent to ${email}.`);
+      const result = await api<{ calendarAttachment?: boolean }>(`/api/operations-board/maid-interviews/${encodeURIComponent(interviewId)}/employer-invitation`, { method: "POST" });
+      setNotice(`Employer invitation sent to ${email}.${result.calendarAttachment ? " An .ics calendar file is attached." : ""}`);
       await loadPage();
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Unable to send employer invitation");

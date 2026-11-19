@@ -214,7 +214,7 @@ const CSS = `
   --sc-green-border:#a8e6cc; --sc-blue-light:#eff6ff;
   --sc-surface:#ffffff; --sc-bg:#f0f4f2;
   --sc-border:#e4e8e6; --sc-border-soft:#eef1ef;
-  --sc-text:#111827; --sc-text2:#6b7280; --sc-text3:#6b7280;
+  --sc-text:#000000; --sc-text2:#000000; --sc-text3:#000000;
   --sc-shadow-xs:0 1px 2px rgba(0,0,0,.05);
   --sc-shadow-sm:0 1px 4px rgba(0,0,0,.08),0 2px 8px rgba(0,0,0,.04);
   --sc-shadow-md:0 4px 16px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.06);
@@ -350,7 +350,7 @@ const CSS = `
 .sc-back-btn {
   display:none; width:36px; height:36px; border-radius:10px;
   background:#f3f5f4; border:none; cursor:pointer;
-  align-items:center; justify-content:center; color:#555; flex-shrink:0;
+  align-items:center; justify-content:center; color:#000; flex-shrink:0;
   transition:background .12s;
 }
 .sc-back-btn:hover { background:#e8ecea; }
@@ -393,7 +393,7 @@ const CSS = `
   padding:8px 13px; border-radius:10px;
   border:1.5px solid var(--sc-border);
   background:var(--sc-surface); text-align:left;
-  cursor:pointer; font-size:13px; font-weight:600; color:#374151;
+  cursor:pointer; font-size:13px; font-weight:600; color:#000;
   transition:all .15s; white-space:nowrap;
 }
 .sc-topic-btn:hover { border-color:var(--sc-green); background:var(--sc-green-light); color:#0a5c40; }
@@ -466,7 +466,7 @@ const CSS = `
   width:34px; height:34px; border-radius:11px;
   background:#e8ece9; display:flex; align-items:center;
   justify-content:center; font-size:12px; font-weight:700;
-  color:#555; flex-shrink:0; overflow:hidden;
+  color:#000; flex-shrink:0; overflow:hidden;
   box-shadow:var(--sc-shadow-xs);
 }
 .sc-msg-avi img { width:100%; height:100%; object-fit:cover; }
@@ -587,7 +587,7 @@ const CSS = `
 .sc-guide-inner { padding:30px; display:flex; flex-direction:column; position:relative; }
 .sc-guide-close {
   position:absolute; top:16px; right:16px; width:34px; height:34px;
-  border-radius:10px; border:1px solid #edf0ee; background:#f8faf9; color:#64748b;
+  border-radius:10px; border:1px solid #edf0ee; background:#f8faf9; color:#000;
   display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s;
 }
 .sc-guide-close:hover { background:#edf7f1; color:#0f8a64; }
@@ -601,13 +601,13 @@ const CSS = `
 .sc-guide-emoji { font-size:29px; line-height:1; display:block; }
 .sc-guide-kicker { margin:0 0 4px; color:#0f8a64; font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
 .sc-guide-title { font-size:21px; font-weight:800; color:var(--sc-text); margin:0; letter-spacing:-.025em; line-height:1.2; }
-.sc-guide-body { font-size:14px; color:#526072; line-height:1.7; margin:22px 0 24px; min-height:72px; }
+.sc-guide-body { font-size:14px; color:#000; line-height:1.7; margin:22px 0 24px; min-height:72px; }
 .sc-guide-progress-wrap { margin-bottom:24px; padding:14px; border:1px solid #e9efec; border-radius:14px; background:#f9fcfa; }
 .sc-guide-progress-track { height:6px; background:#e8efeb; border-radius:99px; overflow:hidden; }
 .sc-guide-progress-fill { height:100%; background:linear-gradient(90deg,#27c48a,#16a97b); border-radius:99px; transition:width .35s cubic-bezier(.4,0,.2,1); }
-.sc-guide-progress-meta { display:flex; justify-content:space-between; margin-top:9px; font-size:11px; color:#64748b; font-weight:700; }
+.sc-guide-progress-meta { display:flex; justify-content:space-between; margin-top:9px; font-size:11px; color:#000; font-weight:700; }
 .sc-guide-actions { display:flex; gap:12px; }
-.sc-guide-btn-skip { flex:1; padding:13px; border-radius:11px; border:1px solid #dce5e0; background:#fff; font-size:14px; font-weight:700; color:#64748b; cursor:pointer; transition:background .12s,border-color .12s; }
+.sc-guide-btn-skip { flex:1; padding:13px; border-radius:11px; border:1px solid #dce5e0; background:#fff; font-size:14px; font-weight:700; color:#000; cursor:pointer; transition:background .12s,border-color .12s; }
 .sc-guide-btn-skip:hover { background:#f6f8f7; border-color:#d1d5db; }
 .sc-guide-btn-next { flex:2; padding:13px; border-radius:11px; border:none; background:linear-gradient(135deg,#20b982,#0f956b); color:#fff; font-size:14px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px; box-shadow:0 4px 12px rgba(22,169,123,.25); transition:transform .12s,box-shadow .12s; }
 .sc-guide-btn-next:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(22,169,123,.40); }
@@ -724,7 +724,7 @@ function TopicPicker({
           )}
         </div>
         <div className={`sc-topics-toggle${open ? " open" : ""}`}>
-          <ChevronDown size={13} color="#6b7280" />
+          <ChevronDown size={13} color="#000000" />
         </div>
       </button>
 

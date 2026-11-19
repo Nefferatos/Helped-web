@@ -26,7 +26,7 @@ const C = {
   dark:        "#072B35",
   darkMid:     "#0A3D4A",
   text:        "#111111",
-  textMuted:   "#263238",
+  textMuted:   "#000000",
   border:      "#B2D8E0",
   surface:     "#EEF2ED",
   white:       "#F8F8F4",
