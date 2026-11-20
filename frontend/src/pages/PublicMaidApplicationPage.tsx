@@ -69,6 +69,8 @@ type ApplicantFormState = {
   availableDate: string;
   expectedSalary: string;
   employmentPreference: string;
+  hasReferral: string;
+  referralSource: string;
   coverNote: string;
   placeOfBirth: string;
   heightCm: string;
@@ -156,6 +158,8 @@ const initialState: ApplicantFormState = {
   availableDate: "",
   expectedSalary: "",
   employmentPreference: "",
+  hasReferral: "",
+  referralSource: "",
   coverNote: "",
   placeOfBirth: "",
   heightCm: "",
@@ -499,6 +503,7 @@ const requiredAddMaidProfileFields: Array<keyof ApplicantFormState> = [
   "contactNumber",
   "nationality",
   "dateOfBirth",
+  "hasReferral",
 ];
 
 const addMaidFieldLabels: Partial<Record<keyof ApplicantFormState, string>> = {
@@ -507,6 +512,8 @@ const addMaidFieldLabels: Partial<Record<keyof ApplicantFormState, string>> = {
   contactNumber: "WhatsApp / contact number",
   nationality: "Nationality",
   dateOfBirth: "Date of birth",
+  hasReferral: "Referral status",
+  referralSource: "Referrer's name or referral code",
   placeOfBirth: "Place of birth",
   heightCm: "Height",
   weightKg: "Weight",
@@ -849,7 +856,12 @@ const ReviewSection = ({
 const PublicMaidApplicationPage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [form, setForm] = useState<ApplicantFormState>(initialState);
+  const [form, setForm] = useState<ApplicantFormState>(() => {
+    const referralCode = searchParams.get("ref")?.trim();
+    return referralCode
+      ? { ...initialState, hasReferral: "Yes", referralSource: referralCode }
+      : initialState;
+  });
   const [files, setFiles] = useState<Record<string, File[]>>({});
   const [photoValidation, setPhotoValidation] = useState<Record<string, { checking?: boolean; error?: string }>>({});
   const photoSectionRef = useRef<HTMLDivElement>(null);
@@ -985,6 +997,12 @@ const PublicMaidApplicationPage = () => {
       case "nationality":
         if (!value) return "Please select your nationality.";
         return undefined;
+      case "hasReferral":
+        if (!value) return "Please answer whether someone referred you.";
+        return undefined;
+      case "referralSource":
+        if (form.hasReferral === "Yes" && !value.trim()) return "Please enter the referrer's name or referral code.";
+        return undefined;
       default:
         if (requiredAddMaidProfileFields.includes(key as keyof ApplicantFormState) && !value.trim()) {
           return `${addMaidFieldLabels[key as keyof ApplicantFormState] || key} is required.`;
@@ -1000,6 +1018,10 @@ const PublicMaidApplicationPage = () => {
         const error = validateField(key, form[key]);
         if (error) newErrors[key] = error;
       });
+      if (form.hasReferral === "Yes") {
+        const referralError = validateField("referralSource", form.referralSource);
+        if (referralError) newErrors.referralSource = referralError;
+      }
     }
     return newErrors;
   };
@@ -1749,6 +1771,38 @@ const PublicMaidApplicationPage = () => {
                       />
                       {touched.contactNumber && <FieldError message={errors.contactNumber} />}
                     </label>
+
+                      <label className="space-y-1.5" id="field-hasReferral">
+                      <FieldLabel>Were you referred by someone?</FieldLabel>
+                      <select
+                        className={touched.hasReferral && errors.hasReferral ? selectErrorCls : selectCls}
+                        value={form.hasReferral}
+                        onChange={(e) => updateField("hasReferral", e.target.value)}
+                        onBlur={(e) => handleBlur("hasReferral", e.target.value)}
+                        aria-invalid={touched.hasReferral && !!errors.hasReferral}
+                      >
+                        <option value="">Select one</option>
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                      </select>
+                      {touched.hasReferral && <FieldError message={errors.hasReferral} />}
+                    </label>
+
+                    {form.hasReferral === "Yes" && (
+                      <label className="space-y-1.5" id="field-referralSource">
+                        <FieldLabel required>Referrer's name or referral code</FieldLabel>
+                        <Input
+                          className={touched.referralSource && errors.referralSource ? fieldErrorCls : fieldCls}
+                          value={form.referralSource}
+                          onChange={(e) => updateField("referralSource", e.target.value)}
+                          onBlur={(e) => handleBlur("referralSource", e.target.value)}
+                          maxLength={180}
+                          placeholder="Enter the name or code"
+                          aria-invalid={touched.referralSource && !!errors.referralSource}
+                        />
+                        {touched.referralSource && <FieldError message={errors.referralSource} />}
+                      </label>
+                    )}
 
                     <label className="space-y-1.5" id="field-nationality">
                       <FieldLabel required>Nationality</FieldLabel>
@@ -2653,8 +2707,8 @@ const PublicMaidApplicationPage = () => {
 
           </div>
         </form>
-        <MaidReferralChatbot />
       </div>
+      <MaidReferralChatbot applicantName={form.fullName} applicantPhone={form.contactNumber} />
     </div>
   );
 };

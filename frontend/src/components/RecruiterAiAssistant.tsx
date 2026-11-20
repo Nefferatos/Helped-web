@@ -26,9 +26,6 @@ import {
   Clock,
   Loader2,
   Share2,
-  FileText,
-  ClipboardCheck,
-  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -98,9 +95,6 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   type?: "insight" | "action" | "summary" | "error" | "success";
-  documentUrl?: string | null;
-  documentId?: string | null;
-  trackerId?: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -208,16 +202,7 @@ const RecruiterAiAssistant = ({
     [selectedId],
   );
 
-  const assistantHook = useApplicantAssistant({
-    selectedApplicantIds,
-    currentFilters,
-    currentSearch,
-    onTrackerCreated: (trackerId, googleDocUrl) => {
-      if (googleDocUrl) {
-        toast.success("Tracker synced to Google Docs", { description: googleDocUrl });
-      }
-    },
-  });
+  const assistantHook = useApplicantAssistant({ selectedApplicantIds, currentFilters, currentSearch });
 
   // Sync backend messages to local display (keep local messages too)
   const combinedMessages = useMemo(() => {
@@ -227,9 +212,6 @@ const RecruiterAiAssistant = ({
         role: m.role,
         content: m.content,
         type: (m.action ? "action" : "insight") as ChatMessage["type"],
-        documentUrl: m.documentUrl,
-        documentId: m.documentId,
-        trackerId: m.trackerId,
       }));
     }
     return messages;
@@ -316,7 +298,7 @@ const RecruiterAiAssistant = ({
         {
           id: `welcome-${Date.now()}`,
           role: "assistant",
-          content: `Welcome! I'm your AI recruiting assistant powered by Make.com. I've analyzed **${analytics.total} applicants** across your pipeline.\n\n• **${analytics.highScore.length}** scoring 80+ and ready to fast-track\n• **${analytics.needsAttention.length}** need contact details fixed\n• **${analytics.readyForScreening.length}** waiting for screening\n\n**New!** I can now:\n• Analyze and compare applicants\n• Create applicant trackers\n• Sync trackers to Google Docs\n• Help with follow-up actions\n\nSelect an applicant and ask me anything!`,
+          content: `Welcome! I'm your AI recruiting assistant powered by Make.com. I've analyzed **${analytics.total} applicants** across your pipeline.\n\n• **${analytics.highScore.length}** scoring 80+ and ready to fast-track\n• **${analytics.needsAttention.length}** need contact details fixed\n• **${analytics.readyForScreening.length}** waiting for screening\n\nI can help compare applicants, identify follow-ups, and suggest practical next steps. Select an applicant and ask me anything!`,
           type: "summary",
         },
       ]);
@@ -558,32 +540,6 @@ const RecruiterAiAssistant = ({
                       </span>
                     )}
 
-                    {/* Actionable results — clickable work actions */}
-                    {!isUser && (msg.documentUrl || msg.trackerId) && (
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {msg.documentUrl && (
-                          <a
-                            href={msg.documentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            Open Google Doc
-                          </a>
-                        )}
-                        {msg.trackerId && (
-                          <button
-                            type="button"
-                            onClick={() => void assistantHook.loadTracker(msg.trackerId ?? undefined)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-[11px] font-semibold text-violet-700 transition hover:bg-violet-100"
-                          >
-                            <ClipboardCheck className="h-3 w-3" />
-                            View tracker
-                          </button>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
               );
@@ -608,8 +564,6 @@ const RecruiterAiAssistant = ({
                 { label: "Who needs follow-up?", icon: Clock, prompt: "Who needs follow-up today?" },
                 { label: "Compare selected", icon: Users, prompt: "Compare the selected applicants" },
                 { label: "Best matches", icon: Star, prompt: "Who are our best matches right now?" },
-                { label: "Create tracker", icon: ClipboardCheck, prompt: "Create an applicant tracker" },
-                { label: "Sync to Google Docs", icon: FileText, prompt: "Sync the tracker to Google Docs" },
                 { label: "Pipeline summary", icon: BarChart3, prompt: "Give me a pipeline summary" },
               ].map((q) => (
                 <button
@@ -637,7 +591,7 @@ const RecruiterAiAssistant = ({
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about applicants, trackers, or next steps..."
+                placeholder="Ask about applicants or next steps..."
                 className="flex-1 text-[12.5px] bg-white"
                 disabled={isThinking || assistantHook.isThinking}
               />
@@ -744,57 +698,6 @@ const RecruiterAiAssistant = ({
               </Button>
             </div>
           )}
-
-          {/* Applicant Tracker */}
-          <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
-            <div className="mb-2 flex items-center gap-2">
-              <ClipboardCheck className="h-4 w-4 text-violet-600" />
-              <p className="text-xs font-bold text-violet-800">Applicant Tracker</p>
-            </div>
-            {assistantHook.trackerInfo?.tracker ? (
-              <div className="space-y-2">
-                <div className="rounded-lg bg-white/80 p-2.5">
-                  <p className="text-[11px] font-semibold text-slate-800">{assistantHook.trackerInfo.tracker.name}</p>
-                  <p className="text-[10px] text-slate-500">{assistantHook.trackerInfo.tracker.items.length} applicants tracked</p>
-                  <p className="text-[10px] text-slate-400">Updated: {new Date(assistantHook.trackerInfo.tracker.updatedAt).toLocaleString()}</p>
-                </div>
-                {assistantHook.trackerInfo.googleDocUrl && (
-                  <a
-                    href={assistantHook.trackerInfo.googleDocUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    Open Google Doc
-                  </a>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void assistantHook.sendMessage("Sync the tracker to Google Docs")}
-                  disabled={assistantHook.isThinking}
-                  className="w-full gap-1.5 text-[11px]"
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  Sync to Google Docs
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-[11px] text-slate-600">No active tracker. Create one to start tracking applicants.</p>
-                <Button
-                  size="sm"
-                  onClick={() => void assistantHook.createTracker()}
-                  disabled={assistantHook.isThinking}
-                  className="w-full gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
-                >
-                  <ClipboardCheck className="h-3.5 w-3.5" />
-                  Create Tracker{selectedId ? " (Selected)" : " (All)"}
-                </Button>
-              </div>
-            )}
-          </div>
 
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3.5">
             <div className="mb-2 flex items-center gap-2">

@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
-import { getAgencyAdminAuthHeaders } from "@/lib/agencyAdminAuth";
+import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
 import { readSafeJson } from "@/lib/safeJson";
 import { adminPath } from "@/lib/routes";
 import { useAiInquiry, type InquiryConversationItem } from "@/hooks/useAiAutomation";
@@ -1788,9 +1788,10 @@ interface CommandCenterMessage {
 }
 
 interface CommandCenterAction {
-  type: "approve_applicant" | "reject_applicant" | "schedule_interview" | "open_maid_profile" | "draft_email";
+  type: "approve_applicant" | "reject_applicant" | "assign_interview" | "open_maid_profile" | "draft_email" | "navigate_to_page" | "website_api_action";
   applicationId?: string;
   maidReferenceCode?: string;
+  destination?: string;
   date?: string;
   recipientKind?: "enquiry" | "applicant";
   recipientId?: string;
@@ -1798,10 +1799,18 @@ interface CommandCenterAction {
   recipientEmail?: string;
   subject?: string;
   body?: string;
+  method?: "POST" | "PUT" | "PATCH" | "DELETE";
+  endpoint?: string;
+  apiBody?: Record<string, unknown>;
+  summary?: string;
   label?: string;
 }
 
 const COMMAND_CENTER_HISTORY_KEY = "helped:ai-command-center:history";
+const getCommandCenterHistoryKey = () => {
+  const admin = getStoredAgencyAdmin();
+  return `${COMMAND_CENTER_HISTORY_KEY}:${admin?.agencyId ?? "unknown"}:${admin?.id ?? "unknown"}`;
+};
 const AI_ASSISTANT_GREETING = "Hello! Welcome to your AI Assistant. What can I help you with today?";
 const COMMAND_CENTER_WELCOME = "Welcome! I’m your agency assistant. I can help with client enquiries, service requests, maid profiles, applicants, and follow-ups. What would you like help with today?";
 const AI_ASSISTANT_GREETING_AUDIO_URL = "/audio/ai-assistant-greeting.mp3";
@@ -1828,9 +1837,10 @@ const splitSpeechChunks = (text: string, maxLength = 180): string[] => {
   return chunks;
 };
 
-const loadCommandCenterHistory = (): CommandCenterMessage[] => {
+const loadCommandCenterHistory = (storageKey = getCommandCenterHistoryKey()): CommandCenterMessage[] => {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(COMMAND_CENTER_HISTORY_KEY) || "[]") as unknown;
+    window.localStorage.removeItem(COMMAND_CENTER_HISTORY_KEY);
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) || "[]") as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((item): item is CommandCenterMessage =>
       Boolean(item) && typeof item === "object" &&
@@ -1991,7 +2001,8 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"insights" | "chat" | "actions">("insights");
-  const [messages, setMessages] = useState<CommandCenterMessage[]>(loadCommandCenterHistory);
+  const [historyKey, setHistoryKey] = useState(getCommandCenterHistoryKey);
+  const [messages, setMessages] = useState<CommandCenterMessage[]>(() => loadCommandCenterHistory(historyKey));
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const [typingCharacterCount, setTypingCharacterCount] = useState(0);
   const [message, setMessage] = useState("");
@@ -2011,6 +2022,15 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
   const speakGreetingRef = useRef<(() => Promise<void>) | null>(null);
   const greetingAudioRef = useRef<HTMLAudioElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const nextHistoryKey = getCommandCenterHistoryKey();
+    if (nextHistoryKey === historyKey) return;
+    setHistoryKey(nextHistoryKey);
+    setMessages(loadCommandCenterHistory(nextHistoryKey));
+    setError(null);
+    setEmailDraft(null);
+  }, [historyKey]);
 
   useEffect(() => {
     const audio = new Audio(AI_ASSISTANT_GREETING_AUDIO_URL);
@@ -2093,9 +2113,9 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
         ...item,
         actions: item.actions?.filter((action) => action.type !== "draft_email"),
       }));
-      window.localStorage.setItem(COMMAND_CENTER_HISTORY_KEY, JSON.stringify(safeHistory));
+      window.localStorage.setItem(historyKey, JSON.stringify(safeHistory));
     } catch { /* storage unavailable */ }
-  }, [messages]);
+  }, [messages, historyKey]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -2138,15 +2158,29 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
   }, []);
 
   const runApplicantAction = async (action: CommandCenterAction) => {
-    const actionLabel = action.type === "approve_applicant" ? "approve" : action.type === "reject_applicant" ? "reject" : "schedule an interview for";
-    if (!window.confirm(`Confirm: ${actionLabel} this applicant${action.date ? ` on ${action.date}` : ""}?`)) return;
+    const actionLabel = action.type === "approve_applicant" ? "approve" : action.type === "reject_applicant" ? "reject" : "move to Screening Interview";
+    if (!window.confirm(`Confirm: ${actionLabel} this applicant?`)) return;
     const headers = { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() };
-    const response = action.type === "schedule_interview"
-      ? await fetch(`/api/ats/applications/${encodeURIComponent(action.applicationId)}/stage`, { method: "PATCH", headers, body: JSON.stringify({ stage: "Screening Interview", reason: `Interview scheduled for ${action.date || "date to be confirmed"}` }) })
-      : await fetch("/api/ats/bulk-actions", { method: "POST", headers, body: JSON.stringify({ applicationIds: [action.applicationId], action: action.type === "approve_applicant" ? "approve" : "reject" }) });
+    const response = await fetch("/api/ats/bulk-actions", { method: "POST", headers, body: JSON.stringify({ applicationIds: [action.applicationId], action: action.type === "approve_applicant" ? "approve" : action.type === "reject_applicant" ? "reject" : "assign_interview" }) });
     const data = await readSafeJson<{ error?: string }>(response);
     if (!response.ok) throw new Error(data.error || "Could not update applicant");
     setMessages((previous) => previous.map((message) => message.actions?.includes(action) ? { ...message, actions: [] } : message));
+  };
+
+  const runWebsiteAction = async (action: CommandCenterAction) => {
+    if (!action.method || !action.endpoint || !action.summary) throw new Error("This website action is incomplete.");
+    const payload = action.apiBody ? `\n\nPayload:\n${JSON.stringify(action.apiBody, null, 2)}` : "";
+    const approved = window.confirm(`Review website action\n\n${action.summary}\n\n${action.method} ${action.endpoint}${payload}\n\nContinue?`);
+    if (!approved) return;
+    const response = await fetch(action.endpoint, {
+      method: action.method,
+      headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+      ...(action.apiBody ? { body: JSON.stringify(action.apiBody) } : {}),
+    });
+    const result = await readSafeJson<{ error?: string; message?: string }>(response);
+    if (!response.ok) throw new Error(result.error || result.message || "The website could not apply this action.");
+    setMessages((previous) => previous.map((message) => message.actions?.includes(action) ? { ...message, actions: message.actions.filter((item) => item !== action) } : message));
+    toast.success(result.message || "Website action completed");
   };
 
   const sendCommandCenterEmail = async () => {
@@ -2192,6 +2226,29 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
       return;
     }
     window.location.assign(adminPath(`/maid/${encodeURIComponent(referenceCode)}`));
+  };
+
+  const navigateToPage = (action: CommandCenterAction) => {
+    const pagePaths: Record<string, string> = {
+      dashboard: "/dashboard",
+      requests: "/requests",
+      enquiries: "/enquiry",
+      maids: "/edit-maids",
+      applicants: "/recruitment",
+      contracts: "/employment-contracts",
+      operations: "/operations-center",
+      interviews: "/maid-interviews",
+      messages: "/chat-support",
+      documents: "/contractor-tasks",
+      reports: "/reports",
+      settings: "/technical",
+    };
+    const path = action.destination ? pagePaths[action.destination] : undefined;
+    if (!path) {
+      setError("That page is not available through AI Command.");
+      return;
+    }
+    window.location.assign(adminPath(path));
   };
 
   const clearChat = () => {
@@ -2588,14 +2645,18 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
                             <button
                               key={`${action.type}-${action.applicationId || action.maidReferenceCode || action.recipientId || action.label}`}
                               type="button"
-                              onClick={() => action.type === "open_maid_profile"
-                                ? openMaidProfile(action)
-                                : action.type === "draft_email"
-                                  ? setEmailDraft(action)
-                                  : void runApplicantAction(action).catch((err) => setError(err instanceof Error ? err.message : "Could not update applicant"))}
+                              onClick={() => action.type === "navigate_to_page"
+                                ? navigateToPage(action)
+                                : action.type === "open_maid_profile"
+                                  ? openMaidProfile(action)
+                                  : action.type === "draft_email"
+                                    ? setEmailDraft(action)
+                                    : action.type === "website_api_action"
+                                      ? void runWebsiteAction(action).catch((err) => setError(err instanceof Error ? err.message : "Could not apply website action"))
+                                    : void runApplicantAction(action).catch((err) => setError(err instanceof Error ? err.message : "Could not update applicant"))}
                               className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold ${action.type === "reject_applicant" ? "border-red-200 bg-red-50 text-red-700" : "border-violet-200 bg-violet-50 text-violet-700"}`}
                             >
-                              {action.label || (action.type === "draft_email" ? "Review email" : action.type === "open_maid_profile" ? "Open maid profile" : action.type === "approve_applicant" ? "Confirm approval" : action.type === "reject_applicant" ? "Confirm rejection" : `Set interview${action.date ? `: ${action.date}` : ""}`)}
+                              {action.label || (action.type === "navigate_to_page" ? "Open page" : action.type === "website_api_action" ? "Review and apply" : action.type === "draft_email" ? "Review email" : action.type === "open_maid_profile" ? "Open maid profile" : action.type === "approve_applicant" ? "Confirm approval" : action.type === "reject_applicant" ? "Confirm rejection" : "Move to Screening Interview")}
                             </button>
                           ))}
                         </div>

@@ -21,6 +21,8 @@ export interface FdwApplicationEventPayload {
   languages: string;
   employment_preference: string;
   available_date: string;
+  has_referral?: string;
+  referral_source?: string;
   note?: string;
   application_code?: string;
 }
@@ -53,6 +55,9 @@ export const sendFdwChatMessage = async (input: {
   conversationId: string;
   message: string;
   collected?: Record<string, unknown>;
+  mode?: "apply" | "refer";
+  currentField?: string;
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   fallbackReply?: string;
 }): Promise<FdwChatReply> => {
   const data = await postFdwChatbot<{
@@ -64,8 +69,11 @@ export const sendFdwChatMessage = async (input: {
   }>({
     scenario: "fdw_application_chat",
     conversation_id: input.conversationId,
+    mode: input.mode ?? "apply",
+    current_field: input.currentField ?? "",
     message: input.message,
     collected: input.collected ?? {},
+    conversation_history: input.conversationHistory ?? [],
     fallback_reply: input.fallbackReply ?? "",
   });
   return {

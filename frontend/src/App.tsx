@@ -116,11 +116,7 @@ const PublicAiReceptionist = lazyRoute(() => import("@/components/ai/PublicAiRec
 
 export const shouldShowGlobalAiCommandCenter = (pathname: string) => {
   const normalized = pathname.replace(/\/+$/, "");
-  return ![
-    "/agencyadmin/ai-agents",
-    "/agencyadmin/recruitment",
-    "/agencyadmin/chat-support",
-  ].includes(normalized);
+  return normalized === "/agencyadmin/dashboard";
 };
 
 const AdminShell = ({ children }: { children: ReactNode }) => {

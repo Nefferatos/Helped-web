@@ -37,6 +37,8 @@ export const writeMaidApplicationDraftFromChat = (answers: Record<string, unknow
         languageSkills: languages.join(", "),
         employmentPreference: asText(answers.employment_preference),
         availableDate: asText(answers.available_date),
+        hasReferral: asText(answers.has_referral),
+        referralSource: asText(answers.referral_source),
         coverNote: asText(answers.note),
       },
       selectedLanguages: languages,

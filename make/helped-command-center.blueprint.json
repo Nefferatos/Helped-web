@@ -25,7 +25,7 @@
             "mapper": {
                 "files": [],
                 "message": "{{1.userPrompt}}\n\nConversation history:\n{{join(map(slice(1.messages; -10); item.role + \": \" + item.content); \"\\n\")}}",
-                "threadId": "{{1.scenario}}",
+                "threadId": "{{1.scenario}}-{{1.context.user.id}}",
                 "outputType": "text",
                 "tokenLimit": "100",
                 "modelConfig": {
@@ -43,49 +43,31 @@
                     "x": 450,
                     "y": 0
                 },
-                "notes": "AI Command Center engine. After import: connect your Make AI Provider connection (same one used by your other AI scenarios)."
+                "notes": "Shared AI engine for agency staff and authenticated employers. The Worker sends role-scoped context, while the thread ID isolates memory per user. After import: connect your Make AI Provider connection (same one used by your other AI scenarios)."
             },
             "tools": []
         },
         {
             "id": 3,
-            "module": "json:CreateJSON",
+            "module": "gateway:WebhookRespond",
             "version": 1,
-            "parameters": {
-                "json": "{\n  \"reply\": \"\"\n}"
-            },
+            "parameters": {},
             "mapper": {
-                "json": "{\"reply\": \"{{2.response}}\"}"
+                "body": "{{2.response}}",
+                "status": "200",
+                "headers": [
+                    {
+                        "key": "Content-Type",
+                        "value": "text/plain; charset=utf-8"
+                    }
+                ]
             },
             "metadata": {
                 "designer": {
                     "x": 900,
                     "y": 0
                 },
-                "notes": "Wrap the AI reply in { reply: \"...\" } so the Worker's extractCommandCenterReply can read it."
-            }
-        },
-        {
-            "id": 4,
-            "module": "gateway:WebhookRespond",
-            "version": 1,
-            "parameters": {},
-            "mapper": {
-                "body": "{{3.data}}",
-                "status": "200",
-                "headers": [
-                    {
-                        "key": "Content-Type",
-                        "value": "application/json"
-                    }
-                ]
-            },
-            "metadata": {
-                "designer": {
-                    "x": 1350,
-                    "y": 0
-                },
-                "notes": "Return JSON reply to the Worker."
+                "notes": "Return the AI Agent's Response directly. For actions, the agent must respond with one valid JSON object: {\"reply\":\"...\",\"actions\":[{\"type\":\"website_api_action\",...}]} or a navigation/applicant action. For no-action replies, plain text is fine. The Worker validates role, route, record scope, and payload, then asks the signed-in user to confirm before sending the action through the website API."
             }
         }
     ],
@@ -114,14 +96,13 @@
             "AFTER IMPORT:",
             "1. WEBHOOK: Click Module 1, create a new webhook named 'AI Command Center Chat Webhook', copy its URL.",
             "2. AI AGENT: Click Module 2, connect your Make AI Provider connection.",
-            "3. CREATE JSON: Module 3 is pre-configured to return { reply: \"...\" }.",
-            "4. WEBHOOK RESPONSE: Module 4 is pre-configured.",
-            "5. WORKER SECRET: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_URL (paste the webhook URL).",
-            "6. ACTIVATE: Toggle the scenario ON.",
+            "3. WEBHOOK RESPONSE: Map Body directly to Module 2 > Response and set Status to 200.",
+            "4. WORKER SECRET: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_URL (paste the webhook URL).",
+            "5. ACTIVATE: Toggle the scenario ON and keep webhook processing immediate (Sequential processing off).",
             "",
             "The Worker sends { type, scenario, systemPrompt, userPrompt, messages, context }.",
-            "The AI agent uses 1.systemPrompt (agency data + instructions) and 1.userPrompt + conversation history.",
-            "Returns { reply: \"...\" }, which extractCommandCenterReply reads back into the chat."
+            "The AI agent uses 1.systemPrompt (role-scoped data + instructions) and 1.userPrompt + conversation history. Thread memory is isolated by scenario and authenticated user ID.",
+            "The webhook response returns Module 2's Response directly. Plain text is fine for chat-only replies. Whenever Module 2 proposes any action, it must return one valid JSON object shaped as {\"reply\":\"...\",\"actions\":[...]} without Markdown fences. The Worker validates actions against the signed-in role and website API allowlist, then the portal shows the request and payload and requires the user to confirm before execution. This is a permissioned website action interface, not unrestricted computer or source-code control."
         ]
     }
 }

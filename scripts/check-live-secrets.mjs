@@ -40,6 +40,8 @@ const REQUIRED = [
   { name: "MAKE_HR_EMAIL_WEBHOOK_URL", usedBy: "HR interview email dispatch (:10687)" },
   { name: "MAKE_WEBHOOK_URL_APPLICANT_INTAKE", usedBy: "candidate.created intake (:14313)" },
   { name: "MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT", usedBy: "applicant assistant (:10218)" },
+  { name: "MAKE_WEBHOOK_URL_FDW_CHATBOT", usedBy: "POST /api/fdw/chatbot — shared FDW apply/referral AI chat" },
+  { name: "MAKE_WEBHOOK_URL_MAID_REFERRAL", usedBy: "consented public maid referrals → Sheets outbox" },
   { name: "MAKE_WEBHOOK_URL_CONTRACTOR_ARRIVAL_ALERT", usedBy: "arrival.completed alert (:8337)" },
   { name: "EVENT_INGEST_SECRET", usedBy: "POST /api/events + GET /api/events/health (:5773)" },
 ];

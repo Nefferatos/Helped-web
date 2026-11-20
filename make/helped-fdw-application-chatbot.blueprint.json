@@ -1,5 +1,5 @@
 {
-    "name": "FDW Application Chatbot",
+    "name": "FDW Applicant Assistant",
     "flow": [
         {
             "id": 1,
@@ -29,7 +29,7 @@
                             "data": {
                                 "editable": "true"
                             },
-                            "label": "FDW Application Chatbot"
+                            "label": "FDW Applicant Assistant"
                         }
                     }
                 },
@@ -70,12 +70,17 @@
                                 "makeConnectionId": 9990574
                             },
                             "filter": {
-                                "name": "FDW chatbot message",
+                                "name": "FDW applicant chat message",
                                 "conditions": [
                                     [
                                         {
                                             "a": "{{1.scenario}}",
                                             "b": "fdw_application_chat",
+                                            "o": "text:equal"
+                                        },
+                                        {
+                                            "a": "{{1.mode}}",
+                                            "b": "apply",
                                             "o": "text:equal"
                                         }
                                     ]
@@ -83,10 +88,10 @@
                             },
                             "mapper": {
                                 "files": [],
-                                "message": "Applicant answer: {{1.message}}\\nCollected details: {{escapeJSON(1.collected)}}\\nSuggested next prompt: {{1.fallback_reply}}",
+                                "message": "You are chatting with an FDW applicant. Only answer questions about the FDW application and its requirements. The applicant must complete and submit the application in the website form; do not fill in the form, claim to submit it, or claim to update it. Friend referrals are handled by the separate in-chat 'I have a friend to refer' action. If asked about referring a friend, direct them to that action. Never ask for or mention a referral code, collect referral details in this AI response, ask whether the applicant was referred, or claim a referral was added to the form.\\nCurrent focus: {{1.current_field}}\\nApplicant message: {{1.message}}\\nRecent conversation: {{escapeJSON(1.conversation_history)}}",
                                 "threadId": "{{1.conversation_id}}",
                                 "outputType": "text",
-                                "tokenLimit": "50",
+                                "tokenLimit": "60",
                                 "modelConfig": {
                                     "timeout": "",
                                     "recursionLimit": "20",
@@ -94,7 +99,7 @@
                                     "iterationsFromHistoryCount": "0"
                                 },
                                 "defaultModel": "small",
-                                "systemPrompt": "You are a warm, concise application assistant for a Singapore FDW agency. Acknowledge the applicant answer and ask one next question only. Never promise employment or give legal/medical advice. Return ONLY valid JSON in this exact shape: {\\\"reply\\\":\\\"your response\\\"}.",
+                                "systemPrompt": "{{1.system_prompt}}",
                                 "promptCaching": "none",
                                 "fallbackEnabled": false
                             },
@@ -318,7 +323,9 @@
                                     "7": "{{1.languages}}",
                                     "8": "{{1.employment_preference}}",
                                     "9": "{{1.available_date}}",
-                                    "10": "{{1.note}}"
+                                    "10": "{{1.note}}",
+                                    "11": "{{1.has_referral}}",
+                                    "12": "{{1.referral_source}}"
                                 },
                                 "sheetId": "Sheet1",
                                 "spreadsheetId": "/1b373I3pQUupwVZmS58FTJptsDXWsWyPH5ZQvWQKTvNY",

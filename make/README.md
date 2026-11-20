@@ -13,6 +13,7 @@ Importable blueprints that wire the marketing → application → recruiter → 
 | `helped-marketing-campaign-events.blueprint.json` | Webhook → internal Gmail notification → response | Custom Webhook (from Worker durable outbox) |
 | `helped-pdf-autofill.blueprint.json` | Webhook → Router (auth) → Make AI Agent → response | Custom Webhook (from Worker) |
 | `helped-maid-referrals-to-google-sheets.blueprint.json` | Referral chatbot → Google Sheets | Custom Webhook (from Worker) |
+| `helped-fdw-application-chatbot.blueprint.json` | Referral chat → Make AI Agent → reply; completed applications → Sheets | Custom Webhook (from Worker) |
 | `agent-1-lead-referral-hunter.blueprint.json` | Consented acquisition lead → classify and route | New custom webhook |
 | `agent-2-applicant-profile-collector.blueprint.json` | Applicant message + saved profile state → next question / extraction | New custom webhook |
 | `agent-3-profile-draft-builder.blueprint.json` | Confirmed, consented public fields → profile draft | New custom webhook |
@@ -48,6 +49,19 @@ This scenario receives the consented referral payload sent by the FDW-page refer
 5. Click **Run once** in Make, submit a test referral through the chatbot with permission to share, and verify the appended row. Turn the scenario on after the test.
 
 The mapped payload fields are `referralId`, `submittedAt`, `referrerName`, `referrerPhone`, `maidName`, `maidPhone`, `maidNationality`, `relationship`, `notes`, `consentToShareContact`, and `source`. The Make webhook URL is not part of the browser payload; the Worker forwards this data only after validating required details and consent.
+
+## FDW Applicant Assistant (`helped-fdw-application-chatbot.blueprint.json`)
+
+The applicant assistant opens as a floating panel on the full application page. It answers applicant questions conversationally and offers a quick referral shortcut. If the applicant has a referral, the assistant asks who referred them and carries that answer into the form's referral field. Application submission remains on the full form at `/apply-as-maid`. Chat turns go to `POST /api/fdw/chatbot` and the Make AI Agent; chat does not submit applications or write spreadsheet rows.
+
+The full form requires a passport-size photo (minimum 300 × 375 px) and full-body photo (minimum 480 × 800 px), in JPG/PNG. A Work Permit card is required for transfer and ex-Singapore applicants. Resume/CV, passport copy, certificates/training, medical documents, references, and an introduction video (up to one minute) are supporting uploads and are not all universally required. The assistant must direct applicants to the full form for final validation and document upload; they must not paste passport numbers or medical records into chat.
+
+### Setup
+
+1. Import the blueprint and create/reconnect its Custom Webhook and Make AI Provider connection.
+2. The AI Agent's system prompt is mapped from the incoming `system_prompt`; the message includes `mode`, `current_field`, `message`, `collected`, and `conversation_history`. The chat route filter is `scenario = fdw_application_chat` and `mode = apply`. Keep the Webhook Response after the AI Agent and return its generated response immediately. Do not return the literal `Accepted`.
+3. Set the dedicated webhook URL as the server-side Worker secret `MAKE_WEBHOOK_URL_FDW_CHATBOT`, then turn on the scenario. Until it is configured, the Worker uses the shared `MAKE_AI_ENGINE_WEBHOOK_URL` gateway as a fallback. Keep webhook URLs out of frontend code.
+4. Confirm applicant questions and the referral shortcut. Separately test a completed full application and a consented referral; their Sheet delivery paths are distinct from chat replies.
 
 ## Placement lifecycle monitor
 
@@ -295,7 +309,7 @@ Every AI tool now routes its LLM call through one shared gateway — `backend/sr
 | `pdf-autofill` | PDF biodata extraction | `MAKE_WEBHOOK_URL_AI_ENGINE_PDF_AUTOFILL` | `MAKE_WEBHOOK_URL` |
 | `applicant-assistant` | Applicant AI Assistant bubble | `MAKE_WEBHOOK_URL_APPLICANT_ASSISTANT` | `MAKE_WEBHOOK_URL` |
 | `hr-interviewer` | AI HR Interviewer chat (Worker) | `MAKE_AI_HR_INTERVIEWER_WEBHOOK_URL` | `MAKE_WEBHOOK_URL` |
-| `command-center` | AI Command Center bubble chat (AI Agents page) | `MAKE_AI_COMMAND_CENTER_WEBHOOK_URL` | `MAKE_WEBHOOK_URL` |
+| `command-center` | Agency staff and authenticated employer AI Command panels, with role-scoped website context | `MAKE_AI_COMMAND_CENTER_WEBHOOK_URL` | `MAKE_WEBHOOK_URL` |
 
 > **Tip:** You can point every scenario at a single generic Make.com "AI Engine" scenario (which just takes `systemPrompt` + `userPrompt` in → text/JSON out) by setting only `MAKE_WEBHOOK_URL`. Or create dedicated scenarios per tool and set the more specific env vars.
 

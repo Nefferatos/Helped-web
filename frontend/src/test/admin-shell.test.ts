@@ -6,7 +6,7 @@ describe("shouldShowGlobalAiCommandCenter", () => {
     expect(shouldShowGlobalAiCommandCenter("/agencyadmin/chat-support")).toBe(false);
   });
 
-  it("keeps the AI command on other dashboard pages", () => {
+  it("shows the AI command only on the agency dashboard", () => {
     expect(shouldShowGlobalAiCommandCenter("/agencyadmin/dashboard")).toBe(true);
     expect(shouldShowGlobalAiCommandCenter("/agencyadmin/ai-agents")).toBe(false);
   });
