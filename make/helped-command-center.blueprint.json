@@ -1,5 +1,5 @@
 {
-    "name": "Helped - AI Command Center",
+    "name": "Helped - AI Command Center (Fast Response)",
     "flow": [
         {
             "id": 1,
@@ -24,16 +24,18 @@
             "parameters": {},
             "mapper": {
                 "files": [],
-                "message": "{{1.userPrompt}}\n\nConversation history:\n{{join(map(slice(1.messages; -10); item.role + \": \" + item.content); \"\\n\")}}",
+                "message": "{{1.userPrompt}}\n\nRecent conversation (last 4 messages):\n{{join(map(slice(1.messages; -4); item.role + \": \" + item.content); \"\\n\")}}",
                 "threadId": "{{1.scenario}}-{{1.context.user.id}}",
                 "outputType": "text",
-                "tokenLimit": "100",
+                "tokenLimit": "20",
                 "modelConfig": {
-                    "timeout": "",
-                    "recursionLimit": "80",
-                    "iterationsFromHistoryCount": "1"
+                    "timeout": "120",
+                    "recursionLimit": "6",
+                    "iterationsFromHistoryCount": "0",
+                    "aiCompactionEnabled": true
                 },
-                "defaultModel": "small",
+                "defaultModel": "gpt-6-luna",
+                "reasoningEffort": "low",
                 "systemPrompt": "{{1.systemPrompt}}",
                 "promptCaching": "none",
                 "fallbackEnabled": false
@@ -43,7 +45,7 @@
                     "x": 450,
                     "y": 0
                 },
-                "notes": "Shared AI engine for agency staff and authenticated employers. The Worker sends role-scoped context, while the thread ID isolates memory per user. After import: connect your Make AI Provider connection (same one used by your other AI scenarios)."
+                "notes": "Command Center agent. The Worker sends agency-scoped context and a stable per-staff thread ID. No Gmail or external tools are configured. Make enforces a minimum Step timeout of 120 seconds; the website Worker itself stops waiting after 20 seconds and falls back to its direct AI response. Use GPT-6 Luna, Low reasoning, 20% maximum output, Recursion limit 6, and Iterations from history 0."
             },
             "tools": []
         },
@@ -91,17 +93,17 @@
         },
         "zone": "eu1.make.com",
         "notes": [
-            "Helped - AI Command Center - Import-ready blueprint.",
+            "Helped - AI Command Center - Fast Response import-ready blueprint.",
             "",
             "AFTER IMPORT:",
             "1. WEBHOOK: Click Module 1, create a new webhook named 'AI Command Center Chat Webhook', copy its URL.",
-            "2. AI AGENT: Click Module 2, connect your Make AI Provider connection.",
+            "2. AI AGENT: Click Module 2 and connect your Make AI Provider connection. Set GPT-6 Luna, Low reasoning, Maximum output length 20%, Step timeout 120 seconds (Make minimum; not blank), Recursion limit 6, and Iterations from history 0.",
             "3. WEBHOOK RESPONSE: Map Body directly to Module 2 > Response and set Status to 200.",
             "4. WORKER SECRET: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_URL (paste the webhook URL).",
             "5. ACTIVATE: Toggle the scenario ON and keep webhook processing immediate (Sequential processing off).",
             "",
             "The Worker sends { type, scenario, systemPrompt, userPrompt, messages, context }.",
-            "The AI agent uses 1.systemPrompt (role-scoped data + instructions) and 1.userPrompt + conversation history. Thread memory is isolated by scenario and authenticated user ID.",
+            "The AI agent uses 1.systemPrompt (role-scoped agency data + instructions) and 1.userPrompt plus only the last four conversation messages. Thread memory is isolated by scenario and authenticated staff user ID. This avoids duplicating long conversation history in the agent and reduces payload size. The Make step timeout must be at least 120 seconds; the website Worker has a 20-second Make response deadline and uses its direct AI fallback if Make is still running.",
             "The webhook response returns Module 2's Response directly. Plain text is fine for chat-only replies. Whenever Module 2 proposes any action, it must return one valid JSON object shaped as {\"reply\":\"...\",\"actions\":[...]} without Markdown fences. The Worker validates actions against the signed-in role and website API allowlist, then the portal shows the request and payload and requires the user to confirm before execution. This is a permissioned website action interface, not unrestricted computer or source-code control."
         ]
     }

@@ -41,6 +41,7 @@ import {
   Mic,
   MicOff,
   Volume2,
+  VolumeX,
   Square,
   Phone,
   Reply,
@@ -1841,6 +1842,23 @@ const splitSpeechChunks = (text: string, maxLength = 180): string[] => {
   return chunks;
 };
 
+const startBrowserSpeech = (text: string, callbacks: { onStart?: () => void; onBoundary?: (characterIndex: number) => void; onEnd?: () => void; onError?: () => void }) => {
+  if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return false;
+  try {
+    const utterance = new SpeechSynthesisUtterance(text.replace(/[#*_`]/g, "").replace(/\s+/g, " ").trim());
+    utterance.lang = document.documentElement.lang || navigator.language || "en-SG";
+    utterance.rate = 1;
+    utterance.onstart = () => callbacks.onStart?.();
+    utterance.onboundary = (event) => callbacks.onBoundary?.(event.charIndex + (event.charLength || 0));
+    utterance.onend = () => callbacks.onEnd?.();
+    utterance.onerror = (event) => { if (event.error !== "canceled" && event.error !== "interrupted") callbacks.onError?.(); };
+    window.speechSynthesis.speak(utterance);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const loadCommandCenterHistory = (storageKey = getCommandCenterHistoryKey()): CommandCenterMessage[] => {
   try {
     window.localStorage.removeItem(COMMAND_CENTER_HISTORY_KEY);
@@ -2415,13 +2433,21 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
       }
     } catch (error) {
       if (generation !== speechGenerationRef.current) return;
-      setTypingMessageId(null);
-      setIsSpeaking(false);
-      const detail = error instanceof DOMException && error.name === "AbortError"
-        ? "Speech generation was interrupted. Please try again."
-        : error instanceof Error ? error.message : "Voice playback failed";
-      setError(`The reply is in chat, but voice playback failed: ${detail}`);
-      toast.error(detail);
+      const started = startBrowserSpeech(text, {
+        onStart: () => { if (generation === speechGenerationRef.current) setIsSpeaking(true); },
+        onBoundary: (characterIndex) => { if (generation === speechGenerationRef.current) setTypingCharacterCount(Math.min(text.length, characterIndex)); },
+        onEnd: () => { if (generation === speechGenerationRef.current) { setTypingCharacterCount(text.length); setTypingMessageId(null); setIsSpeaking(false); } },
+        onError: () => { if (generation === speechGenerationRef.current) { setTypingMessageId(null); setIsSpeaking(false); setError("Voice playback is unavailable in this browser. The reply is still available in chat."); } },
+      });
+      if (!started) {
+        setTypingMessageId(null);
+        setIsSpeaking(false);
+        const detail = error instanceof DOMException && error.name === "AbortError"
+          ? "Speech generation was interrupted. Please try again."
+          : error instanceof Error ? error.message : "Voice playback failed";
+        setError(`The reply is in chat, but voice playback failed: ${detail}`);
+        toast.error(detail);
+      }
     }
   };
 
@@ -2432,6 +2458,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
     speechGenerationRef.current += 1;
     speechRequestsRef.current.forEach((controller) => controller.abort());
     speechRequestsRef.current.clear();
+    window.speechSynthesis?.cancel();
     audioRef.current?.pause();
     audioRef.current = null;
     if (speechObjectUrlRef.current) URL.revokeObjectURL(speechObjectUrlRef.current);
@@ -2734,7 +2761,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
                   <div className="mb-2 flex items-center justify-between">
                     <p className="text-[10px] text-slate-500">{isRecording ? "Listening… click the mic to finish" : isSubmitting ? "Thinking…" : isSpeaking ? "Speaking" : "Push to talk · Make transcription + Fish Audio voice"}</p>
                     <div className="flex gap-1">
-                      <Button type="button" size="sm" variant="ghost" aria-label={voiceEnabled ? "Mute voice responses" : "Enable voice responses"} onClick={() => { const enabled = !voiceEnabled; setVoiceEnabled(enabled); window.localStorage.setItem(COMMAND_CENTER_VOICE_KEY, String(enabled)); window.dispatchEvent(new CustomEvent(COMMAND_CENTER_VOICE_EVENT, { detail: { enabled } })); if (!enabled) { stopSpeaking(); setTypingMessageId(null); } }}><Volume2 className={`h-4 w-4 ${voiceEnabled ? "text-violet-600" : "text-slate-400"}`} /></Button>
+                      <Button type="button" size="sm" variant="ghost" aria-label={voiceEnabled ? "Mute voice responses" : "Enable voice responses"} title={voiceEnabled ? "Voice responses on — click to mute" : "Voice responses off — click to enable"} onClick={() => { const enabled = !voiceEnabled; setVoiceEnabled(enabled); window.localStorage.setItem(COMMAND_CENTER_VOICE_KEY, String(enabled)); window.dispatchEvent(new CustomEvent(COMMAND_CENTER_VOICE_EVENT, { detail: { enabled } })); if (!enabled) { stopSpeaking(); setTypingMessageId(null); } }}>{voiceEnabled ? <Volume2 className="h-4 w-4 text-violet-600" /> : <VolumeX className="h-4 w-4 text-slate-400" />}</Button>
                       {isSpeaking && <Button type="button" size="sm" variant="ghost" aria-label="Stop speaking" onClick={() => { stopSpeaking(); setTypingMessageId(null); }}><Square className="h-3.5 w-3.5" /></Button>}
                     </div>
                   </div>

@@ -127,6 +127,23 @@ const splitSpeechChunks = (text: string, maxLength = 180): string[] => {
   return chunks;
 };
 
+const startBrowserSpeech = (text: string, callbacks: { onStart?: () => void; onBoundary?: (characterIndex: number) => void; onEnd?: () => void; onError?: () => void }) => {
+  if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return false;
+  try {
+    const utterance = new SpeechSynthesisUtterance(plainAssistantText(text));
+    utterance.lang = document.documentElement.lang || navigator.language || "en-SG";
+    utterance.rate = 1;
+    utterance.onstart = () => callbacks.onStart?.();
+    utterance.onboundary = (event) => callbacks.onBoundary?.(event.charIndex + (event.charLength || 0));
+    utterance.onend = () => callbacks.onEnd?.();
+    utterance.onerror = (event) => { if (event.error !== "canceled" && event.error !== "interrupted") callbacks.onError?.(); };
+    window.speechSynthesis.speak(utterance);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const getConversationStorageKey = () => {
   const admin = getStoredAgencyAdmin();
   return `${COMMAND_CENTER_HISTORY_KEY}:${admin?.agencyId ?? "unknown"}:${admin?.id ?? "unknown"}`;
@@ -550,6 +567,7 @@ export default function AiCommandCenterPage() {
     speechGenerationRef.current += 1;
     speechRequestsRef.current.forEach((controller) => controller.abort());
     speechRequestsRef.current.clear();
+    window.speechSynthesis?.cancel();
     audioRef.current?.pause();
     audioRef.current = null;
     if (speechUrlRef.current) URL.revokeObjectURL(speechUrlRef.current);
@@ -662,10 +680,18 @@ export default function AiCommandCenterPage() {
       }
     } catch (error) {
       if (generation !== speechGenerationRef.current) return;
-      setTypingMessageId(null);
-      setIsSpeaking(false);
-      const detail = error instanceof DOMException && error.name === "AbortError" ? "Speech generation was interrupted. Please try again." : error instanceof Error ? error.message : "Voice playback failed";
-      setChatError(`The reply is in chat, but voice playback failed: ${detail}`);
+      const started = startBrowserSpeech(text, {
+        onStart: () => { if (generation === speechGenerationRef.current) setIsSpeaking(true); },
+        onBoundary: (characterIndex) => { if (generation === speechGenerationRef.current) setTypingCharacterCount(Math.min(text.length, characterIndex)); },
+        onEnd: () => { if (generation === speechGenerationRef.current) { setTypingCharacterCount(text.length); setTypingMessageId(null); setIsSpeaking(false); } },
+        onError: () => { if (generation === speechGenerationRef.current) { setTypingMessageId(null); setIsSpeaking(false); setChatError("Voice playback is unavailable in this browser. The reply is still available in chat."); } },
+      });
+      if (!started) {
+        setTypingMessageId(null);
+        setIsSpeaking(false);
+        const detail = error instanceof DOMException && error.name === "AbortError" ? "Speech generation was interrupted. Please try again." : error instanceof Error ? error.message : "Voice playback failed";
+        setChatError(`The reply is in chat, but voice playback failed: ${detail}`);
+      }
     }
   };
 
