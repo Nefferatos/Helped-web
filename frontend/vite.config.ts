@@ -19,6 +19,32 @@ export default defineConfig(({ mode }) => {
     host: "::",
     port: 8080,
     proxy: {
+      // Command Center planning and agent catalog live on the Cloudflare Worker.
+      // Approval routes intentionally remain on the Express API below.
+      "/api/ai-command-center/commands": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
+      "/api/ai-command-center/agents": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
+      "/api/ai-command-center/tools": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
+      "/api/ai-command-center/actions": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
+      "/api/ai-command-center/executions": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
+      "/api/ai-command-center/customer-auto-replies": {
+        target: workerApiProxyTarget,
+        changeOrigin: true,
+      },
       "/api/ai/command-center": {
         target: workerApiProxyTarget,
         changeOrigin: true,

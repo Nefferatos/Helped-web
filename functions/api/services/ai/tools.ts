@@ -553,15 +553,20 @@ const getAgencyContext = (data: AppDataLike, actor: AiActorContext, input: Recor
   const profilesByApplication = new Map(
     list(data.ats?.profiles).map((profile) => [text(profile.applicationId), profile]),
   );
-  const applicantHighlights = [...agencyApplications]
-    .sort((a, b) => {
-      const aScore = num(data.ats?.scores?.[text(a.id)]?.score) ?? -1;
-      const bScore = num(data.ats?.scores?.[text(b.id)]?.score) ?? -1;
-      return bScore - aScore || dateValue(b) - dateValue(a);
-    })
-    .slice(0, 20)
+  const applicantStopWords = new Set(["applicant", "applicants", "candidate", "candidates", "show", "find", "list", "tell", "about", "please", "what", "which", "the", "and", "for", "with", "from", "this", "that"]);
+  const applicantSearchTerms = lower(message).match(/[a-z0-9._-]{3,}/g)?.filter((term) => !applicantStopWords.has(term)) ?? [];
+  const matchedApplicantRecords = agencyApplications
     .map((application) => {
       const profile = profilesByApplication.get(text(application.id)) ?? {};
+      const haystack = `${application.id} ${application.applicationCode} ${application.status} ${profile.fullName} ${profile.nationality}`.toLowerCase();
+      const matchScore = applicantSearchTerms.filter((term) => haystack.includes(term)).length;
+      return { application, profile, matchScore, agencyScore: num(data.ats?.scores?.[text(application.id)]?.score) ?? -1 };
+    })
+    .filter((item) => applicantSearchTerms.length === 0 || item.matchScore > 0)
+    .sort((a, b) => b.matchScore - a.matchScore || b.agencyScore - a.agencyScore || dateValue(b.application) - dateValue(a.application));
+  const applicantHighlights = matchedApplicantRecords
+    .slice(0, 50)
+    .map(({ application, profile }) => {
       const score = data.ats?.scores?.[text(application.id)];
       return {
         id: application.id,
@@ -630,10 +635,20 @@ const getAgencyContext = (data: AppDataLike, actor: AiActorContext, input: Recor
         : null,
     },
     dataCoverage: {
-      enquiries: { total: agencyEnquiries.length, recentIncluded: recentEnquiryRecords.length, openTotal: openEnquiries.length },
-      pendingRequests: { total: agencyRequests.filter((item) => lower(item.status) === "pending").length, included: pendingRequestRecords.length },
-      applicants: { total: agencyApplications.length, included: applicantHighlights.length },
-      contracts: { total: agencyContracts.length, included: contractRecords.length },
+      enquiries: { total: agencyEnquiries.length, recentIncluded: recentEnquiryRecords.length, recentTruncated: newestEnquiries.length > recentEnquiryRecords.length, openTotal: openEnquiries.length },
+      pendingRequests: {
+        total: agencyRequests.filter((item) => lower(item.status) === "pending").length,
+        included: pendingRequestRecords.length,
+        truncated: agencyRequests.filter((item) => lower(item.status) === "pending").length > pendingRequestRecords.length,
+      },
+      applicants: {
+        total: agencyApplications.length,
+        matched: matchedApplicantRecords.length,
+        included: applicantHighlights.length,
+        limit: 50,
+        truncated: matchedApplicantRecords.length > applicantHighlights.length,
+      },
+      contracts: { total: agencyContracts.length, included: contractRecords.length, truncated: agencyContracts.length > contractRecords.length },
       maidProfiles: {
         total: agencyMaids.length,
         included: newestAgencyMaids.length,

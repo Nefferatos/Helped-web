@@ -57,6 +57,8 @@ export interface RequestMessageRecord {
   conversationId: string;
   senderType: RequestMessageSenderType;
   senderId: number;
+  senderName?: string;
+  replyToMessageId?: string | number;
   message: string;
   createdAt: string;
   attachments?: unknown;

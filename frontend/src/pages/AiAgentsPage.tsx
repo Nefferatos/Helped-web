@@ -1807,6 +1807,10 @@ interface CommandCenterAction {
 }
 
 const COMMAND_CENTER_HISTORY_KEY = "helped:ai-command-center:history";
+const COMMAND_CENTER_HISTORY_EVENT = "helped:ai-command-center:history-updated";
+const COMMAND_CENTER_VOICE_KEY = "helped:ai-command-center:voice-enabled";
+const COMMAND_CENTER_VOICE_EVENT = "helped:ai-command-center:voice-updated";
+const readCommandCenterVoicePreference = () => window.localStorage.getItem(COMMAND_CENTER_VOICE_KEY) !== "false";
 const getCommandCenterHistoryKey = () => {
   const admin = getStoredAgencyAdmin();
   return `${COMMAND_CENTER_HISTORY_KEY}:${admin?.agencyId ?? "unknown"}:${admin?.id ?? "unknown"}`;
@@ -2011,7 +2015,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
   const [emailDraft, setEmailDraft] = useState<CommandCenterAction | null>(null);
   const [emailSending, setEmailSending] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(readCommandCenterVoicePreference);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -2030,6 +2034,17 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
     setMessages(loadCommandCenterHistory(nextHistoryKey));
     setError(null);
     setEmailDraft(null);
+  }, [historyKey]);
+
+  useEffect(() => {
+    const syncHistory = (event: Event) => {
+      const detail = (event as CustomEvent<{ historyKey?: string; messages?: CommandCenterMessage[] }>).detail;
+      if (detail?.historyKey !== historyKey || !Array.isArray(detail.messages)) return;
+      const incoming = detail.messages.filter((item) => item && typeof item.id === "string" && (item.role === "assistant" || item.role === "user") && typeof item.content === "string").slice(-40);
+      setMessages((current) => JSON.stringify(current) === JSON.stringify(incoming) ? current : incoming);
+    };
+    window.addEventListener(COMMAND_CENTER_HISTORY_EVENT, syncHistory);
+    return () => window.removeEventListener(COMMAND_CENTER_HISTORY_EVENT, syncHistory);
   }, [historyKey]);
 
   useEffect(() => {
@@ -2114,6 +2129,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
         actions: item.actions?.filter((action) => action.type !== "draft_email"),
       }));
       window.localStorage.setItem(historyKey, JSON.stringify(safeHistory));
+      window.dispatchEvent(new CustomEvent(COMMAND_CENTER_HISTORY_EVENT, { detail: { historyKey, messages } }));
     } catch { /* storage unavailable */ }
   }, [messages, historyKey]);
 
@@ -2241,7 +2257,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
       messages: "/chat-support",
       documents: "/contractor-tasks",
       reports: "/reports",
-      settings: "/technical",
+      settings: "/settings",
     };
     const path = action.destination ? pagePaths[action.destination] : undefined;
     if (!path) {
@@ -2422,6 +2438,20 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
     speechObjectUrlRef.current = null;
     setIsSpeaking(false);
   };
+
+  useEffect(() => {
+    const syncVoice = (event: Event) => {
+      const enabled = event instanceof StorageEvent
+        ? readCommandCenterVoicePreference()
+        : (event as CustomEvent<{ enabled?: boolean }>).detail?.enabled;
+      if (typeof enabled !== "boolean") return;
+      setVoiceEnabled(enabled);
+      if (!enabled) { stopSpeaking(); setTypingMessageId(null); }
+    };
+    window.addEventListener(COMMAND_CENTER_VOICE_EVENT, syncVoice);
+    window.addEventListener("storage", syncVoice);
+    return () => { window.removeEventListener(COMMAND_CENTER_VOICE_EVENT, syncVoice); window.removeEventListener("storage", syncVoice); };
+  }, []);
 
   speakGreetingRef.current = async () => {
     stopSpeaking();
@@ -2704,7 +2734,7 @@ function AiCommandCenterBubble({ enquiries, requests, applicants, contracts, mai
                   <div className="mb-2 flex items-center justify-between">
                     <p className="text-[10px] text-slate-500">{isRecording ? "Listening… click the mic to finish" : isSubmitting ? "Thinking…" : isSpeaking ? "Speaking" : "Push to talk · Make transcription + Fish Audio voice"}</p>
                     <div className="flex gap-1">
-                      <Button type="button" size="sm" variant="ghost" aria-label={voiceEnabled ? "Mute voice responses" : "Enable voice responses"} onClick={() => { setVoiceEnabled((value) => !value); if (voiceEnabled) stopSpeaking(); }}><Volume2 className={`h-4 w-4 ${voiceEnabled ? "text-violet-600" : "text-slate-400"}`} /></Button>
+                      <Button type="button" size="sm" variant="ghost" aria-label={voiceEnabled ? "Mute voice responses" : "Enable voice responses"} onClick={() => { const enabled = !voiceEnabled; setVoiceEnabled(enabled); window.localStorage.setItem(COMMAND_CENTER_VOICE_KEY, String(enabled)); window.dispatchEvent(new CustomEvent(COMMAND_CENTER_VOICE_EVENT, { detail: { enabled } })); if (!enabled) { stopSpeaking(); setTypingMessageId(null); } }}><Volume2 className={`h-4 w-4 ${voiceEnabled ? "text-violet-600" : "text-slate-400"}`} /></Button>
                       {isSpeaking && <Button type="button" size="sm" variant="ghost" aria-label="Stop speaking" onClick={() => { stopSpeaking(); setTypingMessageId(null); }}><Square className="h-3.5 w-3.5" /></Button>}
                     </div>
                   </div>

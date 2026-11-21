@@ -149,7 +149,7 @@ const RequestDetailsPage = () => {
                   const mine = message.senderType === "admin" || message.senderType === "staff";
                   return <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[88%] rounded-2xl px-4 py-3 ${mine ? "rounded-br-md bg-teal-800 text-white" : message.senderType === "system" ? "border border-slate-200 bg-white text-slate-700" : "rounded-bl-md bg-white text-slate-900 shadow-sm"}`}>
-                      <p className={`text-xs font-bold ${mine ? "text-amber-200" : "text-slate-600"}`}>{mine ? "Agency" : message.senderType === "system" ? "Request update" : "Employer"}</p>
+                      <p className={`text-xs font-bold ${mine ? "text-amber-200" : "text-slate-600"}`}>{mine ? message.senderName || (message.senderId === 0 ? "AI Assistant" : "Agency") : message.senderType === "system" ? "Request update" : "Employer"}</p>
                       <p className="mt-1 whitespace-pre-wrap break-words text-sm">{message.message}</p>
                       <p className={`mt-2 text-right text-[11px] ${mine ? "text-teal-100" : "text-slate-500"}`}>{new Date(message.createdAt).toLocaleString()}</p>
                     </div>

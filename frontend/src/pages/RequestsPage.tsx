@@ -760,7 +760,7 @@ const RequestsPageContent = () => {
                       return (
                         <div key={message.id} className={cn("flex", fromEmployer ? "justify-start" : "justify-end")}>
                           <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2.5", fromEmployer ? "rounded-tl-sm bg-slate-100 text-slate-900" : "rounded-tr-sm bg-violet-700 text-white")}>
-                            <p className={cn("mb-1 text-[10px] font-bold", fromEmployer ? "text-slate-500" : "text-violet-100")}>{fromEmployer ? "Employer" : message.senderType === "staff" ? "Agency staff" : "You · Agency"}</p>
+                            <p className={cn("mb-1 text-[10px] font-bold", fromEmployer ? "text-slate-500" : "text-violet-100")}>{fromEmployer ? "Employer" : message.senderName || (message.senderId === 0 ? "AI Assistant" : message.senderType === "staff" ? "Agency staff" : "You · Agency")}</p>
                             <p className="whitespace-pre-wrap text-sm leading-5">{message.message}</p>
                             <p className={cn("mt-1 text-right text-[10px]", fromEmployer ? "text-slate-500" : "text-violet-200")}>{new Date(message.createdAt).toLocaleString()}</p>
                           </div>

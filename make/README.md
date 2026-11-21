@@ -1,5 +1,9 @@
 # Make.com scenarios for Helped Maids
 
+The AI Command Center Make execution and signed callback contract is documented in [`docs/ai-command-center/MAKE_INTEGRATION.md`](../docs/ai-command-center/MAKE_INTEGRATION.md). The existing `helped-command-center.blueprint.json` is a legacy chat bridge, not an approved-action execution scenario; do not replace or reuse it for action dispatch.
+
+`helped-ai-command-center-execution-dry-run.blueprint.json` is a separate ingress-only template for later contract testing. It has no outbound provider or data-write modules and must remain off until the Phase 9 authorization gateway exists.
+
 Importable blueprints that wire the marketing → application → recruiter → PDF-autofill flow to the real web endpoints in this repo.
 
 | File | Diagram half | Trigger |

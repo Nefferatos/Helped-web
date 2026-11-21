@@ -847,7 +847,7 @@ const ClientRequestsPage = () => {
       );
     }
     const isClient = message.senderType === "client";
-    const senderLabel = isClient ? "You" : message.senderType === "staff" ? "Agency Staff" : "Agency Admin";
+    const senderLabel = isClient ? "You" : message.senderName || (message.senderId === 0 ? "AI Assistant" : message.senderType === "staff" ? "Agency Staff" : "Agency Admin");
     return (
       <div key={message.id} className={cn("flex", isClient ? "justify-end" : "justify-start")}>
         <div

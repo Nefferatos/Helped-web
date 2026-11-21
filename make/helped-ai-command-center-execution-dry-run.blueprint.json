@@ -1,0 +1,57 @@
+{
+  "name": "Helped - AI Command Center Execution Dry Run",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "maxResults": 1 },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "notes": "Dedicated dry-run ingress for the future Command Center execution contract. Create a new webhook after import. Do not add provider/action modules to this scenario."
+      }
+    },
+    {
+      "id": 2,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "body": "{\"accepted\":true,\"mode\":\"dry_run\",\"status\":\"dry_run_received\",\"executionId\":\"{{1.executionId}}\",\"actionId\":\"{{1.actionId}}\",\"agencyId\":\"{{1.agencyId}}\",\"idempotencyKey\":\"{{1.idempotencyKey}}\",\"payloadHash\":\"{{1.payloadHash}}\"}",
+        "status": "202",
+        "headers": [
+          { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+        ]
+      },
+      "metadata": {
+        "designer": { "x": 650, "y": 0 },
+        "notes": "Echoes execution correlation fields for ingress testing only. This response is not a provider result, does not change the execution ledger, and must never be interpreted as completed delivery."
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "slots": null,
+      "confidential": true,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] },
+    "zone": "eu1.make.com",
+    "notes": [
+      "Import-only dry-run template for the At The Agency AI Command Center.",
+      "After import, create a dedicated custom webhook and keep the scenario off until Phase 9 provides a protected dispatcher.",
+      "Never add outbound messaging, database writes, provider modules, or a completion callback to this dry-run scenario.",
+      "The accepted response means only that Make received the request; it is not evidence of action execution or delivery."
+    ]
+  }
+}

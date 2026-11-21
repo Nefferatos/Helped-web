@@ -22,6 +22,7 @@ binding = "APP_DATA"
 id = "62a5ada5801547b5b0895fec94ab0b12"
 
 [vars]
+# Formal Command Center owner review is bound to the authenticated attheagency account.
 # Keep the legacy app_data/blob path active until the normalized Supabase tables
 # have been migrated. Enabling the normalized mode before migration can lock
 # every agency admin out of /api/agency-auth/login.
@@ -52,6 +53,7 @@ SUPABASE_URL = "https://etdbexgrsenjznxbbnbd.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0ZGJleGdyc2VuanpueGJibmJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxMjY3MjAsImV4cCI6MjA5MDcwMjcyMH0.vtop8R2up7ItNoGXoU1Bx1VAVq23gimj-21nBX4LAg4"
 
 AI_AUTOPILOT_ENABLED = "true"
+KNOWLEDGE_EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5"
 # Scheduled autonomous campaign scanning and dispatch; set true to enable.
 AUTONOMOUS_MARKETING_ENABLED = "false"
 # Marketing copy uses the configured Make AI gateway when available.
@@ -169,6 +171,6 @@ invocation_logs = true
 binding = "AI"
 
 [triggers]
-# The existing 30-minute cron also sends the airport report at 08:00 Singapore time,
-# with delivery retries at 08:30 and 09:00 Singapore time if needed.
-crons = ["*/30 * * * *"]
+# The 30-minute cron runs existing reports/autopilot. The every-minute cron
+# dispatches owner-approved scheduled broadcasts when their send time is due.
+crons = ["*/30 * * * *", "* * * * *"]

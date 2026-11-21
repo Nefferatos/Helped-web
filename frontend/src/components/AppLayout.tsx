@@ -83,6 +83,16 @@ const navItems = [
     badgeKey: null,
   },
   {
+    label: "AI Command Center",
+    path: adminPath("/ai-command-center"),
+    icon: Sparkles,
+    iconBg: "linear-gradient(145deg, #C4B5FD, #7C3AED)",
+    iconShadow: "0 4px 0 #6D28D9, 0 6px 12px rgba(124,58,237,0.35)",
+    iconShadowActive: "0 2px 0 #6D28D9, 0 3px 8px rgba(124,58,237,0.3)",
+    iconColor: "#fff",
+    badgeKey: null,
+  },
+  {
     label: "Add Maid",
     path: adminPath("/add-maid"),
     icon: UserPlus,
@@ -243,18 +253,8 @@ const navItems = [
     badgeKey: null,
   },
   {
-    label: "Chatbot Config",
-    path: adminPath("/chatbot-config"),
-    icon: Hand,
-    iconBg: "linear-gradient(145deg, #86EFAC, #16A34A)",
-    iconShadow: "0 4px 0 #15803D, 0 6px 12px rgba(22,163,74,0.45)",
-    iconShadowActive: "0 2px 0 #15803D, 0 3px 8px rgba(22,163,74,0.4)",
-    iconColor: "#fff",
-    badgeKey: null,
-  },
-  {
-    label: "Technical",
-    path: adminPath("/technical"),
+    label: "Settings",
+    path: adminPath("/settings"),
     icon: Settings2,
     iconBg: "linear-gradient(145deg, #CBD5E1, #475569)",
     iconShadow: "0 4px 0 #334155, 0 6px 12px rgba(71,85,105,0.35)",
@@ -1045,6 +1045,7 @@ const SidebarContent = ({
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
+  const isAiCommandCenterPage = location.pathname.endsWith("/ai-command-center");
   const navigate = useNavigate();
   const isDesktop = useIsDesktop(1024);
   const isAddMaidRoute = location.pathname === adminPath("/add-maid");
@@ -1948,7 +1949,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         </header>
 
         {/* Page content */}
-        <main style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+        <main style={{ flex: 1, minHeight: 0, minWidth: 0, overflowY: isAiCommandCenterPage ? "hidden" : "auto", padding: isAiCommandCenterPage ? 0 : 24, ...(isAiCommandCenterPage ? { display: "flex", flexDirection: "column" as const } : {}) }}>
           {children}
         </main>
 

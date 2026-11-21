@@ -40,6 +40,7 @@ import eventRoutes from "./routes/eventRoutes";
 import contractorRoutes from "./routes/contractorRoutes";
 import knowledgeRoutes from "./routes/knowledgeRoutes";
 import integrationRoutes from "./routes/integrationRoutes";
+import aiCommandCenterRoutes from "./routes/aiCommandCenterRoutes";
 import { handleMcp } from './controllers/mcpController'
 import { initializeDatabase } from "./db";
 import {
@@ -142,6 +143,7 @@ app.use("/api/leads", leadWorkflowRoutes);
 app.use("/api/inquiry", inquiryWorkflowRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/ai/direct-marketing", directMarketingRoutes);
+app.use("/api/ai-command-center", aiCommandCenterRoutes);
 
 // PDF autofill — mounted at /api/pdf-autofill (frontend calls this path directly)
 import { pdfAutofill } from './controllers/pdfAutofillController'

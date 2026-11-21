@@ -14,7 +14,7 @@ If the broadcast database was already set up with scheduled campaigns, also appl
 
 Import each blueprint through **Make → Scenarios → Create a new scenario → Import blueprint**:
 
-1. `helped-whatsapp-broadcast.blueprint.json` sends approved campaigns and test messages.
+1. `helped-whatsapp-broadcast-delivery-tracking.blueprint.json` sends approved campaigns and test messages, then reports each successful campaign send to the website so campaign totals can complete. It contains placeholders; configure your current website URL, WAHA key/session, and WhatsApp automation secret after import.
 2. `helped-whatsapp-ai-autoreply.blueprint.json` receives WAHA messages, handles opt-outs in the Worker, and sends an AI draft only when the workspace setting is enabled.
 
 After import, create the custom webhook in the first scenario and copy its URL. Configure the Worker secrets (do not put secrets into frontend variables):
@@ -56,7 +56,7 @@ For campaigns with an image or video, Make sends the message text first and the 
 1. Open `/dashboard/whatsapp-broadcast` and import a CSV with `name,phone,email,company,tags,consent,consent_source` columns.
 2. Mark a test contact `subscribed` only when you have permission documentation. The Worker requires a consent source and rechecks consent when sending.
 3. Set Make's broadcast scenario to sequential processing and add a 1–2 second Sleep step between sends. Start with one contact.
-4. Use the builder's **Send test**, then create a one-recipient campaign and confirm that the message log and campaign status update.
+4. Use the builder's **Send test**, then create a one-recipient campaign and confirm that the message log and campaign status update. For campaigns, confirm the new `/automation/delivery-result` callback module runs after each successful WAHA send. Add a Make error handler to each sendText/sendImage/sendVideo module that reports `recipientId`, `campaignId`, `status: "failed"`, and the error to the same endpoint; otherwise failed sends remain pending.
 5. Keep the WAHA session webhook pointed at the Make auto-reply scenario, with both `message` and `message.ack` events enabled. That scenario must forward each event to the Worker `/automation/incoming` endpoint. Text-only broadcasts update from the outgoing `message` event; image/video broadcasts update after the explicit delivery-result callback.
 6. In Settings, save the AI reply instructions and enable **AI auto-reply** only after Make's webhook is connected. Send a normal inbound test, then `STOP`, and verify that STOP produces no AI reply and opts the contact out.
 
@@ -65,5 +65,5 @@ The AI is restricted to a known contact, replies only after an inbound message, 
 ## API routes
 
 - Admin-authenticated Worker APIs: `/api/whatsapp-broadcast/status`, `/contacts`, `/campaigns`, `/messages`, `/settings`, and the corresponding campaign/contact detail routes.
-- Make uses `x-whatsapp-automation-secret` for `/automation/claim/:recipientId`, `/automation/incoming`, `/automation/auto-reply-result`, `/automation/authorize-test`, `/automation/recipient-status/:id`, and `/automation/delivery-result` (after image/video sends).
+- Make uses `x-whatsapp-automation-secret` for `/automation/claim/:recipientId`, `/automation/incoming`, `/automation/auto-reply-result`, `/automation/authorize-test`, `/automation/recipient-status/:id`, and `/automation/delivery-result` after each campaign send.
 - Do not share the Supabase service-role credential or WAHA API key with the browser. Make only receives a minimal campaign recipient payload and uses its protected secret connection fields.

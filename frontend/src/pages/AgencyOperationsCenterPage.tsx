@@ -10,6 +10,7 @@ import ContractorTasksPage from '@/pages/ContractorTasksPage'
 
 type Placement = { id: string; maid_reference_code: string | null; status: string; flight_booked: boolean; medical_completed: boolean; sip_completed: boolean; handover_completed: boolean }
 type KnowledgeSnippet = { id: string; title: string; category: string; content: string; similarity: number }
+type KnowledgeDocument = { id: string; source_key: string; title: string; category: string; active: boolean; current_version?: number; ingestion_status?: string; processing_error?: string; source_file_name?: string | null; updated_at: string }
 type Requirements = { service_type?: string; location?: string; household_size?: number | null; children_count?: number | null; elderly_count?: number | null; cooking_requirements?: string; preferred_start_date?: string | null; max_monthly_salary?: number; availability?: string; preferred_nationalities?: string[]; preferred_languages?: string[]; minimum_experience_years?: number; notes?: string }
 type MatchCandidate = { maidId: number; maidReferenceCode: string; maidName: string; score: number; reasons: string[]; manual?: boolean; photoDataUrl?: string }
 type ManualMaidOption = { id: number; referenceCode: string; fullName: string; nationality?: string; status?: string; photoDataUrl?: string }
@@ -144,7 +145,9 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [searchParams] = useSearchParams()
   const preferredCandidateReference = searchParams.get('preferredCandidate')?.trim() ?? ''
   const sourceRequestId = searchParams.get('requestId')?.trim() ?? ''
-  const [activeTab, setActiveTab] = useState<TabKey>(preferredCandidateReference ? 'matching' : 'overview')
+  const requestedTab = searchParams.get('tab')
+  const initialTab: TabKey = TABS.some((tab) => tab.key === requestedTab) ? requestedTab as TabKey : preferredCandidateReference ? 'matching' : 'overview'
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [placements, setPlacements] = useState<Placement[]>([])
   const [operationsSummary, setOperationsSummary] = useState<OperationsSummary | null>(null)
   const [removingPlacementId, setRemovingPlacementId] = useState<string | null>(null)
@@ -173,8 +176,18 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [placementCandidate, setPlacementCandidate] = useState<MatchCandidate | null>(null)
   const [startingPlacementId, setStartingPlacementId] = useState<number | null>(null)
   const [knowledge, setKnowledge] = useState({ sourceKey: '', title: '', category: 'SOP', content: '' })
+  const [knowledgeDocuments, setKnowledgeDocuments] = useState<KnowledgeDocument[]>([])
+  const [knowledgeFile, setKnowledgeFile] = useState<File | null>(null)
+  const knowledgeFileInputRef = useRef<HTMLInputElement>(null)
+  const [knowledgeUploading, setKnowledgeUploading] = useState(false)
+  const [knowledgeSaving, setKnowledgeSaving] = useState(false)
+  const [knowledgeDocumentsLoading, setKnowledgeDocumentsLoading] = useState(false)
+  const [reprocessingKnowledgeId, setReprocessingKnowledgeId] = useState<string | null>(null)
+  const [removingKnowledgeId, setRemovingKnowledgeId] = useState<string | null>(null)
   const [knowledgeQuery, setKnowledgeQuery] = useState('')
   const [snippets, setSnippets] = useState<KnowledgeSnippet[]>([])
+  const [knowledgeSearchCompleted, setKnowledgeSearchCompleted] = useState(false)
+  const [knowledgeSearching, setKnowledgeSearching] = useState(false)
   const [expandedKnowledgeSnippetId, setExpandedKnowledgeSnippetId] = useState<string | null>(null)
   const [driveFile, setDriveFile] = useState<File | null>(null)
   const [driveFolderKey, setDriveFolderKey] = useState('')
@@ -207,7 +220,14 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
       setNotice(`Dashboard counts are unavailable: ${summaryError}.${boardError}`)
     }
   }
+  const loadKnowledgeDocuments = async () => {
+    setKnowledgeDocumentsLoading(true)
+    try { setKnowledgeDocuments((await api<{ documents: KnowledgeDocument[] }>('/api/knowledge/documents')).documents ?? []) }
+    catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to load knowledge documents') }
+    finally { setKnowledgeDocumentsLoading(false) }
+  }
   useEffect(() => { void loadPlacements() }, [])
+  useEffect(() => { if (activeTab === 'knowledge') void loadKnowledgeDocuments() }, [activeTab])
 
   useEffect(() => {
     let cancelled = false
@@ -476,16 +496,55 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
 
   const indexKnowledge = async (event: FormEvent) => {
     event.preventDefault()
+    if (knowledgeSaving) return
+    setKnowledgeSaving(true)
     try {
-      await api('/api/knowledge/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(knowledge) })
-      setKnowledge({ sourceKey: '', title: '', category: 'SOP', content: '' }); setNotice('Knowledge document indexed for AI search.')
+      const result = await api<{ duplicate?: boolean; legacyFallback?: boolean; notice?: string }>('/api/knowledge/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(knowledge) })
+      setKnowledge({ sourceKey: '', title: '', category: 'SOP', content: '' }); setNotice(result.duplicate ? 'Identical content is already indexed for your agency; no duplicate was added.' : result.legacyFallback ? (result.notice ?? 'Knowledge was saved with the existing index.') : 'Knowledge document indexed for AI search.'); await loadKnowledgeDocuments()
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to index knowledge') }
+    finally { setKnowledgeSaving(false) }
+  }
+
+  const uploadKnowledgeFile = async () => {
+    if (!knowledgeFile) return setNotice('Choose a TXT or Markdown file first.')
+    if (knowledgeFile.size > 2 * 1024 * 1024) return setNotice('The selected file is larger than the 2 MB upload limit.')
+    setKnowledgeUploading(true)
+    try {
+      const body = new FormData()
+      body.append('file', knowledgeFile)
+      body.append('category', knowledge.category)
+      if (knowledge.title.trim()) body.append('title', knowledge.title.trim())
+      if (knowledge.sourceKey.trim()) body.append('sourceKey', knowledge.sourceKey.trim())
+      const result = await api<{ duplicate?: boolean; legacyFallback?: boolean; notice?: string }>('/api/knowledge/documents/upload', { method: 'POST', body })
+      setKnowledgeFile(null); if (knowledgeFileInputRef.current) knowledgeFileInputRef.current.value = ''; setKnowledge({ sourceKey: '', title: '', category: 'SOP', content: '' })
+      setNotice(result.duplicate ? 'This file’s content is already indexed for your agency; no duplicate was added.' : result.legacyFallback ? (result.notice ?? 'File uploaded and indexed using the existing knowledge index.') : 'Private knowledge source uploaded and indexed.'); await loadKnowledgeDocuments()
+    } catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to upload knowledge source') }
+    finally { setKnowledgeUploading(false) }
+  }
+
+  const reprocessKnowledgeDocument = async (documentId: string) => {
+    if (reprocessingKnowledgeId) return
+    setReprocessingKnowledgeId(documentId)
+    try { const result = await api<{ notice?: string }>(`/api/knowledge/documents/${encodeURIComponent(documentId)}/reprocess`, { method: 'POST', body: JSON.stringify({}) }); setNotice(result.notice ?? 'Knowledge document reprocessed.'); await loadKnowledgeDocuments() }
+    catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to reprocess knowledge') }
+    finally { setReprocessingKnowledgeId(null) }
+  }
+
+  const removeKnowledgeDocument = async (documentId: string, title: string) => {
+    if (!window.confirm(`Remove “${title}” from AI knowledge search? It will be deactivated, not permanently deleted.`)) return
+    setRemovingKnowledgeId(documentId)
+    try { await api(`/api/knowledge/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' }); setNotice('Knowledge document removed from AI retrieval.'); await loadKnowledgeDocuments() }
+    catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to remove knowledge') }
+    finally { setRemovingKnowledgeId(null) }
   }
 
   const searchKnowledge = async () => {
-    if (!knowledgeQuery.trim()) return
-    try { setSnippets((await api<{ snippets: KnowledgeSnippet[] }>(`/api/knowledge/search?q=${encodeURIComponent(knowledgeQuery)}`)).snippets ?? []) }
+    if (!knowledgeQuery.trim()) { setKnowledgeSearchCompleted(false); setSnippets([]); return setNotice('Enter a search phrase first.') }
+    setKnowledgeSearching(true)
+    setKnowledgeSearchCompleted(false)
+    try { setSnippets((await api<{ snippets: KnowledgeSnippet[] }>(`/api/knowledge/search?q=${encodeURIComponent(knowledgeQuery)}`)).snippets ?? []); setKnowledgeSearchCompleted(true) }
     catch (error) { setNotice(error instanceof Error ? error.message : 'Unable to search knowledge') }
+    finally { setKnowledgeSearching(false) }
   }
 
   const syncDrive = async (event: FormEvent) => {
@@ -854,7 +913,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
         </> : null}
 
         {activeTab === 'knowledge' ? (
-          <Card icon={BookOpen} title="Knowledge library" description="Approved facts used by AI reception and WhatsApp replies">
+          <Card icon={BookOpen} title="Knowledge library" description="Approved guidance used by AI Command Center, reception, and WhatsApp replies">
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-black">
               <p className="font-semibold">How this guide works</p>
               <p className="mt-1">Add an approved procedure or FAQ, then select <strong>Index knowledge</strong> to make it searchable. Search below to check what was indexed. Loading an example only fills the form; it does not save or index anything.</p>
@@ -874,10 +933,10 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
               </button>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Source key">
-                  <input className={fieldClass} placeholder="e.g. sop-arrival" value={knowledge.sourceKey} onChange={(e) => setKnowledge({ ...knowledge, sourceKey: e.target.value })} />
+                  <input required maxLength={160} className={fieldClass} placeholder="e.g. sop-arrival" value={knowledge.sourceKey} onChange={(e) => setKnowledge({ ...knowledge, sourceKey: e.target.value })} />
                 </Field>
                 <Field label="Document title">
-                  <input className={fieldClass} placeholder="e.g. Airport arrival checklist" value={knowledge.title} onChange={(e) => setKnowledge({ ...knowledge, title: e.target.value })} />
+                  <input required maxLength={240} className={fieldClass} placeholder="e.g. Airport arrival checklist" value={knowledge.title} onChange={(e) => setKnowledge({ ...knowledge, title: e.target.value })} />
                 </Field>
               </div>
               <Field label="Category">
@@ -888,18 +947,31 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
                 </select>
               </Field>
               <Field label="Content">
-                <textarea className={fieldClass} rows={4} placeholder="Paste approved knowledge content…" value={knowledge.content} onChange={(e) => setKnowledge({ ...knowledge, content: e.target.value })} />
+                <textarea required maxLength={80000} className={fieldClass} rows={4} placeholder="Paste approved knowledge content…" value={knowledge.content} onChange={(e) => setKnowledge({ ...knowledge, content: e.target.value })} />
               </Field>
-              <button className={primaryButton}>Index knowledge</button>
+              <button type="submit" disabled={knowledgeSaving || knowledgeUploading} className={`${primaryButton} disabled:cursor-not-allowed disabled:opacity-60`}>{knowledgeSaving ? 'Indexing…' : 'Index knowledge'}</button>
+              <div className="rounded-2xl border border-border p-4">
+                <label className={labelClass} htmlFor="knowledge-file">Or upload a private text source</label>
+                <input ref={knowledgeFileInputRef} id="knowledge-file" type="file" accept=".txt,.md,text/plain,text/markdown" disabled={knowledgeUploading || knowledgeSaving} onChange={(event) => setKnowledgeFile(event.target.files?.[0] ?? null)} className="block w-full text-sm text-black disabled:opacity-50" />
+                <p className="mt-1 text-xs text-black">UTF-8 TXT or Markdown, up to 2 MB. PDF, DOCX and spreadsheet extraction is not enabled yet.</p>
+                {knowledgeFile && <p className="mt-1 text-xs text-slate-600">Selected: {knowledgeFile.name} ({(knowledgeFile.size / 1024).toFixed(0)} KB)</p>}
+                <button type="button" disabled={!knowledgeFile || knowledgeUploading || knowledgeSaving} onClick={() => void uploadKnowledgeFile()} className={`${secondaryButton} mt-3 disabled:opacity-50`}>{knowledgeUploading ? 'Uploading and indexing…' : 'Upload and index'}</button>
+              </div>
+
+              <div className="rounded-2xl border border-border p-4">
+                <div className="mb-3 flex items-center justify-between"><span className="text-sm font-semibold text-black">Indexed agency documents</span><button type="button" disabled={knowledgeDocumentsLoading} onClick={() => void loadKnowledgeDocuments()} className="text-sm font-medium text-primary underline disabled:opacity-50">{knowledgeDocumentsLoading ? 'Refreshing…' : 'Refresh'}</button></div>
+                {knowledgeDocumentsLoading && knowledgeDocuments.length === 0 ? <p role="status" className="text-sm text-slate-600">Loading agency documents…</p> : knowledgeDocuments.length ? <div className="space-y-2">{knowledgeDocuments.map((document) => <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted p-3"><div><b className="text-sm text-foreground">{document.title}</b><p className="text-xs text-black">{document.category} · {document.current_version ? `v${document.current_version}` : 'legacy record'} · {document.ingestion_status || (document.active ? 'active' : 'inactive')}{document.source_file_name ? ` · ${document.source_file_name}` : ''}{document.processing_error ? ` · Error: ${document.processing_error}` : ''}</p></div><div className="flex gap-2"><button type="button" disabled={Boolean(reprocessingKnowledgeId || removingKnowledgeId) || !document.active} onClick={() => void reprocessKnowledgeDocument(document.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50">{reprocessingKnowledgeId === document.id ? 'Reprocessing…' : 'Reprocess'}</button>{document.active && <button type="button" disabled={Boolean(reprocessingKnowledgeId || removingKnowledgeId)} onClick={() => void removeKnowledgeDocument(document.id, document.title)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 disabled:opacity-50">{removingKnowledgeId === document.id ? 'Removing…' : 'Remove'}</button>}</div></div>)}</div> : <p className="text-sm text-black">No indexed agency documents found.</p>}
+              </div>
 
               <div className="rounded-2xl bg-muted p-4">
                 <span className="mb-2 block text-sm font-medium text-black">Search what's already indexed</span>
                 <div className="flex gap-2">
-                  <input className={`${fieldClass} bg-card`} placeholder="Search…" value={knowledgeQuery} onChange={(e) => setKnowledgeQuery(e.target.value)} />
-                  <button type="button" onClick={searchKnowledge} className="shrink-0 rounded-2xl bg-card px-4 text-primary shadow-sm hover:bg-background">
-                    <Search className="h-4 w-4" />
+                  <input className={`${fieldClass} bg-card`} placeholder="Search…" value={knowledgeQuery} onChange={(e) => { setKnowledgeQuery(e.target.value); setKnowledgeSearchCompleted(false); setSnippets([]) }} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void searchKnowledge() } }} />
+                  <button type="button" disabled={knowledgeSearching} onClick={() => void searchKnowledge()} aria-label="Search indexed knowledge" className="shrink-0 rounded-2xl bg-card px-4 text-primary shadow-sm hover:bg-background disabled:opacity-50">
+                    {knowledgeSearching ? <span className="text-xs">Searching…</span> : <Search className="h-4 w-4" />}
                   </button>
                 </div>
+                {knowledgeSearchCompleted && snippets.length === 0 && <p role="status" className="mt-3 text-sm text-slate-600">No matching indexed knowledge found. Check that the document is active and indexed.</p>}
                 {snippets.length > 0 && (
                   <div className="mt-3 space-y-2">
                     {snippets.map((snippet, index) => (

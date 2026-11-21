@@ -53,8 +53,7 @@ const HiringProcessPage = lazyRoute(() => import("@/pages/HiringProcessPage"));
 const HomePage = lazyRoute(() => import("@/pages/HomePage"));
 const AgencyProfile = lazyRoute(() => import("@/pages/AgencyProfile"));
 const AgencyProfileEdit = lazyRoute(() => import("@/pages/AgencyProfileEdit"));
-const AgencyChatbotConfig = lazyRoute(() => import("@/pages/AgencyChatbotConfig"));
-const TechnicalSettingsPage = lazyRoute(() => import("@/pages/TechnicalSettingsPage"));
+const SettingsPage = lazyRoute(() => import("@/pages/SettingsPage"));
 const AddMaid = lazyRoute(() => import("@/pages/AddMaid"));
 const EditMaids = lazyRoute(() => import("@/pages/EditMaids"));
 const MaidProfile = lazyRoute(() => import("@/pages/MaidProfile"));
@@ -91,6 +90,7 @@ const TermsOfService = lazyRoute(() => import("@/pages/TermsOfService"));
 const DataDeletion = lazyRoute(() => import("@/pages/DataDeletion"));
 const AiAutomationPage = lazyRoute(() => import("@/pages/AiAutomationPage"));
 const AiAgentsPage = lazyRoute(() => import("@/pages/AiAgentsPage"));
+const AiCommandCenterPage = lazyRoute(() => import("@/pages/AiCommandCenterPage"));
 const GlobalAiCommandCenter = lazy(() => import("@/pages/AiAgentsPage").then((module) => ({ default: module.GlobalAiCommandCenter })));
 const AiDirectMarketingPage = lazyRoute(() => import("@/pages/AiDirectMarketingPage"));
 const AiHrInterviewerPage = lazyRoute(() => import("@/pages/AiHrInterviewerPage"));
@@ -373,8 +373,9 @@ const App = () => {
             <Route path="/agencyadmin/dashboard" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><HomePage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfile /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/agency-profile/edit" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyProfileEdit /></AdminShell></ProtectedAdminRoute>)} />
-            <Route path="/agencyadmin/chatbot-config" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AgencyChatbotConfig /></AdminShell></ProtectedAdminRoute>)} />
-            <Route path="/agencyadmin/technical" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><TechnicalSettingsPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/settings" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><SettingsPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/technical" element={<Navigate to="/agencyadmin/settings" replace />} />
+            <Route path="/agencyadmin/chatbot-config" element={<Navigate to="/agencyadmin/settings" replace />} />
             <Route path="/agencyadmin/add-maid" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AddMaid /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/edit-maids" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><EditMaids /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/maid/:refCode" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><MaidProfile /></AdminShell></ProtectedAdminRoute>)} />
@@ -390,6 +391,7 @@ const App = () => {
             <Route path="/dashboard/whatsapp-broadcast" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><WhatsAppBroadcastPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/referral-leads" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><ReferralLeadsPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-agents" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiAgentsPage /></AdminShell></ProtectedAdminRoute>)} />
+            <Route path="/agencyadmin/ai-command-center" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiCommandCenterPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-hr-interviewer" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiHrInterviewerPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/ai-marketing" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AiDirectMarketingPage /></AdminShell></ProtectedAdminRoute>)} />
             <Route path="/agencyadmin/recruitment" element={withRouteLoader(<ProtectedAdminRoute><AdminShell><AtsRecruitmentPage /></AdminShell></ProtectedAdminRoute>)} />

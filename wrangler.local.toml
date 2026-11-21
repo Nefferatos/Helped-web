@@ -32,6 +32,7 @@ CLINE_MODEL = "openai/gpt-4o-mini"
 OPENAI_BASE_URL = "https://api.cline.bot/api/v1"
 OPENAI_MODEL = "openai/gpt-4o-mini"
 AI_AUTOPILOT_ENABLED = "true"
+KNOWLEDGE_EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5"
 RESEND_FROM = "Find Maid <no-reply@rinzinagency.com>"
 DEV_EXPOSE_CONFIRMATION_CODE = "false"
 
