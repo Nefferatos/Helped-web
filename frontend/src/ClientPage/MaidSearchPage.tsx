@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Search, Star, X, Sparkles, Filter, Trash2, ExternalLink, CheckCircle2, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Star, X, Sparkles, Filter, Trash2, ExternalLink, CheckCircle2, Lock, Heart, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getMaidAge, getExperienceBucket, MaidProfile } from "@/lib/maids";
@@ -647,10 +647,10 @@ const LockedMaidCard = ({ maid, loginPath, disableHoverModal = false }: { maid: 
 
 // ── Real maid card ────────────────────────────────────────────────────────────
 const MaidCard = ({
-  maid, isShortlisted, onToggleShortlist, onNavigate, isLoggedIn, loginPath, showCategory, disableHoverPopup = false,
+  maid, isShortlisted, onToggleShortlist, onShare, onNavigate, isLoggedIn, showCategory, disableHoverPopup = false,
 }: {
   maid: MaidProfile; isShortlisted: boolean; onToggleShortlist: (ref: string) => void;
-  onNavigate?: () => void; isLoggedIn: boolean; loginPath: string; showCategory?: boolean; disableHoverPopup?: boolean;
+  onShare?: (maid: MaidProfile) => void; onNavigate?: () => void; isLoggedIn: boolean; showCategory?: boolean; disableHoverPopup?: boolean;
 }) => {
   const [hovered, setHovered] = useState(false);
   const [clickedOpen, setClickedOpen] = useState(false);
@@ -667,12 +667,13 @@ const MaidCard = ({
     };
   }, []);
 
-  if (!isLoggedIn) return <LockedMaidCard maid={maid} loginPath={loginPath} disableHoverModal={disableHoverPopup} />;
-
   const photo = getPrimaryPhoto(maid);
-  const age = getMaidAge(maid);
   const category = getMaidCategory(maid);
-  const displayLabel = showCategory && category ? category : (maid.nationality || "");
+  const nationality = (maid.nationality || "").replace(/\s+maid$/i, "").trim();
+  const displayLabel = showCategory && category ? category : (/^bangladesh$/i.test(nationality) ? "Bangladeshi" : nationality);
+  const age = getMaidAge(maid);
+  const normalizedType = maid.type.toLowerCase();
+  const typeLabel = normalizedType.includes("new") ? "New Maid" : normalizedType.includes("transfer") ? "Transfer Maid" : normalizedType.includes("ex") ? "Ex-Singapore Maid" : getTypeLabel(maid.type);
   const schedulePopupClose = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => {
@@ -714,55 +715,50 @@ const MaidCard = ({
     <>
       <article
         ref={cardRef}
-        className="group flex flex-col overflow-hidden cursor-pointer transition-all rounded-[7px]"
-        style={{ border:`1px solid ${C.border}`, background:C.white, boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}
+        className="group flex min-w-0 flex-col overflow-hidden cursor-pointer transition-all rounded-none"
+        style={{ border:`1px solid ${C.green}`, background:"#fff", boxShadow:"0 2px 8px rgba(7,43,53,0.06)" }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleCardClick}
       >
-        <div className="relative w-full overflow-hidden" style={{ background:C.white, borderBottom:`1px solid ${C.border}` }}>
-          <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate}>
+        <div className="relative w-full overflow-hidden" style={{ background:"#f0f6f7", borderBottom:`1px solid ${C.yellow}` }}>
+          <Link className="block w-full" to={`/maids/${encodeURIComponent(maid.referenceCode)}`} onClick={onNavigate} aria-label={`Open ${displayLabel || "maid"} profile`}>
             {photo ? (
-              <img src={photo} alt={maid.fullName}
-                className="block w-full h-auto"
+              <img src={photo} alt={isLoggedIn ? maid.fullName : "Maid profile preview"}
+                className={`block h-auto w-full object-contain ${isLoggedIn ? "" : "blur-[7px]"}`}
                 loading="lazy" decoding="async"
               />
             ) : (
-              <div className="w-full flex items-center justify-center" style={{ aspectRatio:"3/4", minHeight:130, background:C.surface }}>
+              <div className="flex min-h-48 w-full items-center justify-center" style={{ background:C.surface }}>
                 <svg className="h-8 w-8" style={{ color:C.border }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                 </svg>
               </div>
             )}
           </Link>
-          <button
-            onClick={(e) => { e.preventDefault(); onToggleShortlist(maid.referenceCode); }}
-            className={`absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 py-1.5 text-[9px] font-bold uppercase tracking-wide text-white transition-all ${
-              isShortlisted ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-            }`}
-            style={{ background: isShortlisted ? C.yellow : "rgba(7,43,53,0.75)" }}
-          >
-            <Star className={`h-2.5 w-2.5 ${isShortlisted ? "fill-current" : ""}`}
-              style={{ color: isShortlisted ? C.dark : C.white }} />
-            <span style={{ color: isShortlisted ? C.dark : C.white }}>{isShortlisted ? "Shortlisted" : "Shortlist"}</span>
-          </button>
         </div>
 
-        <div className="flex flex-col gap-1 p-3 flex-1" style={{ background:C.white }}>
+        <div className="flex min-h-[108px] flex-col items-center justify-center gap-1 px-2 py-2 text-center" style={{ background:"#fff" }}>
           {displayLabel && (
-            <p className="leading-tight" style={{ color:C.text, fontSize:13, lineHeight:1.35 }}>
+            <p className="w-full truncate leading-tight font-bold" style={{ color:C.green, fontSize:14, lineHeight:1.3 }}>
               {displayLabel}
             </p>
           )}
-          {maid.referenceCode && <p className="font-mono leading-tight" style={{ color:C.textMuted, fontSize:11, lineHeight:1.2 }}>Ref: {maid.referenceCode}</p>}
-          <div className="hidden" style={{ borderTop:`1px solid ${C.border}` }} />
-          <div className="hidden" style={{ color:C.textMuted }}>
-            {age !== null && <span className="font-medium" style={{ color:C.text }}>({age}) yrs</span>}
-            {age !== null && maid.maritalStatus && <span style={{ color:C.border }}>·</span>}
-            {maid.maritalStatus && <span className="truncate" style={{ color:C.text }}>{maid.maritalStatus}</span>}
-          </div>
-          {maid.religion && <p className="leading-tight line-clamp-1" style={{ color:C.text, fontSize:13, lineHeight:1.35 }}>{maid.religion}</p>}
-          {(maid.maritalStatus || age !== null) && <p className="leading-tight" style={{ color:C.text, fontSize:13, lineHeight:1.35 }}>{maid.maritalStatus || ""}{maid.maritalStatus && age !== null ? " " : ""}{age !== null ? `(${age})` : ""}</p>}
+          {typeLabel && <p className="w-full truncate leading-tight" style={{ color:C.text, fontSize:13, lineHeight:1.3 }}>{typeLabel}</p>}
+          <p className="w-full truncate leading-tight font-semibold" title={maid.fullName || "Maid name unavailable"} style={{ color:C.greenMid, fontSize:13, lineHeight:1.3 }}>{maid.fullName || "Name unavailable"}</p>
+          <p className="w-full truncate leading-tight" style={{ color:C.text, fontSize:12, lineHeight:1.3 }}>{age && age > 0 ? `${age} years old` : "Age unavailable"}</p>
+        </div>
+        <div className="grid h-12 grid-cols-2 border-t" style={{ borderColor:C.yellow, background:"#fff" }}>
+          <button type="button" aria-label={isShortlisted ? "Remove from shortlist" : "Add to shortlist"} aria-pressed={isShortlisted}
+            className="flex min-h-11 items-center justify-center text-teal-800 transition-colors hover:bg-amber-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleShortlist(maid.referenceCode); }}>
+            <Heart size={23} strokeWidth={2} fill={isShortlisted ? C.yellow : "none"} color={isShortlisted ? C.dark : C.green} />
+          </button>
+          <button type="button" aria-label="Share maid profile"
+            className="flex min-h-11 items-center justify-center text-teal-800 transition-colors hover:bg-amber-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare?.(maid); }}>
+            <Share2 size={23} strokeWidth={2.5} />
+          </button>
         </div>
       </article>
       {(hovered || clickedOpen) && cardRef.current && !disableHoverPopup && (
@@ -789,11 +785,12 @@ const MaidCard = ({
 // ════════════════════════════════════════════════════════════════════════════
 const ShortlistDialog = ({
   open, onOpenChange, shortlistRefs, shortlistedMaids, missingShortlistRefs,
-  onToggleShortlist, isLoggedIn, loginPath, isIndianSubcategoryActive, isShortlistOpen, setIsShortlistOpen,
+  onToggleShortlist, onShareMaid, isLoggedIn, loginPath, isIndianSubcategoryActive, isShortlistOpen, setIsShortlistOpen,
 }: {
   open: boolean; onOpenChange: (v: boolean) => void;
   shortlistRefs: string[]; shortlistedMaids: MaidProfile[]; missingShortlistRefs: string[];
   onToggleShortlist: (ref: string) => void;
+  onShareMaid: (maid: MaidProfile) => void;
   isLoggedIn: boolean; loginPath: string; isIndianSubcategoryActive: boolean;
   isShortlistOpen: boolean; setIsShortlistOpen: (v: boolean) => void;
 }) => {
@@ -906,9 +903,9 @@ const ShortlistDialog = ({
                       maid={maid}
                       isShortlisted={true}
                       onToggleShortlist={onToggleShortlist}
+                      onShare={onShareMaid}
                       onNavigate={() => onOpenChange(false)}
                       isLoggedIn={isLoggedIn}
-                      loginPath={loginPath}
                       showCategory={isIndianSubcategoryActive}
                       disableHoverPopup={true}
                     />
@@ -1057,6 +1054,38 @@ const MaidSearchPage = ({
   }, []);
 
   const handleToggleShortlist = (ref: string) => { setShortlistRefs(toggleShortlistRef(ref)); };
+
+  const handleShareMaid = async (maid: MaidProfile) => {
+    const url = `${window.location.origin}/maids/${encodeURIComponent(maid.referenceCode)}`;
+    const shareData = { title: `${maid.nationality || "Maid"} profile`, text: "View this maid profile", url };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const input = document.createElement("textarea");
+        input.value = url;
+        input.setAttribute("readonly", "");
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(input);
+        if (!copied) throw new Error("Clipboard unavailable");
+      }
+      toast.success("Profile link copied to clipboard");
+    } catch {
+      toast.error("Could not share this profile. Please copy the profile URL from your browser.");
+    }
+  };
 
   useEffect(() => {
     if (!authReady) return;
@@ -1573,8 +1602,8 @@ const MaidSearchPage = ({
                   maid={maid}
                   isShortlisted={shortlist.has(maid.referenceCode)}
                   onToggleShortlist={handleToggleShortlist}
+                  onShare={handleShareMaid}
                   isLoggedIn={isLoggedIn}
-                  loginPath={loginPath}
                   showCategory={isIndianSubcategoryActive}
                 />
               ))}
@@ -1601,6 +1630,7 @@ const MaidSearchPage = ({
             shortlistedMaids={shortlistedMaids}
             missingShortlistRefs={missingShortlistRefs}
             onToggleShortlist={handleToggleShortlist}
+            onShareMaid={handleShareMaid}
             isLoggedIn={isLoggedIn}
             loginPath={loginPath}
             isIndianSubcategoryActive={isIndianSubcategoryActive}

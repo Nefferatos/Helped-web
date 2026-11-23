@@ -313,6 +313,92 @@ async function extractPdfText(file: File): Promise<string> {
   return combinedText;
 }
 
+async function splitPdfForMake(file: File): Promise<Blob[]> {
+  const { PDFDocument } = await import("pdf-lib");
+  let source: InstanceType<typeof PDFDocument>;
+  try {
+    source = await PDFDocument.load(await file.arrayBuffer());
+  } catch {
+    throw new Error("This PDF cannot be split for upload. Save an unprotected copy and try again.");
+  }
+
+  const chunks: Blob[] = [];
+  let current = await PDFDocument.create();
+  for (let pageIndex = 0; pageIndex < source.getPageCount(); pageIndex++) {
+    const [page] = await current.copyPages(source, [pageIndex]);
+    current.addPage(page);
+    const candidate = await current.save({ useObjectStreams: true });
+    if (candidate.byteLength <= MAX_MAKE_ATTACHMENT_BYTES) continue;
+
+    current.removePage(current.getPageCount() - 1);
+    if (current.getPageCount()) chunks.push(new Blob([await current.save({ useObjectStreams: true })], { type: "application/pdf" }));
+
+    current = await PDFDocument.create();
+    const [singlePage] = await current.copyPages(source, [pageIndex]);
+    current.addPage(singlePage);
+    const singlePageBytes = await current.save({ useObjectStreams: true });
+    if (singlePageBytes.byteLength > MAX_MAKE_ATTACHMENT_BYTES) {
+      chunks.push(await rasterizePdfPage(file, pageIndex));
+      current = await PDFDocument.create();
+    }
+  }
+  if (current.getPageCount()) chunks.push(new Blob([await current.save({ useObjectStreams: true })], { type: "application/pdf" }));
+  return chunks;
+}
+
+async function rasterizePdfPage(file: File, pageIndex: number): Promise<Blob> {
+  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  try {
+    const page = await pdf.getPage(pageIndex + 1);
+    for (const scale of [1.6, 1.35, 1.1, 0.9]) {
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Could not prepare a scanned PDF page for upload.");
+      await page.render({ canvasContext: context, viewport }).promise;
+      for (const quality of [0.84, 0.74, 0.64]) {
+        const jpeg = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+        if (!jpeg) continue;
+        const { PDFDocument } = await import("pdf-lib");
+        const imagePdf = await PDFDocument.create();
+        const image = await imagePdf.embedJpg(await jpeg.arrayBuffer());
+        const outputPage = imagePdf.addPage([viewport.width / scale, viewport.height / scale]);
+        outputPage.drawImage(image, { x: 0, y: 0, width: viewport.width / scale, height: viewport.height / scale });
+        const bytes = await imagePdf.save({ useObjectStreams: true });
+        if (bytes.byteLength <= MAX_MAKE_ATTACHMENT_BYTES) {
+          return new Blob([bytes], { type: "application/pdf" });
+        }
+      }
+    }
+  } finally {
+    await pdf.destroy();
+  }
+  throw new Error(`PDF page ${pageIndex + 1} could not be reduced enough for upload. Please use a lower-resolution scan.`);
+}
+
+function mergeExtractedParts(parts: Record<string, unknown>[]): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const part of parts) {
+    for (const [key, value] of Object.entries(part)) {
+      if (Array.isArray(value)) {
+        const existing = Array.isArray(merged[key]) ? merged[key] as unknown[] : [];
+        merged[key] = key === "familyMembers"
+          ? [...existing, ...value].filter((item, index, all) => all.findIndex((candidate) => JSON.stringify(candidate) === JSON.stringify(item)) === index)
+          : [...existing, ...value];
+      } else if (value && typeof value === "object") {
+        const existing = merged[key] && typeof merged[key] === "object" && !Array.isArray(merged[key])
+          ? merged[key] as Record<string, unknown> : {};
+        merged[key] = { ...existing, ...(value as Record<string, unknown>) };
+      } else if (value != null && String(value).trim()) {
+        merged[key] = value;
+      }
+    }
+  }
+  return merged;
+}
+
 async function extractDocxText(file: File): Promise<string> {
   if (file.size > MAX_PDF_SIZE_BYTES) throw new Error("Word document is too large. Please upload a file smaller than 10MB.");
   const zip = await JSZip.loadAsync(file);
@@ -878,45 +964,65 @@ export async function extractDocumentForForm(
 
   let userContent: Array<{ type: "text"; text: string }>;
   let attachment: { fileName: string; fileMimeType: string; fileDataBase64: string } | undefined;
+  let pdfParts: Blob[] | undefined;
+  let extractedDocumentText = "";
   if (isImage) {
     attachment = await prepareImageForMake(file);
     userContent = [{ type: "text", text: buildUserPrompt("") }];
   } else {
-    const documentText = isDocx ? await extractDocxText(file) : await extractPdfText(file);
-    if (!documentText.trim() && !isPdf) throw new Error("No readable text was found in the uploaded document.");
+    extractedDocumentText = isDocx ? await extractDocxText(file) : await extractPdfText(file);
+    if (!extractedDocumentText.trim() && !isPdf) throw new Error("No readable text was found in the uploaded document.");
     if (isPdf) {
-      if (file.size > MAX_MAKE_ATTACHMENT_BYTES) throw new Error("This PDF is too large to send to Make. Use a smaller copy or split it into smaller files.");
-      attachment = { fileName: file.name, fileMimeType: "application/pdf", fileDataBase64: await bufferToBase64(await file.arrayBuffer()) };
+      if (file.size > MAX_MAKE_ATTACHMENT_BYTES) {
+        pdfParts = await splitPdfForMake(file);
+      } else {
+        attachment = { fileName: file.name, fileMimeType: "application/pdf", fileDataBase64: await bufferToBase64(await file.arrayBuffer()) };
+      }
     }
-    if (documentText.length > 70_000) throw new Error("This draft is too long to autofill at once. Upload a shorter draft or split it into smaller files.");
-    userContent = [{ type: "text", text: buildUserPrompt(documentText) }];
+    if (extractedDocumentText.length > 70_000) throw new Error("This draft is too long to autofill at once. Upload a shorter draft or split it into smaller files.");
+    userContent = [{ type: "text", text: buildUserPrompt(extractedDocumentText) }];
   }
 
   onStage?.("extracting");
-  const response = await fetch("/api/pdf-autofill", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-    body: JSON.stringify({
-      makeOnly: true,
-      scenario,
-      vision: Boolean(attachment),
-      ...(attachment ?? {}),
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-    }),
-    signal: AbortSignal.timeout(GROQ_TIMEOUT_MS),
-  }).catch((error: unknown) => {
-    if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) {
-      throw new Error("Draft autofill timed out. Try a smaller document or a clearer image.");
-    }
-    throw error;
-  });
-  const result = await response.json() as { content?: string; error?: string };
-  if (!response.ok || result.error) throw new Error(result.error ?? `Draft autofill failed (${response.status}).`);
-  if (!result.content?.trim()) throw new Error("No details were returned from the uploaded draft.");
-  return parseGroqJson(result.content) as unknown as Record<string, unknown>;
+  const payloads = pdfParts
+    ? await Promise.all(pdfParts.map(async (part, index) => ({
+      fileName: `${file.name.replace(/\.pdf$/i, "")}-part-${index + 1}-of-${pdfParts!.length}.pdf`,
+      fileMimeType: "application/pdf",
+      fileDataBase64: await bufferToBase64(await part.arrayBuffer()),
+    })))
+    : [attachment];
+  const results: Record<string, unknown>[] = [];
+  for (let index = 0; index < payloads.length; index++) {
+    const part = payloads[index];
+    const partPrompt = pdfParts && part
+      ? `${buildUserPrompt(extractedDocumentText)}\n\nThe attached PDF is segment ${index + 1} of ${payloads.length}. Use the attached pages to verify the document text and extract any visible values.`
+      : userContent[0].text;
+    const response = await fetch("/api/pdf-autofill", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
+      body: JSON.stringify({
+        makeOnly: true,
+        scenario,
+        vision: Boolean(part),
+        ...(part ?? {}),
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: [{ type: "text", text: partPrompt }] },
+        ],
+      }),
+      signal: AbortSignal.timeout(GROQ_TIMEOUT_MS),
+    }).catch((error: unknown) => {
+      if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) {
+        throw new Error("Draft autofill timed out. Try a smaller document or a clearer image.");
+      }
+      throw error;
+    });
+    const result = await response.json() as { content?: string; error?: string };
+    if (!response.ok || result.error) throw new Error(result.error ?? `Draft autofill failed (${response.status}).`);
+    if (!result.content?.trim()) throw new Error("No details were returned from the uploaded draft.");
+    results.push(parseGroqJson(result.content) as unknown as Record<string, unknown>);
+  }
+  return mergeExtractedParts(results);
 }
 
 // ─── Reference code generator ─────────────────────────────────────────────────

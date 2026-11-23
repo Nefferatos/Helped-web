@@ -4565,6 +4565,7 @@ export const getEmployerContractStore = async (
 
 export const saveEmployerContractStore = async (payload: {
   refCode?: string | null
+  existingRefCode?: string | null
   maid?: Record<string, unknown>
   agency?: Record<string, unknown>
   employer?: Record<string, unknown>
@@ -4585,16 +4586,17 @@ export const saveEmployerContractStore = async (payload: {
   const employerPayload =
     payload.employer && typeof payload.employer === 'object' ? payload.employer : {}
 
-  const incomingRef =
-    String(payload.refCode ?? '').trim() ||
-    toTrimmedString((agencyPayload as { caseReferenceNumber?: unknown }).caseReferenceNumber)
-  const index = incomingRef
+  const existingRefCode = String(payload.existingRefCode ?? '').trim()
+  const index = existingRefCode
     ? data.employers.findIndex(
-        (item) => item.refCode === incomingRef && item.agencyId === agencyId
+        (item) => item.refCode === existingRefCode && item.agencyId === agencyId
       )
     : -1
   const id = index === -1 ? data.counters.employers++ : data.employers[index].id
-  const refCode = incomingRef || formatEmployerRefCode(id)
+  let refCode = index === -1 ? formatEmployerRefCode(id) : data.employers[index].refCode
+  while (index === -1 && data.employers.some((item) => item.refCode === refCode && item.agencyId === agencyId)) {
+    refCode = formatEmployerRefCode(data.counters.employers++)
+  }
   const normalizedAgency = {
     ...agencyPayload,
     caseReferenceNumber:

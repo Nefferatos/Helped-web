@@ -5,7 +5,7 @@ import {
   Shield, ChevronRight, Search, Home, Heart, Baby, Backpack,
   BadgeCheck, Sparkles, Lock, UserCheck, TrendingUp,
   Award, SlidersHorizontal, LayoutGrid, ArrowUp, MapPin, Mail, Phone, Clock, MessageCircle, PhoneCall, Facebook, Youtube,
-  Building2, BriefcaseBusiness,
+  Building2, BriefcaseBusiness, Share2,
 } from "lucide-react";
 import { FaTiktok } from "react-icons/fa6";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -18,6 +18,7 @@ import { toast } from "@/components/ui/sonner";
 import { getStoredClient, getClientAuthHeaders, getClientToken, refreshClientToken, type ClientUser } from "@/lib/clientAuth";
 import { getMaidAge, MaidProfile } from "@/lib/maids";
 import { filterMaids } from "@/lib/maidFilter";
+import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import { syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import culinaryImg from "./assets/culinary-optimized.webp";
 import elderlyImg from "./assets/elderly-care-optimized.webp";
@@ -711,16 +712,25 @@ const GLOBAL_STYLES = `
   .nationality-panel-title { margin: 0; color: var(--teal); font: 800 16px/1.2 'Inter', sans-serif; }
   .nationality-panel-link { color: var(--teal); font: 700 13px/1.3 'Inter', sans-serif; text-align: right; text-decoration: underline; }
   .nationality-preview-grid { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px; padding: 14px 16px 16px; }
-  .nationality-preview { width: 100%; min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: #fff; color: #0b1f25; text-align: left; text-decoration: none; font: inherit; cursor: pointer; appearance: none; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
-  .nationality-preview-photo { width: 100%; overflow: hidden; border-bottom: 1px solid var(--border); background: #f5f7f8; }
-  .nationality-preview-photo img { width: 100%; height: auto; display: block; }
+  .nationality-preview { display: flex; width: 100%; min-width: 0; overflow: hidden; flex-direction: column; border: 1px solid var(--teal); border-radius: 0; background: #fff; color: var(--ink); text-align: left; text-decoration: none; font: inherit; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+  .nationality-preview-main { display: block; width: 100%; padding: 0; border: 0; background: #fff; color: inherit; text-align: inherit; text-decoration: none; font: inherit; cursor: pointer; appearance: none; }
+  .nationality-preview-photo { width: 100%; overflow: hidden; border-bottom: 1px solid var(--amber); background: #f5f7f8; }
+  .nationality-preview-photo img { width: 100%; height: auto; object-fit: contain; object-position: center; display: block; }
   /* Keep the guest blur in the UI too: Wrangler's local image-transform mock
      does not support the blur option used by /photo-preview. */
-  .nationality-preview.is-locked .nationality-preview-photo img { filter: blur(8px); transform: scale(1.06); }
-  .nationality-preview p { margin: 8px 12px 0; font: 500 13px/1.35 'Inter', sans-serif; }
-  .nationality-preview p + p { margin-top: 1px; }
-  .nationality-preview p:last-child { margin-bottom: 12px; }
-  .nationality-preview:hover { border-color: var(--teal-light); box-shadow: 0 5px 16px rgba(14,78,94,.16); transform: translateY(-2px); }
+  .nationality-preview.is-locked .nationality-preview-photo img { filter: blur(8px); }
+  .nationality-preview-info { display: flex; min-height: 88px; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px 7px; text-align: center; }
+  .nationality-preview-info p { width: 100%; overflow: hidden; margin: 0; color: var(--ink); font: 700 13px/1.35 'Inter', sans-serif; font-size: 13px !important; text-overflow: ellipsis; white-space: nowrap; }
+  .nationality-preview-info p:first-child { color: var(--teal); font-size: 14px !important; font-weight: 800; }
+  .nationality-preview-info p:nth-child(2) { color: var(--ink); font-weight: 700; }
+  .nationality-preview-info p:nth-child(3) { color: var(--teal-mid); font-weight: 700; }
+  .nationality-preview-info p:nth-child(4) { color: var(--ink); font-size: 12px !important; font-weight: 700; }
+  .nationality-preview-actions { display: grid; min-height: 44px; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--amber); }
+  .nationality-preview-action { display: flex; min-width: 0; align-items: center; justify-content: center; border: 0; background: #fff; color: var(--teal); cursor: pointer; transition: background .18s ease, color .18s ease; }
+  .nationality-preview-action + .nationality-preview-action { border-left: 1px solid var(--border); }
+  .nationality-preview-action:hover, .nationality-preview-action:focus-visible { background: var(--amber-light); color: var(--teal-deep); outline-color: var(--amber-dark); }
+  .nationality-preview-action.is-saved { color: var(--amber-dark); }
+  .nationality-preview:hover { border-color: var(--amber-dark); box-shadow: 0 5px 16px rgba(14,78,94,.16); transform: translateY(-2px); }
   .nationality-preview:hover .nationality-preview-photo { border-color: var(--teal-light); }
   .nationality-preview:hover p:first-of-type { color: var(--teal); }
   .nationality-guest-unlock {
@@ -1219,6 +1229,7 @@ const NationalityPreviewPanel = ({
   isLoggedIn: boolean;
 }) => {
   const [guestPromptAnchor, setGuestPromptAnchor] = useState<DOMRect | null>(null);
+  const [shortlistRefs, setShortlistRefs] = useState(() => getSavedShortlistRefs());
   const guestCardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const guestPromptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openGuestPrompt = (referenceCode: string) => {
@@ -1234,6 +1245,7 @@ const NationalityPreviewPanel = ({
   useEffect(() => () => {
     if (guestPromptTimer.current) clearTimeout(guestPromptTimer.current);
   }, []);
+  useEffect(() => subscribeToShortlistRefs(setShortlistRefs), []);
 
   if (!maids.length) return null;
   const moreHref = `/search-maids/results?q=${encodeURIComponent(searchQuery)}`;
@@ -1248,26 +1260,58 @@ const NationalityPreviewPanel = ({
       </div>
       <div className="nationality-preview-grid">
         {maids.slice(0, 8).map((maid, index) => {
-          const age = getMaidAge(maid);
           const mobileExtraClass = index === 7 ? " nationality-preview-mobile-extra" : "";
+          const displayNationality = (maid.nationality || nationality).replace(/\s+maid$/i, "").replace(/^Bangladesh$/i, "Bangladeshi");
+          const maidType = maid.type.toLowerCase();
+          const typeLabel = maidType.includes("transfer") ? "Transfer Maid" : maidType.includes("ex") ? "Ex-Singapore Maid" : "New Maid";
+          const age = getMaidAge(maid);
+          const isShortlisted = shortlistRefs.includes(maid.referenceCode);
+          const shareMaid = async () => {
+            const profileUrl = `${window.location.origin}/maids/${encodeURIComponent(maid.referenceCode)}`;
+            if (navigator.share) {
+              try {
+                await navigator.share({ title: `${displayNationality} ${typeLabel}`, text: "View this maid profile", url: profileUrl });
+                return;
+              } catch (error) {
+                if (error instanceof DOMException && error.name === "AbortError") return;
+              }
+            }
+            try {
+              if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(profileUrl);
+              } else {
+                const input = document.createElement("textarea");
+                input.value = profileUrl;
+                input.setAttribute("readonly", "");
+                input.style.position = "fixed";
+                input.style.opacity = "0";
+                document.body.appendChild(input);
+                input.select();
+                const copied = document.execCommand("copy");
+                document.body.removeChild(input);
+                if (!copied) throw new Error("Clipboard unavailable");
+              }
+              toast.success("Profile link copied to clipboard");
+            } catch {
+              toast.error("Could not share this profile. Please copy the profile URL from your browser.");
+            }
+          };
           const cardContent = <>
-            <div className="nationality-preview-photo">
-              <img src={getPrimaryPhoto(maid)} alt={maid.fullName || `${nationality} helper`} loading="lazy" decoding="async" />
-            </div>
-            <p>{maid.nationality || `${nationality} maid`}</p>
-            {maid.religion && <p>{maid.religion}</p>}
-            {(maid.maritalStatus || age) && <p>{maid.maritalStatus || ""}{maid.maritalStatus && age ? " " : ""}{age ? `(${age})` : ""}</p>}
+            <div className="nationality-preview-photo"><img src={getPrimaryPhoto(maid)} alt={maid.fullName || `${nationality} helper`} loading="lazy" decoding="async" /></div>
+            <div className="nationality-preview-info"><p>{displayNationality}</p><p>{typeLabel}</p><p title={maid.fullName || "Maid name unavailable"}>{maid.fullName || "Name unavailable"}</p><p>{age && age > 0 ? `${age} years old` : "Age unavailable"}</p></div>
           </>;
           return (
-            isLoggedIn ? (
-              <Link key={maid.referenceCode} to={`/maids/${encodeURIComponent(maid.referenceCode)}`} className={`nationality-preview${mobileExtraClass}`} aria-label={`View ${maid.fullName || `${nationality} helper`} profile`}>
-                {cardContent}
-              </Link>
-            ) : (
-              <button key={maid.referenceCode} ref={(element) => { guestCardRefs.current[maid.referenceCode] = element; }} type="button" className={`nationality-preview is-locked${mobileExtraClass}`} onClick={() => openGuestPrompt(maid.referenceCode)} onMouseEnter={() => openGuestPrompt(maid.referenceCode)} onMouseLeave={closeGuestPrompt} onFocus={() => openGuestPrompt(maid.referenceCode)} onBlur={closeGuestPrompt} aria-label="Log in to view this helper's full profile">
-                {cardContent}
-              </button>
-            )
+            <article key={maid.referenceCode} className={`nationality-preview${isLoggedIn ? "" : " is-locked"}${mobileExtraClass}`}>
+              {isLoggedIn ? (
+                <Link to={`/maids/${encodeURIComponent(maid.referenceCode)}`} className="nationality-preview-main" aria-label={`View ${maid.fullName || `${nationality} helper`} profile`}>{cardContent}</Link>
+              ) : (
+                <button ref={(element) => { guestCardRefs.current[maid.referenceCode] = element; }} type="button" className="nationality-preview-main" onClick={() => openGuestPrompt(maid.referenceCode)} onMouseEnter={() => openGuestPrompt(maid.referenceCode)} onMouseLeave={closeGuestPrompt} onFocus={() => openGuestPrompt(maid.referenceCode)} onBlur={closeGuestPrompt} aria-label="Log in to view this helper's full profile">{cardContent}</button>
+              )}
+              <div className="nationality-preview-actions">
+                <button type="button" className={`nationality-preview-action${isShortlisted ? " is-saved" : ""}`} aria-label={isShortlisted ? "Remove from shortlist" : "Add to shortlist"} aria-pressed={isShortlisted} onClick={() => setShortlistRefs(toggleShortlistRef(maid.referenceCode))}><Heart size={22} fill={isShortlisted ? "currentColor" : "none"} /></button>
+                <button type="button" className="nationality-preview-action" aria-label="Share maid profile" onClick={() => { void shareMaid(); }}><Share2 size={21} /></button>
+              </div>
+            </article>
           );
         })}
       </div>

@@ -9467,34 +9467,25 @@ app.post(
     }
 
     const data = await loadData(c.env);
+    const admin = c.get("agencyAdmin") as AgencyAdminRecord;
     const existingRefCode = toTrimmedString(body.existingRefCode);
-    const incomingRef =
-      toTrimmedString(body.refCode) ||
-      toTrimmedString(
-        (agencyPayload as { caseReferenceNumber?: unknown }).caseReferenceNumber,
-      );
     const existingIndex = existingRefCode
-      ? data.employers.findIndex((item) => item.refCode === existingRefCode)
-      : incomingRef
-      ? data.employers.findIndex((item) => item.refCode === incomingRef)
+      ? data.employers.findIndex(
+          (item) => item.refCode === existingRefCode && (item.agencyId ?? 1) === admin.agencyId,
+        )
       : -1;
-
-    if (
-      incomingRef &&
-      existingRefCode &&
-      incomingRef !== existingRefCode &&
-      data.employers.some(
-        (item, index) => item.refCode === incomingRef && index !== existingIndex,
-      )
-    ) {
-      return c.json({ error: "Reference number already in use" }, 409);
+    if (existingRefCode && existingIndex === -1) {
+      return c.json({ error: "Contract not found. Reload the contract and try again." }, 404);
     }
 
     const id =
       existingIndex === -1
         ? data.counters.employers++
         : data.employers[existingIndex].id;
-    const refCode = incomingRef || formatEmployerRefCode(id);
+    let refCode = existingIndex === -1 ? formatEmployerRefCode(id) : data.employers[existingIndex].refCode;
+    while (existingIndex === -1 && data.employers.some((item) => item.refCode === refCode && (item.agencyId ?? 1) === admin.agencyId)) {
+      refCode = formatEmployerRefCode(data.counters.employers++);
+    }
     const normalizedAgency = {
       ...agencyPayload,
       caseReferenceNumber:
@@ -9505,7 +9496,7 @@ app.post(
 
     const employerRecord: EmployerContractRecord = {
       id,
-      agencyId: (c.get("agencyAdmin") as AgencyAdminRecord).agencyId,
+      agencyId: admin.agencyId,
       refCode,
       maid: maidPayload,
       agency: normalizedAgency,

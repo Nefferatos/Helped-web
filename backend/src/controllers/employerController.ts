@@ -46,8 +46,9 @@ export const getEmployerContract = async (req: Request, res: Response) => {
 export const saveEmployerContract = async (req: Request, res: Response) => {
   try {
     const agencyId = await getRequestAgencyId(req)
-    const { refCode, maid, agency, employer, spouse, familyMembers, notificationDate, documents } = req.body as {
+    const { refCode, existingRefCode, maid, agency, employer, spouse, familyMembers, notificationDate, documents } = req.body as {
       refCode?: string | null
+      existingRefCode?: string | null
       maid?: Record<string, unknown>
       agency?: Record<string, unknown>
       employer?: Record<string, unknown>
@@ -66,8 +67,13 @@ export const saveEmployerContract = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'employer.name is required' })
     }
 
+    if (existingRefCode && !(await getEmployerContractStore(existingRefCode, agencyId))) {
+      return res.status(404).json({ error: 'Contract not found. Reload the contract and try again.' })
+    }
+
     const saved = await saveEmployerContractStore({
       refCode,
+      existingRefCode,
       maid,
       agency,
       employer,

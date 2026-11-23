@@ -908,7 +908,6 @@ const MaidProfilePage = () => {
             {navSep}
             <button type="button" onClick={handleOpenEditWindow} className={navLink}>Edit This Maid</button>
             {navSep}
-            <button type="button" onClick={() => navigate(adminPath(`/maid/${encodeURIComponent(maid.referenceCode)}/full`))} className={navLink}>Full View</button>
             {navSep}
             <button type="button" onClick={() => setIsManagePhotosOpen(true)} className={navLink}>Manage Photos</button>
             {navSep}

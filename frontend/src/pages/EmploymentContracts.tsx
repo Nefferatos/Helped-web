@@ -24,6 +24,7 @@ import { readSafeJson } from "@/lib/safeJson";
 
 const mockEmployers = [
   {
+    recordRef: "06579",
     ref: "06579",
     date: "01-11-2014",
     employer: "Suresh Satyanarayana Balasubramanian",
@@ -33,6 +34,7 @@ const mockEmployers = [
 ];
 
 type EmployerRow = {
+  recordRef: string;
   ref: string;
   date: string;
   employer: string;
@@ -216,7 +218,7 @@ const EmploymentContracts = () => {
     if (selected.size === paginatedEmployers.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(paginatedEmployers.map((e) => e.ref)));
+      setSelected(new Set(paginatedEmployers.map((e) => e.recordRef)));
     }
   };
 
@@ -227,6 +229,7 @@ const EmploymentContracts = () => {
       ? employers.filter((r) =>
           [
             r.ref,
+            r.recordRef,
             r.employer,
             r.employerNationality,
             r.spouse,
@@ -287,7 +290,8 @@ const EmploymentContracts = () => {
         const agency = (record.agency as Record<string, unknown>) || {};
         const contractDate = String(agency.contractDate ?? "");
         return {
-          ref: String(record.refCode ?? "").trim(),
+          recordRef: String(record.refCode ?? "").trim(),
+          ref: String(agency.caseReferenceNumber ?? record.refCode ?? "").trim(),
           date: contractDate || String(record.updatedAt ?? record.createdAt ?? ""),
           employer: String(emp.name ?? ""),
           employerNationality: String(emp.nationality ?? ""),
@@ -299,7 +303,7 @@ const EmploymentContracts = () => {
         };
       });
 
-      setEmployers(sortByRefDesc(rows.filter((r) => r.ref)));
+      setEmployers(sortByRefDesc(rows.filter((r) => r.recordRef)));
     } catch (error) {
       setLoadError(
         error instanceof Error ? error.message : "Failed to load employers",
@@ -420,7 +424,7 @@ const EmploymentContracts = () => {
         `${refs.length} contract${refs.length === 1 ? "" : "s"} deleted`,
       );
       const deletedRefs = new Set(refs);
-      setEmployers((current) => current.filter((item) => !deletedRefs.has(item.ref)));
+      setEmployers((current) => current.filter((item) => !deletedRefs.has(item.recordRef)));
       setSelected(new Set());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete");
@@ -450,7 +454,7 @@ const EmploymentContracts = () => {
 
   const allSelected =
     paginatedEmployers.length > 0 &&
-    paginatedEmployers.every((e) => selected.has(e.ref));
+    paginatedEmployers.every((e) => selected.has(e.recordRef));
 
   return (
     <>
@@ -735,10 +739,10 @@ const EmploymentContracts = () => {
               </div>
             ) : (
               paginatedEmployers.map((emp, i) => {
-                const isSelected = selected.has(emp.ref);
+                const isSelected = selected.has(emp.recordRef);
                 return (
                   <div
-                    key={emp.ref}
+                    key={emp.recordRef}
                     className={`ec-row-enter ec-row-hover group grid cursor-pointer items-center gap-3 rounded-xl ${ROW_PX} py-3 transition-all ${
                       isSelected
                         ? "bg-emerald-50 border border-emerald-200"
@@ -752,7 +756,7 @@ const EmploymentContracts = () => {
                     onClick={() =>
                       navigate(
                         adminPath(
-                          `/employment-contracts/${encodeURIComponent(emp.ref)}`,
+                          `/employment-contracts/${encodeURIComponent(emp.recordRef)}`,
                         ),
                       )
                     }
@@ -831,7 +835,7 @@ const EmploymentContracts = () => {
                       className="flex justify-center"
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleSelect(emp.ref);
+                        toggleSelect(emp.recordRef);
                       }}
                     >
                       {isSelected ? (

@@ -76,7 +76,6 @@ const CATEGORY_NAMES = GENERATED_FORMS.map((f) => f.category);
 const NATIONALITY_OPTIONS = ["Singaporean","Singapore","Indian","Filipino","Indonesian","Myanmar","Sri Lankan","Bangladeshi","Malaysian","Chinese"];
 const INCOME_OPTIONS = ["$1,000 - $1,499","$1,500 - $1,999","$2,000 - $2,499","$2,500 - $2,999","$3,000 - $3,499","$3,500 - $3,999","$4,000 - $4,499","$4,500 - $4,999","$5,000 - $5,499","$5,500 - $5,999","$6,000 and above"];
 const MONTHS = ["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"];
-const DEFAULT_CASE_REFERENCE_NUMBER = "06583";
 
 /* ─── helpers ─── */
 const toText = (v: unknown) => String(v ?? "").trim();
@@ -313,9 +312,9 @@ const CategoryFileUpload = ({ category, hasTemplate, refCode, uploads, onUpload,
                 />
                 <Printer className="h-6 w-6 shrink-0 text-emerald-600 stroke-[1.35]" aria-hidden="true" />
                 <FileCheck2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                <button type="button" onClick={() => void openEmployerDocument(u, !/\.pdf$/i.test(u.name)).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold text-sky-700 hover:underline">{u.name}</button>
-                <button type="button" onClick={() => void openEmployerDocument(u, !/\.pdf$/i.test(u.name)).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="inline-flex shrink-0 items-center gap-0.5 rounded border border-sky-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50">
-                  {/\.pdf$/i.test(u.name) ? <><Eye className="h-2.5 w-2.5" />View</> : <><Download className="h-2.5 w-2.5" />Download</>}
+                <button type="button" onClick={() => void openEmployerDocument(u, !/\.pdf$/i.test(u.name)).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="min-w-0 flex-1 break-words text-left text-[14px] leading-5 font-semibold text-black hover:underline">{u.name}</button>
+                <button type="button" onClick={() => void openEmployerDocument(u, !/\.pdf$/i.test(u.name)).catch((error) => toast.error(error instanceof Error ? error.message : "Failed to open file"))} className="inline-flex shrink-0 items-center gap-1 rounded border border-sky-200 bg-white px-2 py-1 text-[12px] font-semibold text-gray-900 hover:bg-sky-50">
+                  {/\.pdf$/i.test(u.name) ? <><Eye className="h-3.5 w-3.5" />View</> : <><Download className="h-3.5 w-3.5" />Download</>}
                 </button>
                 {!readOnly && (
                   <button type="button" onClick={() => removeUpload(i)} className="shrink-0 text-gray-300 hover:text-red-400">
@@ -528,7 +527,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
     communicationToBuy: "",
   });
 
-  const [agency, setAgency] = useState({ caseReferenceNumber: isCreateMode ? DEFAULT_CASE_REFERENCE_NUMBER : refCode || "", contractDate: todayIsoDate(), dateOfEmploymentDay: "", dateOfEmploymentMonth: "", dateOfEmploymentYear: "", invoiceNumber: "", serviceFee: "", deposit: "", sipFee: "", medicalFee: "", transportFee: "", documentFee: "", placementFee: "", insuranceFee: "", agencyWitness: "", maidId: "", handlingInHospitalFee: "", extensionFee: "", discountedFee: "", balanceFee: "" });
+  const [agency, setAgency] = useState({ caseReferenceNumber: isCreateMode ? "" : refCode || "", contractDate: todayIsoDate(), dateOfEmploymentDay: "", dateOfEmploymentMonth: "", dateOfEmploymentYear: "", invoiceNumber: "", serviceFee: "", deposit: "", sipFee: "", medicalFee: "", transportFee: "", documentFee: "", placementFee: "", insuranceFee: "", agencyWitness: "", maidId: "", handlingInHospitalFee: "", extensionFee: "", discountedFee: "", balanceFee: "" });
   const [employer, setEmployer] = useState({ name: "", gender: "", dateOfBirthDay: "", dateOfBirthMonth: "", dateOfBirthYear: "", nationality: "", residentialStatus: "", nric: "", addressLine1: "", addressLine2: "", postalCode: "", typeOfResidence: "", occupation: "", company: "", email: "", residentialPhone: "", mobileNumber: "", monthlyCombinedIncome: "", existingEmployer: "", existingEmployerNric: "", monthlyContribution: "", dateOfEmployment: "" });
   const [notificationDate, setNotificationDate] = useState({ month: "", year: "" });
   const [spouse, setSpouse] = useState({ name: "", gender: "", dateOfBirthDay: "", dateOfBirthMonth: "", dateOfBirthYear: "", nationality: "", residentialStatus: "", nric: "", occupation: "", company: "" });
@@ -795,7 +794,8 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
 
       const body = {
         existingRefCode: refCode || null,
-        refCode: agency.caseReferenceNumber || refCode || null,
+        // refCode is the immutable record key; caseReferenceNumber is business data.
+        refCode: refCode || null,
         maid: maidPayload,
         agency,
         employer,
@@ -838,7 +838,6 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
 
   const ordinal = (n: number) => ["1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th"][n - 1] ?? `${n}th`;
   const maidPhoto = useMemo(() => getPrimaryPhoto(maid as unknown as Record<string, unknown>), [maid]);
-  const displayReferenceNumber = isCreateMode ? agency.caseReferenceNumber : refCode || agency.caseReferenceNumber;
   const showStepOne = !showStepTabs || activeStep === 1;
   const showStepTwo = !showStepTabs || activeStep === 2;
   const showStepThree = !showStepTabs || activeStep === 3;
@@ -912,9 +911,6 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
                 <h2 className="text-[19px] font-bold text-gray-900 leading-tight">
                   {isCreateMode ? "Create Employment Contract" : "Employment Contract Workspace"}
                 </h2>
-                <p className="text-[12px] text-gray-500 font-medium">
-                  Reference: <span className="font-bold text-emerald-700">{displayReferenceNumber || "—"}</span>
-                </p>
               </div>
             </div>
           </div>
@@ -1433,7 +1429,7 @@ export const EmploymentContractPage = ({ mode = "view" }: { mode?: EmploymentCon
               <div>
                 {DOCUMENT_SECTIONS.map((section) => (
                   <section key={section.title}>
-                    <h4 className="border-y border-blue-200 bg-[#c9def2] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 sm:px-4">
+                    <h4 className="border-y border-blue-200 bg-[#c9def2] px-3 py-2 text-[14px] font-extrabold tracking-wide text-black sm:px-4">
                       {section.title}
                     </h4>
                     <CategoryFileUpload
