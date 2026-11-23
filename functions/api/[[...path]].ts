@@ -12692,7 +12692,8 @@ app.post("/api/operations-board/placements", requireAgencyAdminAuth, canManageAg
   if (placementHook) runChatBackgroundTask(c, enqueueMakeWebhookEvent(c.env, "deployment_task_event", `placement:${placement.id}:created`, admin.agencyId, {
     event_type: "placement.created", agency_id: admin.agencyId, placement_id: placement.id,
     employer_id: placement.employer_id, applicant_reference: placement.maid_reference_code, ...(sourceRequestId ? { source_request_id: sourceRequestId } : {}),
-    selected_at: placement.created_at, checklist_ready: checklistReady,
+    selected_at: placement.created_at, checklist_ready: checklistReady, checklist_task_count: checklistTaskCount,
+    record_url: new URL(`/agencyadmin/operations/placements/${encodeURIComponent(placement.id)}`, c.req.url).toString(),
   }).catch((error) => console.error("Placement creation Make event could not be queued", errMsg(error))));
 
   return c.json({ placement, checklist: { ready: checklistReady, taskCount: checklistTaskCount }, makeEventConfigured: Boolean(placementHook) }, 201);
@@ -22826,7 +22827,7 @@ const deliverMakeWebhookOutboxRow = async (env: Bindings, deliveryId: string) =>
   }
 };
 
-const enqueueMakeWebhookEvent = async (env: Bindings, hook: MakeWebhookOutboxHook, eventId: string, agencyId: number | null, payload: Record<string, unknown>) => {
+const enqueueMakeWebhookEvent = async (env: Bindings, hook: MakeWebhookOutboxHook, eventId: string, agencyId: number | null, payload: Record<string, unknown>, deferDelivery = false) => {
   const config = getSupabaseAppDataConfig(env);
   if (!config) throw new Error("Durable Make delivery requires normalized Supabase storage");
   if (!makeWebhookUrlForOutbox(env, hook)) return "not_configured";
@@ -22844,7 +22845,10 @@ const enqueueMakeWebhookEvent = async (env: Bindings, hook: MakeWebhookOutboxHoo
   if (!findResponse.ok) throw new Error(`Unable to find Make outbox event (${findResponse.status}): ${await readSupabaseError(findResponse)}`);
   const [delivery] = await findResponse.json() as Array<{ id: string; status: string; next_attempt_at: string }>;
   if (!delivery) throw new Error("Make event was not persisted to the outbox");
-  if (delivery.status === "PENDING" && Date.parse(delivery.next_attempt_at) <= Date.now()) return deliverMakeWebhookOutboxRow(env, delivery.id);
+  if (delivery.status === "PENDING" && Date.parse(delivery.next_attempt_at) <= Date.now()) {
+    if (deferDelivery) return "pending";
+    return deliverMakeWebhookOutboxRow(env, delivery.id);
+  }
   if (delivery.status === "PENDING") return "pending_retry";
   return delivery.status.toLowerCase();
 };
