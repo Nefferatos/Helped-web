@@ -177,6 +177,7 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [startingPlacementId, setStartingPlacementId] = useState<number | null>(null)
   const [knowledge, setKnowledge] = useState({ sourceKey: '', title: '', category: 'SOP', content: '' })
   const [knowledgeDocuments, setKnowledgeDocuments] = useState<KnowledgeDocument[]>([])
+  const [showInactiveKnowledge, setShowInactiveKnowledge] = useState(false)
   const [knowledgeFile, setKnowledgeFile] = useState<File | null>(null)
   const knowledgeFileInputRef = useRef<HTMLInputElement>(null)
   const [knowledgeUploading, setKnowledgeUploading] = useState(false)
@@ -196,6 +197,11 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
   const [mediaLanguage, setMediaLanguage] = useState('en-US')
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [transcriptResult, setTranscriptResult] = useState<TranscriptResult | null>(null)
+
+  const visibleKnowledgeDocuments = knowledgeDocuments.filter((document) =>
+    showInactiveKnowledge ? !document.active : document.active,
+  )
+  const inactiveKnowledgeCount = knowledgeDocuments.filter((document) => !document.active).length
 
   const loadPlacements = async () => {
     setNotice('')
@@ -959,8 +965,57 @@ export default function AgencyOperationsCenterPage({ embedded = false }: { embed
               </div>
 
               <div className="rounded-2xl border border-border p-4">
-                <div className="mb-3 flex items-center justify-between"><span className="text-sm font-semibold text-black">Indexed agency documents</span><button type="button" disabled={knowledgeDocumentsLoading} onClick={() => void loadKnowledgeDocuments()} className="text-sm font-medium text-primary underline disabled:opacity-50">{knowledgeDocumentsLoading ? 'Refreshing…' : 'Refresh'}</button></div>
-                {knowledgeDocumentsLoading && knowledgeDocuments.length === 0 ? <p role="status" className="text-sm text-slate-600">Loading agency documents…</p> : knowledgeDocuments.length ? <div className="space-y-2">{knowledgeDocuments.map((document) => <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted p-3"><div><b className="text-sm text-foreground">{document.title}</b><p className="text-xs text-black">{document.category} · {document.current_version ? `v${document.current_version}` : 'legacy record'} · {document.ingestion_status || (document.active ? 'active' : 'inactive')}{document.source_file_name ? ` · ${document.source_file_name}` : ''}{document.processing_error ? ` · Error: ${document.processing_error}` : ''}</p></div><div className="flex gap-2"><button type="button" disabled={Boolean(reprocessingKnowledgeId || removingKnowledgeId) || !document.active} onClick={() => void reprocessKnowledgeDocument(document.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50">{reprocessingKnowledgeId === document.id ? 'Reprocessing…' : 'Reprocess'}</button>{document.active && <button type="button" disabled={Boolean(reprocessingKnowledgeId || removingKnowledgeId)} onClick={() => void removeKnowledgeDocument(document.id, document.title)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 disabled:opacity-50">{removingKnowledgeId === document.id ? 'Removing…' : 'Remove'}</button>}</div></div>)}</div> : <p className="text-sm text-black">No indexed agency documents found.</p>}
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-black">
+                    {showInactiveKnowledge ? 'Inactive agency documents' : 'Indexed agency documents'}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    {inactiveKnowledgeCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowInactiveKnowledge((current) => !current)}
+                        className="text-sm font-medium text-primary underline"
+                      >
+                        {showInactiveKnowledge ? 'Show active' : 'Show inactive (' + inactiveKnowledgeCount + ')'}
+                      </button>
+                    )}
+                    <button type="button" disabled={knowledgeDocumentsLoading} onClick={() => void loadKnowledgeDocuments()} className="text-sm font-medium text-primary underline disabled:opacity-50">
+                      {knowledgeDocumentsLoading ? 'Refreshing...' : 'Refresh'}
+                    </button>
+                  </div>
+                </div>
+                {knowledgeDocumentsLoading && knowledgeDocuments.length === 0 ? (
+                  <p role="status" className="text-sm text-slate-600">Loading agency documents...</p>
+                ) : visibleKnowledgeDocuments.length ? (
+                  <div className="space-y-2">
+                    {visibleKnowledgeDocuments.map((document) => (
+                      <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted p-3">
+                        <div>
+                          <b className="text-sm text-foreground">{document.title}</b>
+                          <p className="text-xs text-black">
+                            {document.category} · {document.current_version ? 'v' + document.current_version : 'legacy record'} · {document.ingestion_status || (document.active ? 'active' : 'inactive')}
+                            {document.source_file_name ? ' · ' + document.source_file_name : ''}
+                            {document.processing_error ? ' · Error: ' + document.processing_error : ''}
+                          </p>
+                        </div>
+                        {document.active && (
+                          <div className="flex gap-2">
+                            <button type="button" disabled={Boolean(reprocessingKnowledgeId || removingKnowledgeId)} onClick={() => void reprocessKnowledgeDocument(document.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50">
+                              {reprocessingKnowledgeId === document.id ? 'Reprocessing...' : 'Reprocess'}
+                            </button>
+                            <button type="button" disabled={Boolean(reprocessingKnowledgeId || removingKnowledgeId)} onClick={() => void removeKnowledgeDocument(document.id, document.title)} className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 disabled:opacity-50">
+                              {removingKnowledgeId === document.id ? 'Removing...' : 'Remove'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-black">
+                    {showInactiveKnowledge ? 'No inactive agency documents.' : 'No active indexed agency documents.'}
+                  </p>
+                )}
               </div>
 
               <div className="rounded-2xl bg-muted p-4">

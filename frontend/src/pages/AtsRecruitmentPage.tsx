@@ -641,13 +641,13 @@ const AtsRecruitmentPage = () => {
     durationMinutes?: number;
     calendarEventId?: string;
     sheetRowNumber?: number;
-  }): Promise<{ meetLink?: string; eventUrl?: string; eventId?: string; sheetRowNumber?: number; calendarSynced?: boolean }> => {
+  }): Promise<{ meetLink?: string; eventUrl?: string; eventId?: string; sheetRowNumber?: number; calendarSynced?: boolean; calendarEventSaved?: boolean }> => {
     const response = await fetch("/api/ai/hr-interview/email", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
       body: JSON.stringify({ ...payload, position: "Domestic helper recruitment" }),
     });
-    const data = await response.json().catch(() => ({})) as { error?: string; meetLink?: string; eventUrl?: string; eventId?: string; sheetRowNumber?: number; calendarSynced?: boolean };
+    const data = await response.json().catch(() => ({})) as { error?: string; meetLink?: string; eventUrl?: string; eventId?: string; sheetRowNumber?: number; calendarSynced?: boolean; calendarEventSaved?: boolean };
     if (!response.ok) throw new Error(data.error || "Email could not be sent. Check the interview email Make workflow.");
     return data;
   };
@@ -722,6 +722,7 @@ const AtsRecruitmentPage = () => {
       setActiveStageTab((current) => current === interviewTarget.status ? "Screening Interview" : current);
       setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: interviewMeetingLink.trim() || undefined, calendarEventId: interviewTarget.scheduledInterview?.calendarEventId || undefined, calendarEventUrl: interviewTarget.scheduledInterview?.calendarEventUrl || undefined });
       let calendarSyncConfirmed = false;
+      let makeResultCalendarEventSaved = false;
       let calendarEventUrl = interviewTarget.scheduledInterview?.calendarEventUrl || undefined;
       if (sendApplicantEmail && interviewTarget.email) {
         const makeResult = await deliverApplicantEmail({
@@ -744,12 +745,15 @@ const AtsRecruitmentPage = () => {
         });
         const makeMeetLink = makeResult.meetLink?.trim();
         calendarSyncConfirmed = makeResult.calendarSynced === true;
+        makeResultCalendarEventSaved = makeResult.calendarEventSaved === true;
         calendarEventUrl = makeResult.eventUrl || calendarEventUrl;
         if (makeMeetLink) {
           generatedMeetLink = makeMeetLink;
           meetingLinkToSave = makeMeetLink;
           setInterviewMeetingLink(makeMeetLink);
           setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: makeMeetLink, calendarEventId: makeResult.eventId, calendarEventUrl: makeResult.eventUrl });
+        } else if (makeResult.calendarEventSaved) {
+          setScheduledInterview({ applicationId: interviewTarget.id, applicantName: interviewTarget.name, date: scheduledDate, time: scheduledTime24, meetingLink: interviewMeetingLink.trim() || undefined, calendarEventId: makeResult.eventId, calendarEventUrl: makeResult.eventUrl });
         }
         if (!scheduleData.interview.id) throw new Error("The interview invitation was sent but the saved interview ID is missing. Contact the agency before retrying.");
         const invitationRecordResponse = await fetch(`/api/ats/interviews/${encodeURIComponent(String(scheduleData.interview.id))}/invitation-sent`, {
@@ -796,6 +800,8 @@ const AtsRecruitmentPage = () => {
             ? `The meeting link is ready for ${interviewTarget.name}. Open it now, or find it later in Recruiter Calendar.`
             : calendarSyncConfirmed
               ? `The invitation and calendar event were created, and the interview sheet row was saved for ${interviewTarget.name}.`
+              : makeResultCalendarEventSaved
+                ? `The invitation was sent and a Calendar event was created for ${interviewTarget.name}.`
               : `The interview invitation was sent to ${interviewTarget.name}. The email includes an importable calendar file; no connected Calendar and Sheets sync was confirmed.`
           : meetingLinkToSave
             ? `The interview for ${interviewTarget.name} is saved with its meeting link.`

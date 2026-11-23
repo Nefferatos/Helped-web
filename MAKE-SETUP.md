@@ -2,6 +2,26 @@
 
 ## Architecture
 
+## Customer Auto Replies for the AI Command Center
+
+Website chat and request-message replies use a separate Make AI Agent scenario.
+Import `make/customer-auto-reply-agent.blueprint.json`, create its webhook,
+connect a Make AI model, and switch the scenario on with immediate processing.
+Then set the webhook URL as the Worker secret:
+
+```bash
+npx wrangler secret put MAKE_CUSTOMER_AUTO_REPLY_WEBHOOK_URL
+```
+
+The same variable can go in `.dev.vars` for local development. Never put the
+webhook URL in a `VITE_*` variable or frontend code. In AI Command Center, ask
+to enable automatic replies for website chat, request messages, or both. Review
+and confirm the action card. The Worker supplies recent thread history and
+agency-approved knowledge, and saves an answer only when the agent returns
+valid JSON, no handoff, and confidence of at least 0.82. Errors, low confidence,
+and sensitive messages are handed to agency staff. WhatsApp remains a separate
+Make AI Agent scenario and has its own WhatsApp settings.
+
 ```
 Customer types message → React → Cloudflare Worker → Make.com Webhook → AI Agent → Response → Worker → React
 ```

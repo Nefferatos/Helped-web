@@ -18,6 +18,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import { getStoredClient } from "@/lib/clientAuth";
+import { normalizeAgencyDisplayName } from "@/lib/agencyDisplayName";
 import type {
   AgencyChatbotConfig,
   AgencyChatbotTopicOption,
@@ -793,10 +794,11 @@ function ChatAvatar({
 
 function MessageBubble({ message, isOwn }: { message: ChatMessage; isOwn: boolean }) {
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const initials = (message.senderName || "?").slice(0, 2).toUpperCase();
+  const displaySenderName = normalizeAgencyDisplayName(message.senderName) || message.senderName;
+  const initials = (displaySenderName || "?").slice(0, 2).toUpperCase();
   const avatarUrl = isOwn ? message.clientProfileImageUrl : message.agencyProfileImageUrl;
   const avatarFallback = isOwn ? "ME" : initials;
-  const avatarAlt = isOwn ? "Your profile" : message.senderName;
+  const avatarAlt = isOwn ? "Your profile" : displaySenderName;
 
   return (
     <div className={`sc-msg-row${isOwn ? " own" : ""}`}>
@@ -807,7 +809,7 @@ function MessageBubble({ message, isOwn }: { message: ChatMessage; isOwn: boolea
         className="sc-msg-avi"
       />
       <div className="sc-msg-col">
-        {!isOwn && <div className="sc-msg-sender">{message.senderName}</div>}
+        {!isOwn && <div className="sc-msg-sender">{displaySenderName}</div>}
         <div className="sc-bubble">{message.message && <div>{message.message}</div>}{message.attachments?.map((attachment, index) => <ChatAttachmentPreview key={`${message.id}-${index}`} attachment={attachment} viewer="client" />)}</div>
         <div className="sc-msg-time">{time}</div>
       </div>
@@ -966,7 +968,11 @@ const ClientSupportChat = () => {
       if (!response.ok || !data.conversations) {
         throw new Error(data.error || "Failed to load conversations");
       }
-      setConversations(data.conversations);
+      setConversations(data.conversations.map((conversation) => ({
+        ...conversation,
+        title: normalizeAgencyDisplayName(conversation.title) || conversation.title,
+        agencyName: normalizeAgencyDisplayName(conversation.agencyName) || conversation.agencyName,
+      })));
 
       const hasSelectedConversation = data.conversations.some(
         (conversation) =>
@@ -1075,26 +1081,6 @@ const ClientSupportChat = () => {
   useEffect(() => {
     void loadChatbotConfig();
   }, [loadChatbotConfig]);
-
-  // Keep the employer's presence current while the support chat is open.
-  // The agency inbox uses this heartbeat to render the green online indicator.
-  useEffect(() => {
-    const sendHeartbeat = () => {
-      if (document.visibilityState !== "visible") return;
-      void clientFetch(`/api/chats/client/heartbeat?${qs}`, {
-        method: "POST",
-        keepalive: true,
-      }).catch(() => {});
-    };
-
-    sendHeartbeat();
-    const interval = window.setInterval(sendHeartbeat, 20_000);
-    document.addEventListener("visibilitychange", sendHeartbeat);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", sendHeartbeat);
-    };
-  }, [qs]);
 
   useEffect(() => {
     let cancelled = false;

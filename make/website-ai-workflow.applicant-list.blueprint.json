@@ -1,0 +1,1530 @@
+{
+    "name":  "WEBSITE AI WORKFLOW - Applicant List invitation fix",
+    "flow":  [
+                 {
+                     "id":  1,
+                     "module":  "gateway:CustomWebHook",
+                     "version":  1,
+                     "parameters":  {
+                                        "hook":  3613363,
+                                        "maxResults":  1
+                                    },
+                     "mapper":  {
+
+                                },
+                     "metadata":  {
+                                      "designer":  {
+                                                       "x":  0,
+                                                       "y":  1050
+                                                   },
+                                      "restore":  {
+                                                      "parameters":  {
+                                                                         "hook":  {
+                                                                                      "data":  {
+                                                                                                   "editable":  "true"
+                                                                                               },
+                                                                                      "label":  "Ai Workflow New"
+                                                                                  }
+                                                                     }
+                                                  },
+                                      "parameters":  [
+                                                         {
+                                                             "name":  "hook",
+                                                             "type":  "hook:gateway-webhook",
+                                                             "label":  "Webhook",
+                                                             "required":  true
+                                                         },
+                                                         {
+                                                             "name":  "maxResults",
+                                                             "type":  "number",
+                                                             "label":  "Maximum number of results"
+                                                         }
+                                                     ]
+                                  }
+                 },
+                 {
+                     "id":  2,
+                     "module":  "builtin:BasicRouter",
+                     "version":  1,
+                     "mapper":  null,
+                     "metadata":  {
+                                      "designer":  {
+                                                       "x":  300,
+                                                       "y":  1050
+                                                   }
+                                  },
+                     "routes":  [
+                                    {
+                                        "flow":  [
+                                                     {
+                                                         "id":  10,
+                                                         "module":  "gateway:WebhookRespond",
+                                                         "version":  1,
+                                                         "parameters":  {
+
+                                                                        },
+                                                         "filter":  {
+                                                                        "name":  "Website inquiry completed",
+                                                                        "conditions":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "inquiry_pipeline",
+                                                                                                   "o":  "text:equal"
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                                    },
+                                                         "mapper":  {
+                                                                        "body":  "{\n  \"ok\": true,\n  \"scenario\": \"inquiry_pipeline\",\n  \"event\": \"inquiry.processed\",\n  \"inquiryId\": {{1.inquiryId}}\n}",
+                                                                        "status":  "200",
+                                                                        "headers":  [
+
+                                                                                    ]
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  553,
+                                                                                           "y":  0
+                                                                                       },
+                                                                          "restore":  {
+                                                                                          "expect":  {
+                                                                                                         "headers":  {
+                                                                                                                         "mode":  "chose"
+                                                                                                                     }
+                                                                                                     }
+                                                                                      },
+                                                                          "expect":  [
+                                                                                         {
+                                                                                             "name":  "status",
+                                                                                             "type":  "uinteger",
+                                                                                             "label":  "Status",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "min":  100
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "body",
+                                                                                             "type":  "any",
+                                                                                             "label":  "Body"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "headers",
+                                                                                             "spec":  [
+                                                                                                          {
+                                                                                                              "name":  "key",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Key",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  256
+                                                                                                                           }
+                                                                                                          },
+                                                                                                          {
+                                                                                                              "name":  "value",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Value",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  4096
+                                                                                                                           }
+                                                                                                          }
+                                                                                                      ],
+                                                                                             "type":  "array",
+                                                                                             "label":  "Custom headers",
+                                                                                             "validate":  {
+                                                                                                              "maxItems":  16
+                                                                                                          }
+                                                                                         }
+                                                                                     ]
+                                                                      }
+                                                     }
+                                                 ]
+                                    },
+                                    {
+                                        "flow":  [
+                                                     {
+                                                         "id":  11,
+                                                         "module":  "gateway:WebhookRespond",
+                                                         "version":  1,
+                                                         "parameters":  {
+
+                                                                        },
+                                                         "filter":  {
+                                                                        "name":  "Website lead created",
+                                                                        "conditions":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "lead_pipeline",
+                                                                                                   "o":  "text:equal"
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                                    },
+                                                         "mapper":  {
+                                                                        "body":  "{\n  \"ok\": true,\n  \"scenario\": \"lead_pipeline\",\n  \"event\": \"lead.created\",\n  \"leadId\": {{1.leadId}}\n}",
+                                                                        "status":  "200",
+                                                                        "headers":  [
+
+                                                                                    ]
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  600,
+                                                                                           "y":  300
+                                                                                       },
+                                                                          "restore":  {
+                                                                                          "expect":  {
+                                                                                                         "headers":  {
+                                                                                                                         "mode":  "chose"
+                                                                                                                     }
+                                                                                                     }
+                                                                                      },
+                                                                          "expect":  [
+                                                                                         {
+                                                                                             "name":  "status",
+                                                                                             "type":  "uinteger",
+                                                                                             "label":  "Status",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "min":  100
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "body",
+                                                                                             "type":  "any",
+                                                                                             "label":  "Body"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "headers",
+                                                                                             "spec":  [
+                                                                                                          {
+                                                                                                              "name":  "key",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Key",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  256
+                                                                                                                           }
+                                                                                                          },
+                                                                                                          {
+                                                                                                              "name":  "value",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Value",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  4096
+                                                                                                                           }
+                                                                                                          }
+                                                                                                      ],
+                                                                                             "type":  "array",
+                                                                                             "label":  "Custom headers",
+                                                                                             "validate":  {
+                                                                                                              "maxItems":  16
+                                                                                                          }
+                                                                                         }
+                                                                                     ]
+                                                                      }
+                                                     }
+                                                 ]
+                                    },
+                                    {
+                                        "flow":  [
+                                                     {
+                                                         "id":  12,
+                                                         "module":  "gateway:WebhookRespond",
+                                                         "version":  1,
+                                                         "parameters":  {
+
+                                                                        },
+                                                         "filter":  {
+                                                                        "name":  "HR interview session (no email type)",
+                                                                        "conditions":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "interview_pipeline",
+                                                                                                   "o":  "text:equal"
+                                                                                               },
+                                                                                               {
+                                                                                                   "a":  "{{1.type}}",
+                                                                                                   "o":  "text:empty"
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                                    },
+                                                         "mapper":  {
+                                                                        "body":  "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"interview.completed\"\n}",
+                                                                        "status":  "200",
+                                                                        "headers":  [
+
+                                                                                    ]
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  600,
+                                                                                           "y":  600
+                                                                                       }
+                                                                      }
+                                                     }
+                                                 ]
+                                    },
+                                    {
+                                        "flow":  [
+                                                     {
+                                                         "id":  20,
+                                                         "module":  "google-email:sendAnEmail",
+                                                         "version":  4,
+                                                         "parameters":  {
+                                                                            "__IMTCONN__":  ""
+                                                                        },
+                                                         "filter":  {
+                                                                        "name":  "Candidate passed interview Ã¢â‚¬â€ send email",
+                                                                        "conditions":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "interview_pipeline",
+                                                                                                   "o":  "text:equal"
+                                                                                               },
+                                                                                               {
+                                                                                                   "a":  "{{1.type}}",
+                                                                                                   "b":  "pass",
+                                                                                                   "o":  "text:equal"
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                                    },
+                                                         "mapper":  {
+                                                                        "to":  [
+                                                                                   "{{1.to}}"
+                                                                               ],
+                                                                        "content":  "\u003c!doctype html\u003e\r\n\u003chtml\u003e\r\n\u003chead\u003e\r\n  \u003cmeta charset=\"utf-8\"\u003e\r\n  \u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1\"\u003e\r\n  \u003ctitle\u003eApplication Update\u003c/title\u003e\r\n\u003c/head\u003e\r\n\r\n\u003cbody style=\"margin:0;padding:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#1f2937;\"\u003e\r\n\r\n\u003ctable role=\"presentation\"\r\n       width=\"100%\"\r\n       cellspacing=\"0\"\r\n       cellpadding=\"0\"\r\n       border=\"0\"\r\n       style=\"width:100%;background:#eef2f7;padding:32px 12px;\"\u003e\r\n\r\n  \u003ctr\u003e\r\n    \u003ctd align=\"center\"\u003e\r\n\r\n      \u003ctable role=\"presentation\"\r\n             width=\"600\"\r\n             cellspacing=\"0\"\r\n             cellpadding=\"0\"\r\n             border=\"0\"\r\n             style=\"width:100%;max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 35px rgba(15,23,42,0.10);\"\u003e\r\n\r\n        \u003c!-- HEADER --\u003e\r\n        \u003ctr\u003e\r\n          \u003ctd align=\"center\"\r\n              style=\"padding:32px 32px 28px;background:#12355b;\"\u003e\r\n\r\n            \u003cimg\r\n              src=\"https://rinzinagency.com/rinzin_logo.png\"\r\n              alt=\"At The Agency (formerly Rinzin Agency Pte. Ltd)\"\r\n              style=\"display:block;max-width:145px;max-height:62px;width:auto;height:auto;border:0;margin:0 auto;\"\r\n            \u003e\r\n\r\n            \u003cp style=\"margin:18px 0 0;color:#dbeafe;font-size:12px;line-height:1.4;letter-spacing:1.6px;text-transform:uppercase;font-weight:700;\"\u003e\r\n              Application Update\r\n            \u003c/p\u003e\r\n\r\n          \u003c/td\u003e\r\n        \u003c/tr\u003e\r\n\r\n        \u003c!-- MAIN CONTENT --\u003e\r\n        \u003ctr\u003e\r\n          \u003ctd style=\"padding:38px 36px 34px;\"\u003e\r\n\r\n            \u003c!-- GREETING --\u003e\r\n            \u003cp style=\"margin:0 0 10px;color:#64748b;font-size:14px;line-height:1.6;\"\u003e\r\n              Hello {{1.candidateName}},\r\n            \u003c/p\u003e\r\n\r\n            \u003c!-- TITLE --\u003e\r\n            \u003ch1 style=\"margin:0 0 20px;color:#12355b;font-size:26px;line-height:1.3;font-weight:700;\"\u003e\r\n              Congratulations! YouÃ¢â‚¬â„¢ve been shortlisted\r\n            \u003c/h1\u003e\r\n\r\n            \u003c!-- INTRODUCTION --\u003e\r\n            \u003cp style=\"margin:0 0 24px;font-size:15px;line-height:1.75;color:#334155;\"\u003e\r\n              WeÃ¢â‚¬â„¢re pleased to let you know that you have been shortlisted for the\r\n              \u003cstrong\u003e{{1.position}}\u003c/strong\u003e position with\r\n              \u003cstrong\u003eAt The Agency (formerly Rinzin Agency Pte. Ltd)\u003c/strong\u003e.\r\n            \u003c/p\u003e\r\n\r\n            \u003cp style=\"margin:0 0 26px;font-size:15px;line-height:1.75;color:#334155;\"\u003e\r\n              Thank you for taking the time to speak with us and for sharing your\r\n              experience during the interview process.\r\n            \u003c/p\u003e\r\n\r\n            \u003c!-- STATUS CARD --\u003e\r\n            \u003ctable role=\"presentation\"\r\n                   width=\"100%\"\r\n                   cellspacing=\"0\"\r\n                   cellpadding=\"0\"\r\n                   border=\"0\"\r\n                   style=\"width:100%;margin:0 0 26px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;\"\u003e\r\n\r\n              \u003ctr\u003e\r\n                \u003ctd style=\"padding:22px;\"\u003e\r\n\r\n                  \u003cp style=\"margin:0 0 12px;color:#166534;font-size:13px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;\"\u003e\r\n                    Shortlisted Candidate\r\n                  \u003c/p\u003e\r\n\r\n                  \u003ctable role=\"presentation\"\r\n                         width=\"100%\"\r\n                         cellspacing=\"0\"\r\n                         cellpadding=\"0\"\r\n                         border=\"0\"\u003e\r\n\r\n                    \u003ctr\u003e\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;width:120px;color:#64748b;font-size:14px;line-height:1.5;\"\u003e\r\n                        Position\r\n                      \u003c/td\u003e\r\n\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#1f2937;font-size:14px;line-height:1.5;font-weight:600;\"\u003e\r\n                        {{1.position}}\r\n                      \u003c/td\u003e\r\n                    \u003c/tr\u003e\r\n\r\n                    \u003ctr\u003e\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#64748b;font-size:14px;line-height:1.5;\"\u003e\r\n                        Interview Score\r\n                      \u003c/td\u003e\r\n\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#1f2937;font-size:14px;line-height:1.5;font-weight:600;\"\u003e\r\n                        {{1.rating}} / 100\r\n                      \u003c/td\u003e\r\n                    \u003c/tr\u003e\r\n\r\n                    \u003ctr\u003e\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#64748b;font-size:14px;line-height:1.5;\"\u003e\r\n                        Status\r\n                      \u003c/td\u003e\r\n\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#166534;font-size:14px;line-height:1.5;font-weight:700;\"\u003e\r\n                        Shortlisted\r\n                      \u003c/td\u003e\r\n                    \u003c/tr\u003e\r\n\r\n                  \u003c/table\u003e\r\n\r\n                \u003c/td\u003e\r\n              \u003c/tr\u003e\r\n\r\n            \u003c/table\u003e\r\n\r\n            \u003c!-- NEXT STEPS --\u003e\r\n            \u003cp style=\"margin:0 0 10px;color:#12355b;font-size:14px;line-height:1.6;font-weight:700;\"\u003e\r\n              What happens next?\r\n            \u003c/p\u003e\r\n\r\n            \u003cp style=\"margin:0 0 16px;font-size:14px;line-height:1.75;color:#475569;\"\u003e\r\n              Our placement team will contact you shortly to discuss the next\r\n              steps and provide any additional information you may need.\r\n            \u003c/p\u003e\r\n\r\n            \u003cp style=\"margin:0;font-size:14px;line-height:1.75;color:#475569;\"\u003e\r\n              Please keep an eye on your phone and email for further updates from\r\n              our team.\r\n            \u003c/p\u003e\r\n\r\n            \u003c!-- SIGNATURE --\u003e\r\n            \u003ctable role=\"presentation\"\r\n                   width=\"100%\"\r\n                   cellspacing=\"0\"\r\n                   cellpadding=\"0\"\r\n                   border=\"0\"\r\n                   style=\"margin-top:32px;\"\u003e\r\n\r\n              \u003ctr\u003e\r\n                \u003ctd style=\"padding-top:22px;border-top:1px solid #e5e7eb;\"\u003e\r\n\r\n                  \u003cp style=\"margin:0 0 6px;font-size:14px;line-height:1.6;color:#475569;\"\u003e\r\n                    Warm regards,\r\n                  \u003c/p\u003e\r\n\r\n                  \u003cp style=\"margin:0;color:#12355b;font-size:15px;line-height:1.6;font-weight:700;\"\u003e\r\n                    At The Agency (formerly Rinzin Agency Pte. Ltd)\r\n                  \u003c/p\u003e\r\n\r\n                \u003c/td\u003e\r\n              \u003c/tr\u003e\r\n\r\n            \u003c/table\u003e\r\n\r\n          \u003c/td\u003e\r\n        \u003c/tr\u003e\r\n\r\n        \u003c!-- FOOTER --\u003e\r\n        \u003ctr\u003e\r\n          \u003ctd align=\"center\"\r\n              style=\"padding:20px 28px;background:#f8fafc;border-top:1px solid #e5e7eb;\"\u003e\r\n\r\n            \u003cp style=\"margin:0;color:#94a3b8;font-size:11px;line-height:1.7;\"\u003e\r\n              This is an automated application update from\r\n              At The Agency (formerly Rinzin Agency Pte. Ltd).\r\n            \u003c/p\u003e\r\n\r\n          \u003c/td\u003e\r\n        \u003c/tr\u003e\r\n\r\n      \u003c/table\u003e\r\n\r\n      \u003c!-- OUTSIDE FOOTER --\u003e\r\n      \u003cp style=\"margin:16px 0 0;color:#94a3b8;font-size:11px;line-height:1.5;text-align:center;\"\u003e\r\n        Ã‚Â© At The Agency (formerly Rinzin Agency Pte. Ltd). All rights reserved.\r\n      \u003c/p\u003e\r\n\r\n    \u003c/td\u003e\r\n  \u003c/tr\u003e\r\n\r\n\u003c/table\u003e\r\n\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n```\r\n",
+                                                                        "subject":  "Congratulations Ã¢â‚¬â€ you have been shortlisted | At The Agency (formerly Rinzin Agency Pte. Ltd)",
+                                                                        "bodyType":  "rawHtml"
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  600,
+                                                                                           "y":  900
+                                                                                       },
+                                                                          "restore":  {
+                                                                                          "expect":  {
+                                                                                                         "cc":  {
+                                                                                                                    "mode":  "chose"
+                                                                                                                },
+                                                                                                         "to":  {
+                                                                                                                    "mode":  "chose",
+                                                                                                                    "items":  [
+                                                                                                                                  null
+                                                                                                                              ]
+                                                                                                                },
+                                                                                                         "bcc":  {
+                                                                                                                     "mode":  "chose"
+                                                                                                                 },
+                                                                                                         "from":  {
+                                                                                                                      "mode":  "chose",
+                                                                                                                      "label":  "Empty"
+                                                                                                                  },
+                                                                                                         "bodyType":  {
+                                                                                                                          "label":  "Raw HTML"
+                                                                                                                      },
+                                                                                                         "attachments":  {
+                                                                                                                             "mode":  "chose"
+                                                                                                                         },
+                                                                                                         "emailHeaders":  {
+                                                                                                                              "mode":  "chose"
+                                                                                                                          }
+                                                                                                     },
+                                                                                          "parameters":  {
+                                                                                                             "__IMTCONN__":  ""
+                                                                                                         }
+                                                                                      },
+                                                                          "parameters":  [
+                                                                                             {
+                                                                                                 "name":  "__IMTCONN__",
+                                                                                                 "type":  "account:google-email",
+                                                                                                 "label":  "Connection",
+                                                                                                 "required":  true
+                                                                                             }
+                                                                                         ],
+                                                                          "expect":  [
+                                                                                         {
+                                                                                             "name":  "to",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "email",
+                                                                                                          "label":  "Recipient email address",
+                                                                                                          "required":  true,
+                                                                                                          "validate":  true
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "To",
+                                                                                             "required":  true
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "subject",
+                                                                                             "type":  "text",
+                                                                                             "label":  "Subject"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "bodyType",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Body type",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "enum":  [
+                                                                                                                           "rawHtml",
+                                                                                                                           "collection"
+                                                                                                                       ]
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "attachments",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "spec":  [
+                                                                                                                       {
+                                                                                                                           "name":  "filename",
+                                                                                                                           "type":  "filename",
+                                                                                                                           "label":  "File name",
+                                                                                                                           "required":  true,
+                                                                                                                           "semantic":  "file:name"
+                                                                                                                       },
+                                                                                                                       {
+                                                                                                                           "name":  "data",
+                                                                                                                           "type":  "buffer",
+                                                                                                                           "label":  "Data",
+                                                                                                                           "required":  true,
+                                                                                                                           "semantic":  "file:data"
+                                                                                                                       }
+                                                                                                                   ],
+                                                                                                          "type":  "collection",
+                                                                                                          "label":  "Attachment"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "Attachments"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "from",
+                                                                                             "type":  "select",
+                                                                                             "label":  "From"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "cc",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "email",
+                                                                                                          "label":  "Recipient email address"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "CC recipients"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "bcc",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "email",
+                                                                                                          "label":  "Recipient email address"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "BCC recipients"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "emailHeaders",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "spec":  [
+                                                                                                                       {
+                                                                                                                           "name":  "key",
+                                                                                                                           "type":  "text",
+                                                                                                                           "label":  "Key",
+                                                                                                                           "required":  true
+                                                                                                                       },
+                                                                                                                       {
+                                                                                                                           "name":  "value",
+                                                                                                                           "type":  "text",
+                                                                                                                           "label":  "Value"
+                                                                                                                       }
+                                                                                                                   ],
+                                                                                                          "type":  "collection",
+                                                                                                          "label":  "Email header"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "Additional email headers"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "content",
+                                                                                             "type":  "text",
+                                                                                             "label":  "Content"
+                                                                                         }
+                                                                                     ]
+                                                                      }
+                                                     },
+                                                     {
+                                                         "id":  21,
+                                                         "module":  "gateway:WebhookRespond",
+                                                         "version":  1,
+                                                         "parameters":  {
+
+                                                                        },
+                                                         "mapper":  {
+                                                                        "body":  "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"pass\"\n}",
+                                                                        "status":  "200",
+                                                                        "headers":  [
+
+                                                                                    ]
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  900,
+                                                                                           "y":  900
+                                                                                       },
+                                                                          "restore":  {
+                                                                                          "expect":  {
+                                                                                                         "headers":  {
+                                                                                                                         "mode":  "chose"
+                                                                                                                     }
+                                                                                                     }
+                                                                                      },
+                                                                          "expect":  [
+                                                                                         {
+                                                                                             "name":  "status",
+                                                                                             "type":  "uinteger",
+                                                                                             "label":  "Status",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "min":  100
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "body",
+                                                                                             "type":  "any",
+                                                                                             "label":  "Body"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "headers",
+                                                                                             "spec":  [
+                                                                                                          {
+                                                                                                              "name":  "key",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Key",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  256
+                                                                                                                           }
+                                                                                                          },
+                                                                                                          {
+                                                                                                              "name":  "value",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Value",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  4096
+                                                                                                                           }
+                                                                                                          }
+                                                                                                      ],
+                                                                                             "type":  "array",
+                                                                                             "label":  "Custom headers",
+                                                                                             "validate":  {
+                                                                                                              "maxItems":  16
+                                                                                                          }
+                                                                                         }
+                                                                                     ]
+                                                                      }
+                                                     }
+                                                 ]
+                                    },
+                                    {
+                                        "flow":  [
+                                                     {
+                                                         "id":  22,
+                                                         "module":  "google-email:sendAnEmail",
+                                                         "version":  4,
+                                                         "parameters":  {
+                                                                            "__IMTCONN__":  ""
+                                                                        },
+                                                         "filter":  {
+                                                                        "name":  "Candidate not selected Ã¢â‚¬â€ send email",
+                                                                        "conditions":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "interview_pipeline",
+                                                                                                   "o":  "text:equal"
+                                                                                               },
+                                                                                               {
+                                                                                                   "a":  "{{1.type}}",
+                                                                                                   "b":  "fail",
+                                                                                                   "o":  "text:equal"
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                                    },
+                                                         "mapper":  {
+                                                                        "to":  [
+                                                                                   "{{1.to}}"
+                                                                               ],
+                                                                        "content":  "\u003c!doctype html\u003e\r\n\u003chtml\u003e\r\n\u003chead\u003e\r\n  \u003cmeta charset=\"utf-8\"\u003e\r\n  \u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1\"\u003e\r\n  \u003ctitle\u003eApplication Update\u003c/title\u003e\r\n\u003c/head\u003e\r\n\r\n\u003cbody style=\"margin:0;padding:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#1f2937;\"\u003e\r\n\r\n\u003ctable role=\"presentation\"\r\n       width=\"100%\"\r\n       cellspacing=\"0\"\r\n       cellpadding=\"0\"\r\n       border=\"0\"\r\n       style=\"width:100%;background:#eef2f7;padding:32px 12px;\"\u003e\r\n\r\n  \u003ctr\u003e\r\n    \u003ctd align=\"center\"\u003e\r\n\r\n      \u003ctable role=\"presentation\"\r\n             width=\"600\"\r\n             cellspacing=\"0\"\r\n             cellpadding=\"0\"\r\n             border=\"0\"\r\n             style=\"width:100%;max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 35px rgba(15,23,42,0.10);\"\u003e\r\n\r\n        \u003c!-- HEADER --\u003e\r\n        \u003ctr\u003e\r\n          \u003ctd align=\"center\"\r\n              style=\"padding:32px 32px 28px;background:#12355b;\"\u003e\r\n\r\n            \u003cimg\r\n              src=\"https://rinzinagency.com/rinzin_logo.png\"\r\n              alt=\"At The Agency (formerly Rinzin Agency Pte. Ltd)\"\r\n              style=\"display:block;max-width:145px;max-height:62px;width:auto;height:auto;border:0;margin:0 auto;\"\r\n            \u003e\r\n\r\n            \u003cp style=\"margin:18px 0 0;color:#dbeafe;font-size:12px;line-height:1.4;letter-spacing:1.6px;text-transform:uppercase;font-weight:700;\"\u003e\r\n              Application Update\r\n            \u003c/p\u003e\r\n\r\n          \u003c/td\u003e\r\n        \u003c/tr\u003e\r\n\r\n        \u003c!-- MAIN CONTENT --\u003e\r\n        \u003ctr\u003e\r\n          \u003ctd style=\"padding:38px 36px 34px;\"\u003e\r\n\r\n            \u003c!-- GREETING --\u003e\r\n            \u003cp style=\"margin:0 0 10px;color:#64748b;font-size:14px;line-height:1.6;\"\u003e\r\n              Hello {{1.candidateName}},\r\n            \u003c/p\u003e\r\n\r\n            \u003c!-- TITLE --\u003e\r\n            \u003ch1 style=\"margin:0 0 20px;color:#12355b;font-size:26px;line-height:1.3;font-weight:700;\"\u003e\r\n              Thank you for your time and interest\r\n            \u003c/h1\u003e\r\n\r\n            \u003c!-- INTRODUCTION --\u003e\r\n            \u003cp style=\"margin:0 0 20px;font-size:15px;line-height:1.75;color:#334155;\"\u003e\r\n              Thank you for taking the time to interview with\r\n              \u003cstrong\u003eAt The Agency (formerly Rinzin Agency Pte. Ltd)\u003c/strong\u003e\r\n              for the \u003cstrong\u003e{{1.position}}\u003c/strong\u003e position.\r\n            \u003c/p\u003e\r\n\r\n            \u003cp style=\"margin:0 0 26px;font-size:15px;line-height:1.75;color:#334155;\"\u003e\r\n              We appreciate the opportunity to learn more about your experience,\r\n              background, and interest in joining our team.\r\n            \u003c/p\u003e\r\n\r\n            \u003c!-- APPLICATION STATUS CARD --\u003e\r\n            \u003ctable role=\"presentation\"\r\n                   width=\"100%\"\r\n                   cellspacing=\"0\"\r\n                   cellpadding=\"0\"\r\n                   border=\"0\"\r\n                   style=\"width:100%;margin:0 0 26px;background:#fffaf0;border:1px solid #fde3ae;border-radius:12px;\"\u003e\r\n\r\n              \u003ctr\u003e\r\n                \u003ctd style=\"padding:22px;\"\u003e\r\n\r\n                  \u003cp style=\"margin:0 0 10px;color:#9a6700;font-size:13px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;\"\u003e\r\n                    Application Status\r\n                  \u003c/p\u003e\r\n\r\n                  \u003cp style=\"margin:0;font-size:15px;line-height:1.75;color:#475569;\"\u003e\r\n                    After careful consideration, we have decided not to proceed\r\n                    with your application for the \u003cstrong\u003e{{1.position}}\u003c/strong\u003e\r\n                    position at this time.\r\n                  \u003c/p\u003e\r\n\r\n                \u003c/td\u003e\r\n              \u003c/tr\u003e\r\n\r\n            \u003c/table\u003e\r\n\r\n            \u003c!-- CLOSING MESSAGE --\u003e\r\n            \u003cp style=\"margin:0 0 16px;font-size:14px;line-height:1.75;color:#475569;\"\u003e\r\n              We sincerely appreciate the time and effort you invested throughout\r\n              the application and interview process.\r\n            \u003c/p\u003e\r\n\r\n            \u003cp style=\"margin:0;font-size:14px;line-height:1.75;color:#475569;\"\u003e\r\n              We encourage you to consider applying for future opportunities\r\n              with us that may better match your experience and qualifications.\r\n              We wish you every success in your job search and future career.\r\n            \u003c/p\u003e\r\n\r\n            \u003c!-- SIGNATURE --\u003e\r\n            \u003ctable role=\"presentation\"\r\n                   width=\"100%\"\r\n                   cellspacing=\"0\"\r\n                   cellpadding=\"0\"\r\n                   border=\"0\"\r\n                   style=\"margin-top:32px;\"\u003e\r\n\r\n              \u003ctr\u003e\r\n                \u003ctd style=\"padding-top:22px;border-top:1px solid #e5e7eb;\"\u003e\r\n\r\n                  \u003cp style=\"margin:0 0 6px;font-size:14px;line-height:1.6;color:#475569;\"\u003e\r\n                    Warm regards,\r\n                  \u003c/p\u003e\r\n\r\n                  \u003cp style=\"margin:0;color:#12355b;font-size:15px;line-height:1.6;font-weight:700;\"\u003e\r\n                    At The Agency (formerly Rinzin Agency Pte. Ltd)\r\n                  \u003c/p\u003e\r\n\r\n                \u003c/td\u003e\r\n              \u003c/tr\u003e\r\n\r\n            \u003c/table\u003e\r\n\r\n          \u003c/td\u003e\r\n        \u003c/tr\u003e\r\n\r\n        \u003c!-- FOOTER --\u003e\r\n        \u003ctr\u003e\r\n          \u003ctd align=\"center\"\r\n              style=\"padding:20px 28px;background:#f8fafc;border-top:1px solid #e5e7eb;\"\u003e\r\n\r\n            \u003cp style=\"margin:0;color:#94a3b8;font-size:11px;line-height:1.7;\"\u003e\r\n              This is an automated application update from\r\n              At The Agency (formerly Rinzin Agency Pte. Ltd).\r\n            \u003c/p\u003e\r\n\r\n          \u003c/td\u003e\r\n        \u003c/tr\u003e\r\n\r\n      \u003c/table\u003e\r\n\r\n      \u003c!-- OUTSIDE FOOTER --\u003e\r\n      \u003cp style=\"margin:16px 0 0;color:#94a3b8;font-size:11px;line-height:1.5;text-align:center;\"\u003e\r\n        Ã‚Â© At The Agency (formerly Rinzin Agency Pte. Ltd). All rights reserved.\r\n      \u003c/p\u003e\r\n\r\n    \u003c/td\u003e\r\n  \u003c/tr\u003e\r\n\r\n\u003c/table\u003e\r\n\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n```\r\n",
+                                                                        "subject":  "Update on your application | At The Agency (formerly Rinzin Agency Pte. Ltd)",
+                                                                        "bodyType":  "rawHtml"
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  600,
+                                                                                           "y":  1200
+                                                                                       },
+                                                                          "restore":  {
+                                                                                          "expect":  {
+                                                                                                         "cc":  {
+                                                                                                                    "mode":  "chose"
+                                                                                                                },
+                                                                                                         "to":  {
+                                                                                                                    "mode":  "chose",
+                                                                                                                    "items":  [
+                                                                                                                                  null
+                                                                                                                              ]
+                                                                                                                },
+                                                                                                         "bcc":  {
+                                                                                                                     "mode":  "chose"
+                                                                                                                 },
+                                                                                                         "from":  {
+                                                                                                                      "mode":  "chose",
+                                                                                                                      "label":  "Empty"
+                                                                                                                  },
+                                                                                                         "bodyType":  {
+                                                                                                                          "label":  "Raw HTML"
+                                                                                                                      },
+                                                                                                         "attachments":  {
+                                                                                                                             "mode":  "chose"
+                                                                                                                         },
+                                                                                                         "emailHeaders":  {
+                                                                                                                              "mode":  "chose"
+                                                                                                                          }
+                                                                                                     },
+                                                                                          "parameters":  {
+                                                                                                             "__IMTCONN__":  ""
+                                                                                                         }
+                                                                                      },
+                                                                          "parameters":  [
+                                                                                             {
+                                                                                                 "name":  "__IMTCONN__",
+                                                                                                 "type":  "account:google-email",
+                                                                                                 "label":  "Connection",
+                                                                                                 "required":  true
+                                                                                             }
+                                                                                         ],
+                                                                          "expect":  [
+                                                                                         {
+                                                                                             "name":  "to",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "email",
+                                                                                                          "label":  "Recipient email address",
+                                                                                                          "required":  true,
+                                                                                                          "validate":  true
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "To",
+                                                                                             "required":  true
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "subject",
+                                                                                             "type":  "text",
+                                                                                             "label":  "Subject"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "bodyType",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Body type",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "enum":  [
+                                                                                                                           "rawHtml",
+                                                                                                                           "collection"
+                                                                                                                       ]
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "attachments",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "spec":  [
+                                                                                                                       {
+                                                                                                                           "name":  "filename",
+                                                                                                                           "type":  "filename",
+                                                                                                                           "label":  "File name",
+                                                                                                                           "required":  true,
+                                                                                                                           "semantic":  "file:name"
+                                                                                                                       },
+                                                                                                                       {
+                                                                                                                           "name":  "data",
+                                                                                                                           "type":  "buffer",
+                                                                                                                           "label":  "Data",
+                                                                                                                           "required":  true,
+                                                                                                                           "semantic":  "file:data"
+                                                                                                                       }
+                                                                                                                   ],
+                                                                                                          "type":  "collection",
+                                                                                                          "label":  "Attachment"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "Attachments"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "from",
+                                                                                             "type":  "select",
+                                                                                             "label":  "From"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "cc",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "email",
+                                                                                                          "label":  "Recipient email address"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "CC recipients"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "bcc",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "email",
+                                                                                                          "label":  "Recipient email address"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "BCC recipients"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "emailHeaders",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "spec":  [
+                                                                                                                       {
+                                                                                                                           "name":  "key",
+                                                                                                                           "type":  "text",
+                                                                                                                           "label":  "Key",
+                                                                                                                           "required":  true
+                                                                                                                       },
+                                                                                                                       {
+                                                                                                                           "name":  "value",
+                                                                                                                           "type":  "text",
+                                                                                                                           "label":  "Value"
+                                                                                                                       }
+                                                                                                                   ],
+                                                                                                          "type":  "collection",
+                                                                                                          "label":  "Email header"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "Additional email headers"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "content",
+                                                                                             "type":  "text",
+                                                                                             "label":  "Content"
+                                                                                         }
+                                                                                     ]
+                                                                      }
+                                                     },
+                                                     {
+                                                         "id":  23,
+                                                         "module":  "gateway:WebhookRespond",
+                                                         "version":  1,
+                                                         "parameters":  {
+
+                                                                        },
+                                                         "mapper":  {
+                                                                        "body":  "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"fail\"\n}",
+                                                                        "status":  "200",
+                                                                        "headers":  [
+
+                                                                                    ]
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  900,
+                                                                                           "y":  1200
+                                                                                       },
+                                                                          "restore":  {
+                                                                                          "expect":  {
+                                                                                                         "headers":  {
+                                                                                                                         "mode":  "chose"
+                                                                                                                     }
+                                                                                                     }
+                                                                                      },
+                                                                          "expect":  [
+                                                                                         {
+                                                                                             "name":  "status",
+                                                                                             "type":  "uinteger",
+                                                                                             "label":  "Status",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "min":  100
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "body",
+                                                                                             "type":  "any",
+                                                                                             "label":  "Body"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "headers",
+                                                                                             "spec":  [
+                                                                                                          {
+                                                                                                              "name":  "key",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Key",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  256
+                                                                                                                           }
+                                                                                                          },
+                                                                                                          {
+                                                                                                              "name":  "value",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Value",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  4096
+                                                                                                                           }
+                                                                                                          }
+                                                                                                      ],
+                                                                                             "type":  "array",
+                                                                                             "label":  "Custom headers",
+                                                                                             "validate":  {
+                                                                                                              "maxItems":  16
+                                                                                                          }
+                                                                                         }
+                                                                                     ]
+                                                                      }
+                                                     }
+                                                 ]
+                                    },
+                                    {
+                                        "flow":  [
+                                                     {
+                                                         "id":  26,
+                                                         "module":  "google-calendar:createAnEvent",
+                                                         "version":  5,
+                                                         "parameters":  {
+                                                                            "__IMTCONN__":  ""
+                                                                        },
+                                                         "filter":  {
+                                                                        "name":  "Interview invitation Ã¢â‚¬â€ create meeting",
+                                                                        "conditions":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "interview_pipeline",
+                                                                                                   "o":  "text:equal"
+                                                                                               },
+                                                                                               {
+                                                                                                   "a":  "{{1.type}}",
+                                                                                                   "b":  "interview_invitation",
+                                                                                                   "o":  "text:equal"
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                                    },
+                                                         "mapper":  {
+                                                                        "end":  "{{addMinutes(parseDate(1.scheduledAt; \"YYYY-MM-DD[T]HH:mm:ss.SSSZ\"; \"UTC\"); ifempty(1.durationMinutes; 30))}}",
+                                                                        "start":  "{{parseDate(1.scheduledAt; \"YYYY-MM-DD[T]HH:mm:ss.SSSZ\"; \"UTC\")}}",
+                                                                        "select":  "detail",
+                                                                        "summary":  "At The Agency interview Ã¢â‚¬â€ {{1.candidateName}}",
+                                                                        "calendar":  "primary",
+                                                                        "attendees":  [
+                                                                                          {
+                                                                                              "email":  "{{1.to}}"
+                                                                                          }
+                                                                                      ],
+                                                                        "visibility":  "default",
+                                                                        "allDayEvent":  false,
+                                                                        "description":  "AI-assisted interview for {{1.candidateName}}. Position: {{1.position}}.",
+                                                                        "sendUpdates":  "all",
+                                                                        "transparency":  "opaque",
+                                                                        "conferenceDate":  true,
+                                                                        "guestPermissions":  {
+                                                                                                 "guestsCanModify":  false,
+                                                                                                 "guestsCanInviteOthers":  true,
+                                                                                                 "guestsCanSeeOtherGuests":  true
+                                                                                             }
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  600,
+                                                                                           "y":  1500
+                                                                                       },
+                                                                          "setupValidation":  {
+                                                                                                  "result":  {
+                                                                                                                 "valid":  true,
+                                                                                                                 "fields":  [
+
+                                                                                                                            ]
+                                                                                                             },
+                                                                                                  "version":  1,
+                                                                                                  "configuration":  "8cbae44a5c13c5ff"
+                                                                                              },
+                                                                          "restore":  {
+                                                                                          "expect":  {
+                                                                                                         "select":  {
+                                                                                                                        "label":  "In Detail"
+                                                                                                                    },
+                                                                                                         "colorId":  {
+                                                                                                                         "mode":  "chose",
+                                                                                                                         "label":  "Empty"
+                                                                                                                     },
+                                                                                                         "calendar":  {
+                                                                                                                          "mode":  "chose",
+                                                                                                                          "label":  "Primary calendar (select your MAID SCHEDULE calendar manually if desired)"
+                                                                                                                      },
+                                                                                                         "attendees":  {
+                                                                                                                           "mode":  "chose",
+                                                                                                                           "items":  [
+                                                                                                                                         null
+                                                                                                                                     ]
+                                                                                                                       },
+                                                                                                         "eventType":  {
+                                                                                                                           "mode":  "chose",
+                                                                                                                           "label":  "Empty"
+                                                                                                                       },
+                                                                                                         "overrides":  {
+                                                                                                                           "mode":  "chose"
+                                                                                                                       },
+                                                                                                         "recurrence":  {
+                                                                                                                            "mode":  "chose"
+                                                                                                                        },
+                                                                                                         "visibility":  {
+                                                                                                                            "mode":  "chose",
+                                                                                                                            "label":  "Default"
+                                                                                                                        },
+                                                                                                         "allDayEvent":  {
+                                                                                                                             "mode":  "chose"
+                                                                                                                         },
+                                                                                                         "attachments":  {
+                                                                                                                             "mode":  "chose"
+                                                                                                                         },
+                                                                                                         "sendUpdates":  {
+                                                                                                                             "mode":  "chose",
+                                                                                                                             "label":  "To All Guests"
+                                                                                                                         },
+                                                                                                         "transparency":  {
+                                                                                                                              "mode":  "chose",
+                                                                                                                              "label":  "Busy"
+                                                                                                                          },
+                                                                                                         "conferenceDate":  {
+                                                                                                                                "mode":  "chose"
+                                                                                                                            }
+                                                                                                     },
+                                                                                          "parameters":  {
+                                                                                                             "__IMTCONN__":  ""
+                                                                                                         }
+                                                                                      },
+                                                                          "parameters":  [
+                                                                                             {
+                                                                                                 "name":  "__IMTCONN__",
+                                                                                                 "type":  "account:google",
+                                                                                                 "label":  "Connection",
+                                                                                                 "required":  true
+                                                                                             }
+                                                                                         ],
+                                                                          "expect":  [
+                                                                                         {
+                                                                                             "name":  "select",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Create an Event",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "enum":  [
+                                                                                                                           "quick",
+                                                                                                                           "detail"
+                                                                                                                       ]
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "calendar",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Calendar ID",
+                                                                                             "required":  true
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "summary",
+                                                                                             "type":  "text",
+                                                                                             "label":  "Event Name",
+                                                                                             "required":  true
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "conferenceDate",
+                                                                                             "type":  "boolean",
+                                                                                             "label":  "Add Google Meet Video Conferencing",
+                                                                                             "required":  true
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "attendees",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "spec":  [
+                                                                                                                       {
+                                                                                                                           "name":  "displayName",
+                                                                                                                           "type":  "text",
+                                                                                                                           "label":  "Name"
+                                                                                                                       },
+                                                                                                                       {
+                                                                                                                           "name":  "email",
+                                                                                                                           "type":  "email",
+                                                                                                                           "label":  "Email",
+                                                                                                                           "required":  true
+                                                                                                                       }
+                                                                                                                   ],
+                                                                                                          "type":  "collection",
+                                                                                                          "label":  "Attendee"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "Attendees"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "allDayEvent",
+                                                                                             "type":  "boolean",
+                                                                                             "label":  "All Day Event",
+                                                                                             "required":  true
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "start",
+                                                                                             "time":  true,
+                                                                                             "type":  "date",
+                                                                                             "label":  "Start Date",
+                                                                                             "required":  true
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "end",
+                                                                                             "time":  true,
+                                                                                             "type":  "date",
+                                                                                             "label":  "End Date"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "duration",
+                                                                                             "type":  "time",
+                                                                                             "label":  "Duration"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "eventType",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Event Type",
+                                                                                             "validate":  {
+                                                                                                              "enum":  [
+                                                                                                                           "outOfOffice",
+                                                                                                                           "focusTime"
+                                                                                                                       ]
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "colorId",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Color"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "description",
+                                                                                             "type":  "text",
+                                                                                             "label":  "Description"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "location",
+                                                                                             "type":  "text",
+                                                                                             "label":  "Location"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "useDefault",
+                                                                                             "type":  "boolean",
+                                                                                             "label":  "Use the default reminder settings for this event"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "overrides",
+                                                                                             "spec":  [
+                                                                                                          {
+                                                                                                              "name":  "method",
+                                                                                                              "type":  "select",
+                                                                                                              "label":  "Method",
+                                                                                                              "options":  [
+                                                                                                                              {
+                                                                                                                                  "label":  "Email",
+                                                                                                                                  "value":  "email"
+                                                                                                                              },
+                                                                                                                              {
+                                                                                                                                  "label":  "Pop-up",
+                                                                                                                                  "value":  "popup"
+                                                                                                                              }
+                                                                                                                          ],
+                                                                                                              "required":  true
+                                                                                                          },
+                                                                                                          {
+                                                                                                              "name":  "minutes",
+                                                                                                              "type":  "uinteger",
+                                                                                                              "label":  "Minutes",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  40320
+                                                                                                                           }
+                                                                                                          }
+                                                                                                      ],
+                                                                                             "type":  "array",
+                                                                                             "label":  "Reminders",
+                                                                                             "validate":  {
+                                                                                                              "maxItems":  5
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "transparency",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Show me as",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "enum":  [
+                                                                                                                           "opaque",
+                                                                                                                           "transparent"
+                                                                                                                       ]
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "visibility",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Visibility",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "enum":  [
+                                                                                                                           "default",
+                                                                                                                           "public",
+                                                                                                                           "private"
+                                                                                                                       ]
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "sendUpdates",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Send notifications about the event creation",
+                                                                                             "validate":  {
+                                                                                                              "enum":  [
+                                                                                                                           "all",
+                                                                                                                           "externalOnly",
+                                                                                                                           "none"
+                                                                                                                       ]
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "guestPermissions",
+                                                                                             "spec":  [
+                                                                                                          {
+                                                                                                              "name":  "guestsCanModify",
+                                                                                                              "type":  "boolean",
+                                                                                                              "label":  "Modify event",
+                                                                                                              "required":  true
+                                                                                                          },
+                                                                                                          {
+                                                                                                              "name":  "guestsCanInviteOthers",
+                                                                                                              "type":  "boolean",
+                                                                                                              "label":  "Invite others",
+                                                                                                              "required":  true
+                                                                                                          },
+                                                                                                          {
+                                                                                                              "name":  "guestsCanSeeOtherGuests",
+                                                                                                              "type":  "boolean",
+                                                                                                              "label":  "See guest list",
+                                                                                                              "required":  true
+                                                                                                          }
+                                                                                                      ],
+                                                                                             "type":  "collection",
+                                                                                             "label":  "Guest Permissions"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "recurrence",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "text",
+                                                                                                          "label":  "Value"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "Recurrence"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "attachments",
+                                                                                             "spec":  [
+                                                                                                          {
+                                                                                                              "name":  "fileUrl",
+                                                                                                              "type":  "url",
+                                                                                                              "label":  "File URL",
+                                                                                                              "required":  true
+                                                                                                          }
+                                                                                                      ],
+                                                                                             "type":  "array",
+                                                                                             "label":  "Attachments"
+                                                                                         }
+                                                                                     ]
+                                                                      }
+                                                     },
+                                                     {
+                                                         "id":  24,
+                                                         "module":  "google-email:sendAnEmail",
+                                                         "version":  4,
+                                                         "parameters":  {
+                                                                            "__IMTCONN__":  ""
+                                                                        },
+                                                         "mapper":  {
+                                                                        "to":  [
+                                                                                   "{{1.to}}"
+                                                                               ],
+                                                                        "content":  "\u003c!doctype html\u003e\r\n\u003chtml\u003e\r\n\u003chead\u003e\r\n  \u003cmeta charset=\"utf-8\"\u003e\r\n  \u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1\"\u003e\r\n  \u003ctitle\u003eInterview Invitation\u003c/title\u003e\r\n\u003c/head\u003e\r\n\r\n\u003cbody style=\"margin:0;padding:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#1f2937;\"\u003e\r\n\r\n\u003ctable role=\"presentation\"\r\n       width=\"100%\"\r\n       cellspacing=\"0\"\r\n       cellpadding=\"0\"\r\n       border=\"0\"\r\n       style=\"width:100%;background:#eef2f7;padding:32px 12px;\"\u003e\r\n\r\n  \u003ctr\u003e\r\n    \u003ctd align=\"center\"\u003e\r\n\r\n      \u003ctable role=\"presentation\"\r\n             width=\"600\"\r\n             cellspacing=\"0\"\r\n             cellpadding=\"0\"\r\n             border=\"0\"\r\n             style=\"width:100%;max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 35px rgba(15,23,42,0.10);\"\u003e\r\n\r\n        \u003c!-- HEADER --\u003e\r\n        \u003ctr\u003e\r\n          \u003ctd align=\"center\"\r\n              style=\"padding:32px 32px 28px;background:#12355b;\"\u003e\r\n\r\n            \u003cimg\r\n              src=\"https://rinzinagency.com/rinzin_logo.png\"\r\n              alt=\"At The Agency (formerly Rinzin Agency Pte. Ltd)\"\r\n              style=\"display:block;max-width:145px;max-height:62px;width:auto;height:auto;border:0;margin:0 auto;\"\r\n            \u003e\r\n\r\n            \u003cp style=\"margin:18px 0 0;color:#dbeafe;font-size:12px;line-height:1.4;letter-spacing:1.6px;text-transform:uppercase;font-weight:700;\"\u003e\r\n              Interview Invitation\r\n            \u003c/p\u003e\r\n\r\n          \u003c/td\u003e\r\n        \u003c/tr\u003e\r\n\r\n        \u003c!-- MAIN CONTENT --\u003e\r\n        \u003ctr\u003e\r\n          \u003ctd style=\"padding:38px 36px 34px;\"\u003e\r\n\r\n            \u003c!-- GREETING --\u003e\r\n            \u003cp style=\"margin:0 0 10px;color:#64748b;font-size:14px;line-height:1.6;\"\u003e\r\n              Hello {{1.candidateName}},\r\n            \u003c/p\u003e\r\n\r\n            \u003c!-- TITLE --\u003e\r\n            \u003ch1 style=\"margin:0 0 20px;color:#12355b;font-size:26px;line-height:1.3;font-weight:700;\"\u003e\r\n              YouÃ¢â‚¬â„¢ve been invited to an interview\r\n            \u003c/h1\u003e\r\n\r\n            \u003c!-- INTRODUCTION --\u003e\r\n            \u003cp style=\"margin:0 0 26px;font-size:15px;line-height:1.75;color:#334155;\"\u003e\r\n              Thank you for your interest in joining\r\n              \u003cstrong\u003eAt The Agency (formerly Rinzin Agency Pte. Ltd)\u003c/strong\u003e.\r\n              We would like to invite you to an interview for the\r\n              \u003cstrong\u003e{{1.position}}\u003c/strong\u003e position.\r\n            \u003c/p\u003e\r\n\r\n            \u003c!-- INTERVIEW DETAILS CARD --\u003e\r\n            \u003ctable role=\"presentation\"\r\n                   width=\"100%\"\r\n                   cellspacing=\"0\"\r\n                   cellpadding=\"0\"\r\n                   border=\"0\"\r\n                   style=\"width:100%;margin:0 0 28px;background:#f8fafc;border:1px solid #dbe4ee;border-radius:12px;\"\u003e\r\n\r\n              \u003ctr\u003e\r\n                \u003ctd style=\"padding:22px 22px;\"\u003e\r\n\r\n                  \u003cp style=\"margin:0 0 15px;color:#12355b;font-size:13px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;\"\u003e\r\n                    Interview Details\r\n                  \u003c/p\u003e\r\n\r\n                  \u003ctable role=\"presentation\"\r\n                         width=\"100%\"\r\n                         cellspacing=\"0\"\r\n                         cellpadding=\"0\"\r\n                         border=\"0\"\u003e\r\n\r\n                    \u003c!-- DATE --\u003e\r\n                    \u003ctr\u003e\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;width:95px;color:#64748b;font-size:14px;line-height:1.5;\"\u003e\r\n                        Date\r\n                      \u003c/td\u003e\r\n\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#1f2937;font-size:14px;line-height:1.5;font-weight:600;\"\u003e\r\n                        {{1.scheduledDate}}\r\n                      \u003c/td\u003e\r\n                    \u003c/tr\u003e\r\n\r\n                    \u003c!-- TIME --\u003e\r\n                    \u003ctr\u003e\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#64748b;font-size:14px;line-height:1.5;\"\u003e\r\n                        Time\r\n                      \u003c/td\u003e\r\n\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#1f2937;font-size:14px;line-height:1.5;font-weight:600;\"\u003e\r\n                        {{1.scheduledTime}}\r\n                      \u003c/td\u003e\r\n                    \u003c/tr\u003e\r\n\r\n                    \u003c!-- POSITION --\u003e\r\n                    \u003ctr\u003e\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#64748b;font-size:14px;line-height:1.5;\"\u003e\r\n                        Position\r\n                      \u003c/td\u003e\r\n\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#1f2937;font-size:14px;line-height:1.5;font-weight:600;\"\u003e\r\n                        {{1.position}}\r\n                      \u003c/td\u003e\r\n                    \u003c/tr\u003e\r\n\r\n                    \u003c!-- FORMAT --\u003e\r\n                    \u003ctr\u003e\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#64748b;font-size:14px;line-height:1.5;\"\u003e\r\n                        Format\r\n                      \u003c/td\u003e\r\n\r\n                      \u003ctd valign=\"top\"\r\n                          style=\"padding:7px 0;color:#1f2937;font-size:14px;line-height:1.5;font-weight:600;\"\u003e\r\n                        Google Meet\r\n                      \u003c/td\u003e\r\n                    \u003c/tr\u003e\r\n\r\n                  \u003c/table\u003e\r\n\r\n                \u003c/td\u003e\r\n              \u003c/tr\u003e\r\n\r\n            \u003c/table\u003e\r\n\r\n            \u003c!-- GOOGLE MEET BUTTON --\u003e\r\n            \u003ctable role=\"presentation\"\r\n                   width=\"100%\"\r\n                   cellspacing=\"0\"\r\n                   cellpadding=\"0\"\r\n                   border=\"0\"\u003e\r\n\r\n              \u003ctr\u003e\r\n                \u003ctd align=\"center\"\r\n                    style=\"padding:0 0 30px;\"\u003e\r\n\r\n                  \u003ca\r\n                    href=\"{{ifempty(26.hangoutLink; 1.meetingUrl)}}\"\r\n                    target=\"_blank\"\r\n                    style=\"\r\n                      display:inline-block;\r\n                      background:#0f766e;\r\n                      color:#ffffff;\r\n                      text-decoration:none;\r\n                      padding:14px 30px;\r\n                      border-radius:9px;\r\n                      font-size:15px;\r\n                      font-weight:700;\r\n                      line-height:1.2;\r\n                    \"\r\n                  \u003e\r\n                    Join Google Meet\r\n                  \u003c/a\u003e\r\n\r\n                \u003c/td\u003e\r\n              \u003c/tr\u003e\r\n\r\n            \u003c/table\u003e\r\n\r\n            \u003c!-- REMINDER --\u003e\r\n            \u003cp style=\"margin:0 0 14px;font-size:14px;line-height:1.75;color:#475569;\"\u003e\r\n              Please join the meeting a few minutes before the scheduled time\r\n              and make sure your internet connection, microphone, and camera\r\n              are working properly.\r\n            \u003c/p\u003e\r\n\r\n            \u003cp style=\"margin:0;font-size:14px;line-height:1.75;color:#475569;\"\u003e\r\n              If you need to reschedule or have any questions before the\r\n              interview, please feel free to contact us.\r\n            \u003c/p\u003e\r\n\r\n            \u003c!-- SIGNATURE --\u003e\r\n            \u003ctable role=\"presentation\"\r\n                   width=\"100%\"\r\n                   cellspacing=\"0\"\r\n                   cellpadding=\"0\"\r\n                   border=\"0\"\r\n                   style=\"margin-top:32px;\"\u003e\r\n\r\n              \u003ctr\u003e\r\n                \u003ctd style=\"padding-top:22px;border-top:1px solid #e5e7eb;\"\u003e\r\n\r\n                  \u003cp style=\"margin:0 0 6px;font-size:14px;line-height:1.6;color:#475569;\"\u003e\r\n                    Warm regards,\r\n                  \u003c/p\u003e\r\n\r\n                  \u003cp style=\"margin:0;color:#12355b;font-size:15px;line-height:1.6;font-weight:700;\"\u003e\r\n                    At The Agency (formerly Rinzin Agency Pte. Ltd)\r\n                  \u003c/p\u003e\r\n\r\n                \u003c/td\u003e\r\n              \u003c/tr\u003e\r\n\r\n            \u003c/table\u003e\r\n\r\n          \u003c/td\u003e\r\n        \u003c/tr\u003e\r\n\r\n        \u003c!-- FOOTER --\u003e\r\n        \u003ctr\u003e\r\n          \u003ctd align=\"center\"\r\n              style=\"padding:20px 28px;background:#f8fafc;border-top:1px solid #e5e7eb;\"\u003e\r\n\r\n            \u003cp style=\"margin:0;color:#94a3b8;font-size:11px;line-height:1.7;\"\u003e\r\n              This is an automated interview invitation from\r\n              At The Agency (formerly Rinzin Agency Pte. Ltd).\r\n            \u003c/p\u003e\r\n\r\n          \u003c/td\u003e\r\n        \u003c/tr\u003e\r\n\r\n      \u003c/table\u003e\r\n\r\n      \u003c!-- OUTSIDE FOOTER --\u003e\r\n      \u003cp style=\"margin:16px 0 0;color:#94a3b8;font-size:11px;line-height:1.5;text-align:center;\"\u003e\r\n        Ã‚Â© At The Agency (formerly Rinzin Agency Pte. Ltd). All rights reserved.\r\n      \u003c/p\u003e\r\n\r\n    \u003c/td\u003e\r\n  \u003c/tr\u003e\r\n\r\n\u003c/table\u003e\r\n\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n```\r\n",
+                                                                        "subject":  "Interview invitation | At The Agency (formerly Rinzin Agency Pte. Ltd)",
+                                                                        "bodyType":  "rawHtml"
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  900,
+                                                                                           "y":  1500
+                                                                                       },
+                                                                          "restore":  {
+                                                                                          "expect":  {
+                                                                                                         "cc":  {
+                                                                                                                    "mode":  "chose"
+                                                                                                                },
+                                                                                                         "to":  {
+                                                                                                                    "mode":  "chose",
+                                                                                                                    "items":  [
+                                                                                                                                  null
+                                                                                                                              ]
+                                                                                                                },
+                                                                                                         "bcc":  {
+                                                                                                                     "mode":  "chose"
+                                                                                                                 },
+                                                                                                         "from":  {
+                                                                                                                      "mode":  "chose",
+                                                                                                                      "label":  "Empty"
+                                                                                                                  },
+                                                                                                         "bodyType":  {
+                                                                                                                          "label":  "Raw HTML"
+                                                                                                                      },
+                                                                                                         "attachments":  {
+                                                                                                                             "mode":  "chose"
+                                                                                                                         },
+                                                                                                         "emailHeaders":  {
+                                                                                                                              "mode":  "chose"
+                                                                                                                          }
+                                                                                                     },
+                                                                                          "parameters":  {
+                                                                                                             "__IMTCONN__":  ""
+                                                                                                         }
+                                                                                      },
+                                                                          "parameters":  [
+                                                                                             {
+                                                                                                 "name":  "__IMTCONN__",
+                                                                                                 "type":  "account:google-email",
+                                                                                                 "label":  "Connection",
+                                                                                                 "required":  true
+                                                                                             }
+                                                                                         ],
+                                                                          "expect":  [
+                                                                                         {
+                                                                                             "name":  "to",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "email",
+                                                                                                          "label":  "Recipient email address",
+                                                                                                          "required":  true,
+                                                                                                          "validate":  true
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "To",
+                                                                                             "required":  true
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "subject",
+                                                                                             "type":  "text",
+                                                                                             "label":  "Subject"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "bodyType",
+                                                                                             "type":  "select",
+                                                                                             "label":  "Body type",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "enum":  [
+                                                                                                                           "rawHtml",
+                                                                                                                           "collection"
+                                                                                                                       ]
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "attachments",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "spec":  [
+                                                                                                                       {
+                                                                                                                           "name":  "filename",
+                                                                                                                           "type":  "filename",
+                                                                                                                           "label":  "File name",
+                                                                                                                           "required":  true,
+                                                                                                                           "semantic":  "file:name"
+                                                                                                                       },
+                                                                                                                       {
+                                                                                                                           "name":  "data",
+                                                                                                                           "type":  "buffer",
+                                                                                                                           "label":  "Data",
+                                                                                                                           "required":  true,
+                                                                                                                           "semantic":  "file:data"
+                                                                                                                       }
+                                                                                                                   ],
+                                                                                                          "type":  "collection",
+                                                                                                          "label":  "Attachment"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "Attachments"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "from",
+                                                                                             "type":  "select",
+                                                                                             "label":  "From"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "cc",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "email",
+                                                                                                          "label":  "Recipient email address"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "CC recipients"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "bcc",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "type":  "email",
+                                                                                                          "label":  "Recipient email address"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "BCC recipients"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "emailHeaders",
+                                                                                             "spec":  {
+                                                                                                          "name":  "value",
+                                                                                                          "spec":  [
+                                                                                                                       {
+                                                                                                                           "name":  "key",
+                                                                                                                           "type":  "text",
+                                                                                                                           "label":  "Key",
+                                                                                                                           "required":  true
+                                                                                                                       },
+                                                                                                                       {
+                                                                                                                           "name":  "value",
+                                                                                                                           "type":  "text",
+                                                                                                                           "label":  "Value"
+                                                                                                                       }
+                                                                                                                   ],
+                                                                                                          "type":  "collection",
+                                                                                                          "label":  "Email header"
+                                                                                                      },
+                                                                                             "type":  "array",
+                                                                                             "label":  "Additional email headers"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "content",
+                                                                                             "type":  "text",
+                                                                                             "label":  "Content"
+                                                                                         }
+                                                                                     ]
+                                                                      }
+                                                     },
+                                                     {
+                                                         "id":  25,
+                                                         "module":  "gateway:WebhookRespond",
+                                                         "version":  1,
+                                                         "parameters":  {
+
+                                                                        },
+                                                         "mapper":  {
+                                                                        "body":  "{\n  \"ok\": true,\n  \"scenario\": \"interview_pipeline\",\n  \"event\": \"candidate_email_sent\",\n  \"type\": \"interview_invitation\",\n  \"interviewId\": \"{{1.interviewId}}\",\n  \"meetLink\": \"{{ifempty(26.hangoutLink; 1.meetingUrl)}}\",\n  \"eventUrl\": \"{{26.htmlLink}}\",\n  \"eventId\": \"{{26.id}}\"\n}",
+                                                                        "status":  "200",
+                                                                        "headers":  [
+
+                                                                                    ]
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  1200,
+                                                                                           "y":  1500
+                                                                                       }
+                                                                      }
+                                                     }
+                                                 ]
+                                    },
+                                    {
+                                        "flow":  [
+                                                     {
+                                                         "id":  13,
+                                                         "module":  "gateway:WebhookRespond",
+                                                         "version":  1,
+                                                         "parameters":  {
+
+                                                                        },
+                                                         "filter":  {
+                                                                        "name":  "Saved HR interview",
+                                                                        "conditions":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "applicant_interview_completed",
+                                                                                                   "o":  "text:equal"
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                                    },
+                                                         "mapper":  {
+                                                                        "body":  "{\n  \"ok\": true,\n  \"scenario\": \"applicant_interview_completed\",\n  \"event\": \"interview.saved\"\n}",
+                                                                        "status":  "200",
+                                                                        "headers":  [
+
+                                                                                    ]
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  624,
+                                                                                           "y":  1739
+                                                                                       },
+                                                                          "restore":  {
+                                                                                          "expect":  {
+                                                                                                         "headers":  {
+                                                                                                                         "mode":  "chose"
+                                                                                                                     }
+                                                                                                     }
+                                                                                      },
+                                                                          "expect":  [
+                                                                                         {
+                                                                                             "name":  "status",
+                                                                                             "type":  "uinteger",
+                                                                                             "label":  "Status",
+                                                                                             "required":  true,
+                                                                                             "validate":  {
+                                                                                                              "min":  100
+                                                                                                          }
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "body",
+                                                                                             "type":  "any",
+                                                                                             "label":  "Body"
+                                                                                         },
+                                                                                         {
+                                                                                             "name":  "headers",
+                                                                                             "spec":  [
+                                                                                                          {
+                                                                                                              "name":  "key",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Key",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  256
+                                                                                                                           }
+                                                                                                          },
+                                                                                                          {
+                                                                                                              "name":  "value",
+                                                                                                              "type":  "text",
+                                                                                                              "label":  "Value",
+                                                                                                              "required":  true,
+                                                                                                              "validate":  {
+                                                                                                                               "max":  4096
+                                                                                                                           }
+                                                                                                          }
+                                                                                                      ],
+                                                                                             "type":  "array",
+                                                                                             "label":  "Custom headers",
+                                                                                             "validate":  {
+                                                                                                              "maxItems":  16
+                                                                                                          }
+                                                                                         }
+                                                                                     ]
+                                                                      }
+                                                     }
+                                                 ]
+                                    },
+                                    {
+                                        "flow":  [
+                                                     {
+                                                         "id":  14,
+                                                         "module":  "gateway:WebhookRespond",
+                                                         "version":  1,
+                                                         "parameters":  {
+
+                                                                        },
+                                                         "filter":  {
+                                                                        "name":  "Unsupported website event",
+                                                                        "conditions":  [
+                                                                                           [
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "inquiry_pipeline",
+                                                                                                   "o":  "text:notEqual"
+                                                                                               },
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "lead_pipeline",
+                                                                                                   "o":  "text:notEqual"
+                                                                                               },
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "interview_pipeline",
+                                                                                                   "o":  "text:notEqual"
+                                                                                               },
+                                                                                               {
+                                                                                                   "a":  "{{1.scenario}}",
+                                                                                                   "b":  "applicant_interview_completed",
+                                                                                                   "o":  "text:notEqual"
+                                                                                               }
+                                                                                           ]
+                                                                                       ]
+                                                                    },
+                                                         "mapper":  {
+                                                                        "body":  "{\n  \"ok\": false,\n  \"error\": \"Unsupported website automation scenario\"\n}",
+                                                                        "status":  "400",
+                                                                        "headers":  [
+
+                                                                                    ]
+                                                                    },
+                                                         "metadata":  {
+                                                                          "designer":  {
+                                                                                           "x":  600,
+                                                                                           "y":  2100
+                                                                                       }
+                                                                      }
+                                                     }
+                                                 ]
+                                    }
+                                ]
+                 }
+             ],
+    "metadata":  {
+                     "instant":  true,
+                     "version":  1,
+                     "scenario":  {
+                                      "roundtrips":  1,
+                                      "maxErrors":  3,
+                                      "autoCommit":  true,
+                                      "autoCommitTriggerLast":  true,
+                                      "sequential":  false,
+                                      "slots":  null,
+                                      "confidential":  false,
+                                      "dataloss":  false,
+                                      "dlq":  false,
+                                      "freshVariables":  false
+                                  },
+                     "designer":  {
+                                      "orphans":  [
+
+                                                  ]
+                                  },
+                     "zone":  "eu1.make.com",
+                     "notes":  [
+                                   "Fallback Applicant List invitation route only. The deployed Worker prefers MAKE_WEBHOOK_URL_INTERVIEW_PIPELINE, which points to helped-interview-calendar-sheet.blueprint.json and supports Calendar + Sheets creation and rescheduling. This shared scenario can create a Calendar event and send the applicant email for a new invitation, but it does not write a sheet row and cannot reschedule. Reconnect Google Calendar and Gmail after import.",
+                                   "Calendar modules receive scheduledAt as ISO 8601 text from the Worker. Map start with parseDate(1.scheduledAt; \"YYYY-MM-DD[T]HH:mm:ss.SSSZ\"; \"UTC\") and end with addMinutes(parseDate(1.scheduledAt; \"YYYY-MM-DD[T]HH:mm:ss.SSSZ\"; \"UTC\"); ifempty(1.durationMinutes; 30)). Do not use concat(); it is unavailable in the Make formula context used by this scenario. After import, run the webhook once to refresh its data structure and confirm scheduledAt and durationMinutes appear."
+                               ]
+                 }
+}

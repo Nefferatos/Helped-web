@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Loader2, Send, UserRound } from "lucide-react";
+import { ChevronRight, House, Loader2, Send, ShieldCheck, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createFdwConversationId, sendFdwChatMessage } from "@/lib/fdwChatbot";
 import { submitMaidReferral } from "@/lib/ats";
+import referralRobotAvatar from "@/ClientPage/assets/Ai Robot Vector Art.gif";
 
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string };
 type FriendReferral = {
@@ -115,20 +116,24 @@ const FdwApplicationChatbot = ({ applicantName = "", applicantPhone = "" }: { ap
   const submitMessage = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void send(input); };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white">
-      <div ref={messagesRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" aria-live="polite">
+    <div className="relative flex min-h-0 flex-1 flex-col bg-transparent">
+      <div ref={messagesRef} className="relative z-10 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6" aria-live="polite">
         {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-            <p className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2.5 text-sm leading-5 ${message.role === "user" ? "rounded-br-md bg-emerald-700 text-white" : "rounded-bl-md bg-emerald-50 text-slate-900"}`}>{message.content}</p>
+          <div key={message.id} className={`referral-message-in flex items-start gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+            {message.role === "assistant" && <img src={referralRobotAvatar} alt="" className="mt-1 h-11 w-11 shrink-0 rounded-full border-2 border-emerald-100 bg-white object-cover shadow-sm sm:h-14 sm:w-14" />}
+            <p className={`max-w-[88%] whitespace-pre-wrap rounded-[1.5rem] px-4 py-3.5 text-[15px] leading-6 shadow-sm sm:px-5 sm:py-4 sm:text-base ${message.role === "user" ? "rounded-br-md bg-gradient-to-br from-emerald-600 to-emerald-700 text-white" : "rounded-bl-md bg-gradient-to-br from-emerald-50 to-emerald-100/80 text-slate-900"}`}>{message.content}</p>
           </div>
         ))}
-        {!step && <div className="flex flex-wrap gap-1.5 pl-1"><button type="button" onClick={() => startFriendReferral()} disabled={thinking} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"><UserRound className="h-3 w-3" /> I have a friend to refer</button></div>}
+        {!step && <div className="referral-message-in ml-[3.5rem] sm:ml-[4.25rem]"><button type="button" onClick={() => startFriendReferral()} disabled={thinking} className="group inline-flex w-fit max-w-full items-center gap-2 rounded-full border border-emerald-300 bg-white/90 px-3 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm transition hover:border-emerald-500 hover:bg-emerald-50 disabled:opacity-50 sm:gap-2.5 sm:px-3.5"><UsersRound className="h-5 w-5 shrink-0 fill-emerald-600 text-emerald-700" /><span className="whitespace-nowrap">I have a friend to refer</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" /></button></div>}
         {thinking && <p className="px-1 text-xs text-slate-500">Assistant is replying…</p>}
       </div>
-      <form onSubmit={submitMessage} className="flex shrink-0 gap-2 border-t bg-white px-3 py-3">
-        <Input value={input} onChange={(event) => setInput(event.target.value)} maxLength={1200} placeholder={step === "consent" ? "Reply yes to confirm permission, or no to cancel" : step ? "Type your answer" : "Ask about requirements or documents"} aria-label="Ask the applicant assistant" disabled={thinking || step === "done"} />
-        <Button type="submit" size="icon" aria-label="Send message" disabled={thinking || !input.trim() || step === "done"} className="shrink-0 bg-emerald-700 text-white hover:bg-emerald-800">{thinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
-      </form>
+      <div className="relative z-10 shrink-0 rounded-t-[2.5rem] border-t border-emerald-100/80 bg-white/95 px-3 pb-3 pt-4 shadow-[0_-10px_40px_rgba(15,23,42,0.05)] backdrop-blur sm:px-5 sm:pt-5">
+        <form onSubmit={submitMessage} className="flex items-center gap-2 rounded-full border-2 border-emerald-100 bg-slate-50/80 p-1.5 pl-4 shadow-inner focus-within:border-emerald-300 sm:gap-3 sm:pl-5">
+          <Input value={input} onChange={(event) => setInput(event.target.value)} maxLength={1200} placeholder={step === "consent" ? "Reply yes to confirm permission, or no to cancel" : step ? "Type your answer" : "Ask about requirements..."} aria-label="Ask the applicant assistant" disabled={thinking || step === "done"} className="h-12 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0 sm:text-base" />
+          <Button type="submit" size="icon" aria-label="Send message" disabled={thinking || !input.trim() || step === "done"} className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-md hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 sm:h-14 sm:w-14">{thinking ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}</Button>
+        </form>
+        <div className="flex flex-nowrap items-center justify-center gap-2 pt-3 text-[11px] font-medium text-slate-500 sm:gap-3 sm:text-xs"><span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap"><ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />Your information is secure</span><span className="h-5 w-px shrink-0 bg-slate-300" /><span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-emerald-700"><House className="h-4 w-4 shrink-0 fill-emerald-600" />At The Agency</span></div>
+      </div>
     </div>
   );
 };

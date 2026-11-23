@@ -33,7 +33,7 @@ import {
 import { toast } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { getStoredClient, type ClientUser } from "@/lib/clientAuth";
-import { fetchClientUnreadChatCount, markClientNotificationsRead, type SupportNotification } from "@/lib/chat";
+import { fetchClientUnreadChatCount, type SupportNotification } from "@/lib/chat";
 import { logoutClientPortal, syncClientProfileFromSession } from "@/lib/supabaseAuth";
 import { getSavedShortlistRefs, subscribeToShortlistRefs, toggleShortlistRef } from "@/lib/shortlist";
 import type { MaidProfile } from "@/lib/maids";
@@ -110,15 +110,6 @@ const ClientPortalNavbar = () => {
   const navRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const [underline, setUnderline] = useState<{ left: number; width: number } | null>(null);
-
-  const handleNotificationsOpenChange = (open: boolean) => {
-    if (!open || chatNotifications.length === 0) return;
-    setUnreadChatCount(0);
-    setChatNotifications([]);
-    void markClientNotificationsRead().catch(() => {
-      // The next polling cycle will restore the badge if the request did not persist.
-    });
-  };
 
   const isActive = useCallback(
     (to: string) => {
@@ -397,7 +388,7 @@ const ClientPortalNavbar = () => {
 
         {/* ── Right: notifications + avatar ── */}
         <div className="flex items-center gap-2 shrink-0">
-          <DropdownMenu onOpenChange={handleNotificationsOpenChange}>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border-2 border-[#0E4E5E]/15 bg-[#0E4E5E]/5 text-[#0E4E5E] transition hover:border-[#0E4E5E]/30 hover:bg-[#0E4E5E]/10"

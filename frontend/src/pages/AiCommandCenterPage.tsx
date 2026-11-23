@@ -4,12 +4,15 @@ import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
 import { adminPath } from "@/lib/routes";
+import { resolveAgencyDashboardPath } from "../../../shared/agencyDashboard";
 
 type CommandCenterAction = {
   type: "approve_applicant" | "reject_applicant" | "assign_interview" | "open_maid_profile" | "draft_email" | "navigate_to_page" | "website_api_action";
   applicationId?: string;
   maidReferenceCode?: string;
   destination?: string;
+  recordId?: string;
+  referenceCode?: string;
   recipientKind?: "enquiry" | "applicant";
   recipientId?: string;
   recipientName?: string;
@@ -175,9 +178,19 @@ const loadConversation = (storageKey: string): ChatMessage[] => {
     const saved = parsed.filter((item): item is ChatMessage =>
       Boolean(item) && typeof item === "object" &&
       ((item as ChatMessage).role === "assistant" || (item as ChatMessage).role === "user") &&
-      typeof (item as ChatMessage).id === "string" && typeof (item as ChatMessage).content === "string",
+      typeof (item as ChatMessage).id === "string" && typeof (item as ChatMessage).content === "string" &&
+      Boolean((item as ChatMessage).content.trim()),
     ).map(({ id, role, content }) => ({ id, role, content: content.slice(0, 8000) })).slice(-100);
-    return saved.length ? saved : [initialMessage];
+    if (!saved.length) return [initialMessage];
+    const latest = saved.at(-1);
+    if (latest?.role === "user") {
+      saved.push({
+        id: `interrupted-${latest.id}`,
+        role: "assistant",
+        content: "I didn’t finish replying before this chat was reloaded. Please send your request again. I haven’t confirmed or completed an action.",
+      });
+    }
+    return saved;
   } catch {
     return [initialMessage];
   }
@@ -576,6 +589,24 @@ export default function AiCommandCenterPage() {
   }, []);
 
   useEffect(() => {
+    const resetPlayback = () => {
+      stopSpeaking();
+      setTypingMessageId(null);
+      setTypingCharacterCount(0);
+      setIsSpeaking(false);
+    };
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) resetPlayback();
+    };
+    window.addEventListener("pagehide", resetPlayback);
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      window.removeEventListener("pagehide", resetPlayback);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [stopSpeaking]);
+
+  useEffect(() => {
     const syncVoice = (event: Event) => {
       const enabled = event instanceof StorageEvent
         ? readVoicePreference()
@@ -698,6 +729,9 @@ export default function AiCommandCenterPage() {
   const sendMessage = async (rawText: string) => {
     const trimmed = rawText.trim();
     if ((!trimmed && !stagedMedia) || planning) return;
+    stopSpeaking();
+    setTypingMessageId(null);
+    setTypingCharacterCount(0);
     setPlanning(true);
     setChatError("");
     setVoiceStatus("");
@@ -735,7 +769,6 @@ export default function AiCommandCenterPage() {
         .filter((message) => message.id !== "welcome")
         .map((message) => `${savedChat.title} | ${message.role === "user" ? "You" : "Assistant"}: ${message.content.replace(/\s+/g, " ").slice(0, 420)}`));
       const memoryText = memoryLines.join("\n").slice(-6500);
-      const memoryMessage: ChatMessage[] = memoryText ? [{ id: "saved-history-memory", role: "assistant", content: `Continuity notes from other saved chats for this same signed-in agency account. Treat these as background context only; do not resume an old action unless the current request asks. The current conversation takes priority.\n${memoryText}` }] : [];
       const currentMessages = [...messages.slice(-90), userMessage];
       let remainingChars = 15_000;
       const boundedCurrentMessages = currentMessages.slice().reverse().flatMap((message) => {
@@ -745,11 +778,11 @@ export default function AiCommandCenterPage() {
         return content ? [{ ...message, content }] : [];
       }).reverse();
       const latestUserMessage = boundedCurrentMessages.pop();
-      const conversation = [...boundedCurrentMessages, ...memoryMessage, ...(latestUserMessage ? [latestUserMessage] : [])];
+      const conversation = [...boundedCurrentMessages, ...(latestUserMessage ? [latestUserMessage] : [])];
       const response = await fetch("/api/ai/command-center/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAgencyAdminAuthHeaders() },
-        body: JSON.stringify({ messages: conversation.map(({ role, content }) => ({ role, content })), ...(uploadedMedia ? { attachment: uploadedMedia } : {}) }),
+        body: JSON.stringify({ messages: conversation.map(({ role, content }) => ({ role, content })), savedChatMemory: memoryText, currentPage: `${window.location.pathname}${window.location.search}`, ...(uploadedMedia ? { attachment: uploadedMedia } : {}) }),
         signal: AbortSignal.timeout(55_000),
       });
       if (!response.ok) throw new Error(await errorMessage(response));
@@ -783,8 +816,8 @@ export default function AiCommandCenterPage() {
     const key = JSON.stringify(action);
     if (applyingAction) return;
     if (action.type === "navigate_to_page") {
-      const pages: Record<string, string> = { dashboard: "/dashboard", add_maid: "/add-maid", manage_maids: "/edit-maids", maids: "/edit-maids", agency_profile: "/agency-profile", requests: "/requests", enquiries: "/enquiry", applicants: "/recruitment", contracts: "/employment-contracts", operations: "/operations-center", operations_center: "/operations-center", knowledge_library: "/operations-center", interviews: "/maid-interviews", maid_interviews: "/maid-interviews", ai_command_center: "/ai-command-center", ai_hr_interviewer: "/ai-hr-interviewer", messages: "/chat-support", documents: "/contractor-tasks", reports: "/reports", security: "/change-password", settings: "/settings", referral_leads: "/referral-leads", telegram_broadcast: "/telegram-broadcast", whatsapp_broadcast: "/whatsapp-broadcast", ai_agents: "/ai-agents", ai_marketing: "/ai-marketing" };
-      if (action.destination && pages[action.destination]) window.location.assign(adminPath(pages[action.destination]));
+      const destinationPath = action.destination ? resolveAgencyDashboardPath(action.destination, { recordId: action.recordId, referenceCode: action.referenceCode }) : null;
+      if (destinationPath) window.location.assign(adminPath(destinationPath));
       else setChatError("That page isn’t available from this assistant.");
       return;
     }
@@ -933,7 +966,7 @@ export default function AiCommandCenterPage() {
         <div className="mt-0.5 rounded-lg bg-violet-100 p-2 text-violet-700">{isBroadcast || isAutoReply || isWebsiteAutoReply ? <ShieldCheck className="h-4 w-4" /> : <Activity className="h-4 w-4" />}</div>
         <div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-wide text-violet-800">Action needs your approval</p><p className="mt-1 text-sm font-semibold leading-5 text-slate-900">{action.summary || action.label || "The assistant proposes this task."}</p></div>
       </div>
-      {(isBroadcast || isTelegramBroadcast || isInterviewSchedule || isAutoReply || isWebsiteAutoReply || isWebsiteChatReply || isDestructive) && <div className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950">{isDestructive ? "This action may delete or remove website records. Review the exact target and payload below before approving." : isBroadcast ? isScheduledBroadcast ? "This schedules a WhatsApp message for automatic delivery at the displayed time. Current opt-in will be checked again before sending." : "This sends a WhatsApp message to external contacts. The server rechecks active opt-in before dispatch." : isTelegramBroadcast ? isScheduledBroadcast ? "This schedules a Telegram message for automatic delivery at the displayed time. Current consent will be checked again before sending." : "This queues a Telegram broadcast for active, consented subscribers." : isInterviewSchedule ? "This creates the interview record in the website. It does not send an invitation or reserve a calendar event." : isAutoReply ? "This enables ongoing automatic replies to incoming WhatsApp messages." : isWebsiteAutoReply ? "This enables ongoing AI replies in the selected website chat and request channels. Unclear or sensitive cases will be handed to staff." : "This sends the reply below to the selected website chat only after you approve."}</div>}
+      {(isBroadcast || isTelegramBroadcast || isInterviewSchedule || isAutoReply || isWebsiteAutoReply || isWebsiteChatReply || isDestructive) && <div className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950">{isDestructive ? "This action may delete or remove website records. Review the exact target and payload below before approving." : isBroadcast ? isScheduledBroadcast ? "This schedules a WhatsApp message for automatic delivery at the displayed time. Current opt-in will be checked again before sending." : "This sends a WhatsApp message to external contacts. The server rechecks active opt-in before dispatch." : isTelegramBroadcast ? isScheduledBroadcast ? "This schedules a Telegram message for automatic delivery at the displayed time. Current consent will be checked again before sending." : "This queues a Telegram broadcast for active, consented subscribers." : isInterviewSchedule ? "This creates the interview record in the website. It does not send an invitation or reserve a calendar event." : isAutoReply ? "This enables ongoing automatic replies to incoming WhatsApp messages through its Make AI Agent scenario." : isWebsiteAutoReply ? "This enables ongoing Make AI Agent replies in the selected website chat and request channels. The Worker supplies approved knowledge and sends unclear, low-confidence, sensitive, or human-requested cases to agency staff." : "This sends the reply below to the selected website chat only after you approve."}</div>}
       {isWebsiteChatReply && typeof action.apiBody?.message === "string" && <div className="mx-4 mt-3 space-y-2"><p className="text-xs font-semibold text-slate-600">Website chat · recipient #{String(action.apiBody.clientId ?? "unknown")}</p><p className="whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">{action.apiBody.message}</p></div>}
       {isBroadcast && typeof action.apiBody?.mediaUrl === "string" && action.apiBody.mediaType === "image" && <img src={action.apiBody.mediaUrl} alt="Proposed WhatsApp broadcast attachment" className="mx-4 mt-3 max-h-56 max-w-[calc(100%-2rem)] rounded-xl border border-slate-200 object-contain" />}
       {isBroadcast && typeof action.apiBody?.mediaUrl === "string" && action.apiBody.mediaType === "video" && <video src={action.apiBody.mediaUrl} controls className="mx-4 mt-3 max-h-56 max-w-[calc(100%-2rem)] rounded-xl border border-slate-200" />}
@@ -992,7 +1025,7 @@ export default function AiCommandCenterPage() {
         </div> : <div className="cc-side-caption mt-auto px-2 pb-1 pt-8 text-xs leading-5 text-blue-100/80">Your agency assistant<br/>Chat history stays saved on this device.</div>}
        </aside>
        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="cc-header flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3 sm:px-7 sm:py-4">
+        <header className="cc-header relative z-40 flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3 sm:px-7 sm:py-4">
           <div className="min-w-0"><div className="flex items-center gap-3"><span className={`h-3.5 w-3.5 rounded-full ${isRecording ? "bg-rose-500" : isSpeaking ? "bg-blue-500" : "bg-emerald-500"}`} /><span className="text-lg font-medium text-[#11194f]">{isRecording ? "Listening" : isSpeaking ? "Speaking" : "Online"}</span><ChevronRight className="h-4 w-4 rotate-90 text-[#11194f]" /></div><p className="cc-side-caption text-xs text-slate-500">Your agency workspace | chat saved in this browser</p></div>
           <div className="flex shrink-0 items-center gap-1.5">
             <Button type="button" size="icon" variant="ghost" aria-label={voiceEnabled ? "Mute AI voice" : "Enable AI voice"} title={voiceEnabled ? "Mute AI voice" : "Enable AI voice"} onClick={() => { const enabled = !voiceEnabled; setVoiceEnabled(enabled); window.localStorage.setItem(COMMAND_CENTER_VOICE_KEY, String(enabled)); window.dispatchEvent(new CustomEvent(COMMAND_CENTER_VOICE_EVENT, { detail: { enabled } })); if (!enabled) { stopSpeaking(); setTypingMessageId(null); } }} className="cc-icon-button rounded-xl">{voiceEnabled ? <Volume2 className="h-6 w-6" /> : <VolumeX className="h-6 w-6" />}</Button>
@@ -1013,7 +1046,7 @@ export default function AiCommandCenterPage() {
               <article className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"><div className="flex items-center gap-2 font-semibold text-[#14245e]"><MessageCircle className="h-5 w-5 text-blue-600"/>Ask for help</div><p className="mt-2 text-sm leading-6 text-slate-600">Ask a question, find a dashboard page, or request a supported task. Include names, dates, channel, and audience when they matter.</p><p className="mt-3 rounded-xl bg-blue-50 p-3 text-xs leading-5 text-blue-900">Example: “Find the latest enquiry from Mei and summarize what she needs.”</p></article>
               <article className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"><div className="flex items-center gap-2 font-semibold text-[#14245e]"><ShieldCheck className="h-5 w-5 text-blue-600"/>Review before actions</div><p className="mt-2 text-sm leading-6 text-slate-600">For supported changes and outbound messages, check the action card in chat and approve it before it proceeds. If details are unclear, tell the assistant what to change first.</p><p className="mt-3 rounded-xl bg-blue-50 p-3 text-xs leading-5 text-blue-900">Broadcast example: specify the channel, audience, message, media, and send or schedule time.</p></article>
               <article className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"><div className="flex items-center gap-2 font-semibold text-[#14245e]"><Mic className="h-5 w-5 text-blue-600"/>Speak or attach files</div><p className="mt-2 text-sm leading-6 text-slate-600">Use the large microphone to dictate a message. Use the paperclip to attach an Excel/CSV contact list or supported image/video for a broadcast. Review the file and audience details before approving.</p></article>
-              <article className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"><div className="flex items-center gap-2 font-semibold text-[#14245e]"><Clock3 className="h-5 w-5 text-blue-600"/>History and memory</div><p className="mt-2 text-sm leading-6 text-slate-600">Your conversations are saved in this browser under History. Open a previous chat to continue its context, or start a new chat for a separate task. Clearing browser storage or using another device won’t carry these chats over.</p></article>
+              <article className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm"><div className="flex items-center gap-2 font-semibold text-[#14245e]"><Clock3 className="h-5 w-5 text-blue-600"/>History and memory</div><p className="mt-2 text-sm leading-6 text-slate-600">Your conversations are saved in this browser under History. When you send a message, the assistant receives the current chat and a limited set of excerpts from your other saved chats on this device for continuity. This does not train the AI model, and it won’t sync to another device. Clearing browser storage removes these chats.</p></article>
             </div>
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><b>Good to know:</b> The assistant only sees data and actions made available to its connected services. It will tell you if a record, channel, or action is unavailable; it cannot guarantee a message was delivered until the connected broadcast service reports completion.</div>
             <Button type="button" onClick={() => setHelpOpen(false)} className="mt-6 rounded-xl bg-blue-700 text-white hover:bg-blue-800">Back to chat</Button>
@@ -1077,7 +1110,7 @@ export default function AiCommandCenterPage() {
             <Button type="button" size="icon" variant="ghost" disabled={planning || contactImporting} onClick={() => attachmentInputRef.current?.click()} aria-label="Attach a contact spreadsheet or broadcast media" title="Attach Excel/CSV or campaign media" className="cc-icon-button mb-0.5 shrink-0 rounded-2xl"><Paperclip className="h-5 w-5" /></Button>
             <Button type="submit" disabled={planning || (!instruction.trim() && !stagedMedia)} size="icon" aria-label="Send message" className="mb-0.5 mr-1 h-14 w-14 shrink-0 rounded-full bg-gradient-to-br from-sky-500 to-blue-700 text-white shadow-lg shadow-blue-500/25 hover:brightness-110">{planning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-2 text-[11px] text-slate-500"><span>Enter to send · Shift+Enter for a new line · Tap the mic to speak</span><span>{historyError || `Chat saved on this device · recent messages are AI memory · Fish Audio voice ${voiceEnabled ? "on" : "off"}`}</span></div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-2 text-[11px] text-slate-500"><span>Enter to send · Shift+Enter for a new line · Tap the mic to speak</span><span>{historyError || `Chat saved on this device · saved chats provide limited continuity · Fish Audio voice ${voiceEnabled ? "on" : "off"}`}</span></div>
         </form>}
        </div>
       </div>

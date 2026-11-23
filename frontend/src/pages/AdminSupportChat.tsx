@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
+import { normalizeAgencyDisplayName } from "@/lib/agencyDisplayName";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { adminPath } from "@/lib/routes";
 import { readSafeJson } from "@/lib/safeJson";
@@ -57,10 +58,10 @@ const MESSAGE_PAGE_SIZE = 50;
 
 const QUICK_REPLIES = [
   { label: "Acknowledged", text: "Thank you for reaching out. We have received your message and will get back to you shortly." },
-  { label: "Processing", text: "We are currently processing your request. We will update you within 1â€“2 business days." },
+  { label: "Processing", text: "We are currently processing your request. We will update you within 1-2 business days." },
   { label: "Need info", text: "To assist you better, could you please provide more details about your request?" },
   { label: "Resolved", text: "We are glad we could help! Your request has been resolved. Please don't hesitate to reach out if you need anything else." },
-  { label: "Follow-up", text: "Following up on our previous conversation â€” has your concern been fully addressed?" },
+  { label: "Follow-up", text: "Following up on our previous conversation - has your concern been fully addressed?" },
 ];
 
 /* â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -570,7 +571,8 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
   const isOwn = message.senderRole === "agency";
   const isPending = Boolean(message._optimistic);
   const isBot = Boolean(message.isBot);
-  const avatarName = isOwn ? (message.agencyName || message.senderName) : message.senderName;
+  const avatarName = normalizeAgencyDisplayName(isOwn ? (message.agencyName || message.senderName) : message.senderName) || (isOwn ? (message.agencyName || message.senderName) : message.senderName);
+  const displaySenderName = normalizeAgencyDisplayName(message.senderName) || message.senderName;
   const avatarUrl = isOwn ? message.agencyProfileImageUrl : message.clientProfileImageUrl;
 
   return (
@@ -581,7 +583,7 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
       <div className="min-w-0 flex flex-col">
         {!isOwn && (
           <p className="mb-1 pl-1 font-semibold flex items-center gap-1.5" style={{ fontSize: 12, color: "#6B7280" }}>
-            {message.senderName}
+            {displaySenderName}
             {isBot && (
               <span className="rounded-full px-1.5 py-px font-black tracking-wider"
                 style={{ fontSize: 9, background: "linear-gradient(135deg,#eef1ff,#e0e7ff)", color: "#3d55d4" }}>AI</span>
@@ -612,7 +614,7 @@ function MessageBubble({ message, onCopy }: { message: ChatMessage; onCopy: (tex
         <div className={`mt-1 flex items-center gap-1 ${isOwn ? "justify-end pr-1" : "pl-1"}`}
           style={{ fontSize: 11, color: "#6B7280" }}>
           {isPending
-            ? <span className="italic" style={{ color: "#6b7280" }}>Sendingâ€¦</span>
+            ? <span className="italic" style={{ color: "#6b7280" }}>Sending...</span>
             : <>
                 <span>{formatTime(message.createdAt)}</span>
                 {isOwn && <CheckCheck className="h-3 w-3" style={{ color: "#a5b4fc" }} />}
@@ -1345,7 +1347,7 @@ const AdminSupportChat = () => {
                 <Search className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: "#6b7280" }} />
                 <input
                   type="text"
-                  placeholder="Search conversationsâ€¦"
+                  placeholder="Search conversations..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="asc-search h-10 w-full rounded-xl border pl-10 pr-4 font-medium outline-none transition-all"
@@ -1375,7 +1377,7 @@ const AdminSupportChat = () => {
                 >
                   <option value="newest">Newest first</option>
                   <option value="unread">Unread first</option>
-                  <option value="name">Name Aâ€“Z</option>
+                  <option value="name">Name A-Z</option>
                   <option value="oldest">Oldest first</option>
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 pointer-events-none" style={{ color: "#6b7280" }} />
@@ -1578,7 +1580,7 @@ const AdminSupportChat = () => {
                         className="flex items-center gap-2 rounded-full px-4 py-1.5 font-semibold transition-all hover:scale-105 disabled:opacity-60"
                         style={{ fontSize: 12, background: "#fff", color: "#6B7280", border: "1px solid #E5E7EB", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
                         {isLoadingOlder
-                          ? <><RefreshCw className="h-3 w-3 animate-spin" style={{ color: "#111827" }} /> Loadingâ€¦</>
+                          ? <><RefreshCw className="h-3 w-3 animate-spin" style={{ color: "#111827" }} /> Loading...</>
                           : <><RefreshCw className="h-3 w-3" style={{ color: "#111827" }} /> Load earlier</>
                         }
                       </button>

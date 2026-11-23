@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { normalizeAgencyDisplayName } from "@/lib/agencyDisplayName";
 
 export interface ChatWorkspaceConversation {
   key: string;
@@ -243,7 +244,7 @@ export const ChatWorkspace = ({
                           : "rounded-bl-md border bg-white text-foreground"
                       }`}
                     >
-                      <p className="mb-1 text-xs opacity-70">{message.senderName}</p>
+                      <p className="mb-1 text-xs opacity-70">{normalizeAgencyDisplayName(message.senderName) || message.senderName}</p>
                       <p className="whitespace-pre-wrap leading-6">{message.body}</p>
                       <div className="mt-2 flex items-center justify-end gap-1 text-[11px] opacity-70">
                         <span>{formatBubbleTime(message.createdAt)}</span>

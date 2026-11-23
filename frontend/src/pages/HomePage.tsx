@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, CircleAlert, History, RefreshCw } from "lucide-react";
+import { Building2, CheckCircle2, CircleAlert, History, RefreshCw } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getAgencyAdminAuthHeaders, getStoredAgencyAdmin } from "@/lib/agencyAdminAuth";
 import { readSafeJson } from "@/lib/safeJson";
+import { normalizeAgencyDisplayName } from "@/lib/agencyDisplayName";
 import AgencyOperationsCenterPage from "@/pages/AgencyOperationsCenterPage";
 import "./home-dashboard.css";
 
@@ -159,10 +160,27 @@ const HomePage = () => {
       return `${label} ${chartData.reduce((sum, month) => sum + month[key], 0)}`;
     })
     .join(", ");
+  const updatedAtLabel = syncedAt ? syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "when data loads";
+  const agencyDisplayName = normalizeAgencyDisplayName(admin?.agencyName) || "At The Agency";
   return <main className="admin-dashboard">
-    <header className="dash-head"><div><p className="dash-kicker">Agency overview</p><h1>Good day{admin?.agencyName ? `, ${admin.agencyName}` : ""}</h1><p>Your agency at a glance. Updated {syncedAt ? syncedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "when data loads"}.</p></div><button className="dash-refresh" onClick={() => void refresh(true)} disabled={refreshing}><RefreshCw size={15} className={refreshing ? "animate-spin" : ""}/>{refreshing ? "Refreshing" : "Refresh data"}</button></header>
+    <header className="dash-head">
+      <div className="dash-head-copy">
+        <p className="dash-kicker"><Building2 size={15}/> Agency overview</p>
+        <h1>Good day, {agencyDisplayName}</h1>
+        <p>Your agency at a glance. Updated {updatedAtLabel}.</p>
+      </div>
+      <div className="dash-hero-art" aria-hidden="true">
+        <svg viewBox="0 0 360 150" role="presentation">
+          <path d="M8 136c63-61 103-59 149-31 37 23 67 16 101-19 28-29 61-39 102-33" fill="none" stroke="white" strokeOpacity=".35" strokeWidth="2" />
+          <text x="180" y="83" textAnchor="middle" fill="white" fontFamily="Georgia, serif" fontSize="48" fontWeight="700" letterSpacing="5">RINZIN</text>
+          <path d="M91 99h178" stroke="white" strokeOpacity=".6" strokeWidth="2" strokeLinecap="round" />
+          <text x="180" y="122" textAnchor="middle" fill="white" fillOpacity=".9" fontFamily="Arial, sans-serif" fontSize="13" fontWeight="600" letterSpacing="4">AT THE AGENCY</text>
+        </svg>
+      </div>
+      <button className="dash-refresh" onClick={() => void refresh(true)} disabled={refreshing}><RefreshCw size={15} className={refreshing ? "animate-spin" : ""}/>{refreshing ? "Refreshing" : "Refresh data"}</button>
+    </header>
     {errors.length > 0 && <div className="dash-error" role="alert">Some figures could not be loaded. {Array.from(new Set(errors)).join(" · ")}</div>}
-    <section className="dash-full-operations" aria-label="Operations Center">
+    <section className="dash-full-operations dash-panel" aria-label="Operations Center">
       <AgencyOperationsCenterPage embedded />
     </section>
     <section className="dash-portal-actions" aria-labelledby="dash-portal-actions-title">

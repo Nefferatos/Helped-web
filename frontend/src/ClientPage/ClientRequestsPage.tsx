@@ -29,6 +29,7 @@ import {
   requestStatusMeta,
 } from "@/lib/requests";
 import { toast } from "@/components/ui/sonner";
+import { normalizeAgencyDisplayName } from "@/lib/agencyDisplayName";
 
 /* ─────────────────────────────────────────
    Theme — deep teal + warm amber
@@ -847,7 +848,7 @@ const ClientRequestsPage = () => {
       );
     }
     const isClient = message.senderType === "client";
-    const senderLabel = isClient ? "You" : message.senderName || (message.senderId === 0 ? "AI Assistant" : message.senderType === "staff" ? "Agency Staff" : "Agency Admin");
+    const senderLabel = isClient ? "You" : normalizeAgencyDisplayName(message.senderName) || (message.senderId === 0 ? "AI Assistant" : message.senderType === "staff" ? "Agency Staff" : "Agency Admin");
     return (
       <div key={message.id} className={cn("flex", isClient ? "justify-end" : "justify-start")}>
         <div

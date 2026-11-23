@@ -2,6 +2,8 @@
 
 This is the routing registry for the six specialized agents exposed by the planner API. These registered specialists remain planning-only; they are separate from `/api/ai/command-center/chat`, which receives a bounded agency-scoped website data snapshot and may propose actions from a separate server-side API allowlist. The chat validates proposals, and staff must approve each proposed change before the frontend calls the existing authenticated website API. This does not grant arbitrary SQL, URL, table, or method access.
 
+The chat also supports ordinary general-purpose conversation. Non-operational questions use the fast Worker AI provider rather than waiting on Make. Agency record lookups and supported tasks still use the agency-scoped context and existing approval rules. Current-events questions use the optional Brave LLM Context search integration only when the server-side `BRAVE_SEARCH_API_KEY` secret is configured; without it, the assistant must say it cannot verify live information. To configure the secret, run `npx wrangler secret put BRAVE_SEARCH_API_KEY` and paste the API key at the prompt. Keep it in Worker secrets; never add it to browser code or source control. Search results are untrusted reference material and never grant permission to perform an action.
+
 | Agent ID | Scope | Routing examples | Current execution state |
 |---|---|---|---|
 | `applicant_agent` | Applicant and recruitment intelligence | Applicant search, profile summary, missing information, screening summary | Planner may assign; no new Command Center tools execute. Existing ATS workflows remain authoritative. |

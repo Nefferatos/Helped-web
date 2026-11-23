@@ -24,7 +24,7 @@
             "parameters": {},
             "mapper": {
                 "files": [],
-                "message": "{{1.userPrompt}}\n\nRecent conversation (last 4 messages):\n{{join(map(slice(1.messages; -4); item.role + \": \" + item.content); \"\\n\")}}",
+                "message": "Saved-chat continuity from the same agency staff account (background only; may be incomplete or outdated; the current request takes priority):\n{{1.savedChatMemory}}\n\nCurrent conversation, oldest to newest:\n{{join(map(1.messages; item.role + \": \" + item.content); \"\\n\")}}\n\nRespond to the latest user message. Do not repeat or resume a prior action unless the user asks.",
                 "threadId": "{{1.scenario}}-{{1.context.user.id}}",
                 "outputType": "text",
                 "tokenLimit": "20",
@@ -45,7 +45,7 @@
                     "x": 450,
                     "y": 0
                 },
-                "notes": "Command Center agent. The Worker sends agency-scoped context and a stable per-staff thread ID. No Gmail or external tools are configured. Make enforces a minimum Step timeout of 120 seconds; the website Worker itself stops waiting after 20 seconds and falls back to its direct AI response. Use GPT-6 Luna, Low reasoning, 20% maximum output, Recursion limit 6, and Iterations from history 0."
+                "notes": "Command Center agent. Map the Worker’s savedChatMemory and full bounded messages array into this module’s Message field. The Worker sends agency-scoped context and a stable per-staff thread ID. No Gmail or external tools are configured. Make enforces a minimum Step timeout of 120 seconds; the website Worker itself stops waiting after 20 seconds and falls back to its direct AI response. Use GPT-6 Luna, Low reasoning, 20% maximum output, Recursion limit 6, and Iterations from history 0."
             },
             "tools": []
         },
@@ -102,8 +102,7 @@
             "4. WORKER SECRET: npx wrangler secret put MAKE_AI_COMMAND_CENTER_WEBHOOK_URL (paste the webhook URL).",
             "5. ACTIVATE: Toggle the scenario ON and keep webhook processing immediate (Sequential processing off).",
             "",
-            "The Worker sends { type, scenario, systemPrompt, userPrompt, messages, context }.",
-            "The AI agent uses 1.systemPrompt (role-scoped agency data + instructions) and 1.userPrompt plus only the last four conversation messages. Thread memory is isolated by scenario and authenticated staff user ID. This avoids duplicating long conversation history in the agent and reduces payload size. The Make step timeout must be at least 120 seconds; the website Worker has a 20-second Make response deadline and uses its direct AI fallback if Make is still running.",
+            "The Worker sends { type, scenario, systemPrompt, userPrompt, messages, savedChatMemory, context }. Map savedChatMemory and the bounded current conversation into the agent message. After updating an existing scenario, refresh the webhook data structure and confirm savedChatMemory is available to Module 2. The saved-chat excerpts come from browser-local history for the same signed-in agency staff account; they are limited context, not model training or cross-device account memory. The current conversation takes priority. The Make step timeout must be at least 120 seconds; the website Worker has a 20-second Make response deadline and uses its direct AI fallback if Make is still running.",
             "The webhook response returns Module 2's Response directly. Plain text is fine for chat-only replies. Whenever Module 2 proposes any action, it must return one valid JSON object shaped as {\"reply\":\"...\",\"actions\":[...]} without Markdown fences. The Worker validates actions against the signed-in role and website API allowlist, then the portal shows the request and payload and requires the user to confirm before execution. This is a permissioned website action interface, not unrestricted computer or source-code control."
         ]
     }

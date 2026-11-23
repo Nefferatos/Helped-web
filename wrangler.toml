@@ -92,6 +92,11 @@ OPENAI_MODEL = "openai/gpt-4o-mini"
 #   npx wrangler secret put MAKE_AI_RECEPTIONIST_WEBHOOK_SECRET
 # When unset, the receptionist falls back to the existing Cline/OpenAI/CF-AI pipeline.
 
+# Website chat and request-message customer replies use a separate Make AI Agent.
+# Import make/customer-auto-reply-agent.blueprint.json and set its webhook URL:
+#   npx wrangler secret put MAKE_CUSTOMER_AUTO_REPLY_WEBHOOK_URL
+# Keep that webhook URL secret and never expose it in frontend configuration.
+#
 # WhatsApp Make automation. Incoming WAHA events may identify senders with a
 # WhatsApp LID instead of a phone number. The Worker resolves that LID through
 # WAHA so it can match the sender to a subscribed contact. Set these as secrets:

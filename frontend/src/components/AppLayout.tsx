@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { normalizeAgencyDisplayName } from "@/lib/agencyDisplayName";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LogOut,
@@ -50,7 +51,6 @@ import {
 } from "@/lib/agencyAdminAuth";
 import {
   fetchAdminUnreadChatCount,
-  markAdminNotificationsRead,
   type SupportNotification,
 } from "@/lib/chat";
 
@@ -526,29 +526,19 @@ const NavBadge = ({
 
 const getAgencyDisplayName = (agencyAdmin: AgencyAdminUser | null) => {
   if (!agencyAdmin) return "Agency";
-  if (agencyAdmin.role === "admin") {
-    return agencyAdmin.agencyName === "Main Agency"
-      ? "Rinzin Agency"
-      : agencyAdmin.agencyName || "Rinzin Agency";
-  }
-  return agencyAdmin.agencyName || agencyAdmin.username || "Agency";
+  return normalizeAgencyDisplayName(agencyAdmin.agencyName || agencyAdmin.username) || "Agency";
 };
 
 const getAgencyDisplaySubtitle = (agencyAdmin: AgencyAdminUser | null) => {
   if (!agencyAdmin) return "Management Suite";
-  if (agencyAdmin.role === "admin") return "Rinzin Agency";
+  if (agencyAdmin.role === "admin") return normalizeAgencyDisplayName(agencyAdmin.agencyName) || "At The Agency";
   if (agencyAdmin.role === "agency") return "Agency Account";
   return "Management Suite";
 };
 
 const getAgencyDisplayWelcomeName = (agencyAdmin: AgencyAdminUser | null) => {
   if (!agencyAdmin) return "Agency";
-  if (agencyAdmin.role === "admin") {
-    return agencyAdmin.agencyName === "Main Agency"
-      ? "Rinzin Agency"
-      : agencyAdmin.agencyName || "Rinzin Agency";
-  }
-  return agencyAdmin.username || agencyAdmin.agencyName || "Agency";
+  return normalizeAgencyDisplayName(agencyAdmin.agencyName || agencyAdmin.username) || "Agency";
 };
 
 /* ─── Welcome Modal ──────────────────────────────────────────────────────── */
@@ -564,7 +554,7 @@ const WelcomeModal = ({
 }) => {
   const name = getAgencyDisplayWelcomeName(agencyAdmin);
   const subtitle = getAgencyDisplaySubtitle(agencyAdmin);
-  const initials = (agencyAdmin?.agencyName || "A").slice(0, 2).toUpperCase();
+  const initials = getAgencyDisplayWelcomeName(agencyAdmin).slice(0, 2).toUpperCase();
   const logoSrc = agencyLogoUrl || agencyAdmin?.profileImageUrl || "";
 
   const [visible, setVisible] = useState(false);
@@ -1301,7 +1291,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const initials = (agencyAdmin?.agencyName || "A").slice(0, 2).toUpperCase();
+  const initials = getAgencyDisplayName(agencyAdmin).slice(0, 2).toUpperCase();
   const agencyDisplayName = getAgencyDisplayName(agencyAdmin);
   const agencyWelcomeName = getAgencyDisplayWelcomeName(agencyAdmin);
   const desktopWidth = collapsed ? 64 : 280;
@@ -1314,20 +1304,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     badgeCounts.unreadRequests;
   const visibleUnread = totalUnread;
   const visibleChatNotifications = chatNotifications.slice(0, 6);
-
-  const handleNotificationsOpenChange = useCallback((open: boolean) => {
-    if (!open || chatNotificationsRef.current.length === 0) return;
-
-    // Optimistically clear chat notifications.  The useEffect that syncs
-    // badgeCounts/chatNotifications to localStorage will fire immediately
-    // after these state updates, ensuring the cleared state is persisted
-    // before the next polling cycle can read stale cache values.
-    setChatNotifications([]);
-    setBadgeCounts((current) => ({ ...current, unreadChats: 0 }));
-    void markAdminNotificationsRead().catch((error) => {
-      console.warn("[AppLayout] Failed to mark notifications read", error);
-    });
-  }, []);
 
   const sharedSidebarProps = {
     location,
@@ -1571,7 +1547,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               gap: 6,
             }}
           >
-            <DropdownMenu onOpenChange={handleNotificationsOpenChange}>
+            <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   aria-label={
