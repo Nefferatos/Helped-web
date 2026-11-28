@@ -100,7 +100,7 @@ router.post("/login/complete", internalAuth, createRateLimit({ keyPrefix: "teleg
     try {
       if (pending.passwordRequired) {
         if (!password) return res.status(428).json({ passwordRequired: true, error: "Enter the Telegram two-step verification password to finish sign-in." });
-        await client.signInWithPassword(credentials(), { password: async () => password, onError: () => true });
+        await client.signInWithPassword(credentials(), { password: async () => password, onError: async () => true });
       } else {
         await client.invoke(new Api.auth.SignIn({ phoneNumber: pending.phoneNumber, phoneCodeHash: pending.phoneCodeHash, phoneCode: code }));
       }
@@ -109,11 +109,13 @@ router.post("/login/complete", internalAuth, createRateLimit({ keyPrefix: "teleg
       pending.passwordRequired = true;
       await query("UPDATE telegram_direct_accounts SET pending_auth = $1, updated_at = NOW() WHERE agency_id = $2", [seal(JSON.stringify(pending)), agencyId]);
       if (!password) return res.status(428).json({ passwordRequired: true, error: "Enter the Telegram two-step verification password to finish sign-in." });
-      await client.signInWithPassword(credentials(), { password: async () => password, onError: () => true });
+      await client.signInWithPassword(credentials(), { password: async () => password, onError: async () => true });
     }
     const self = await client.getMe();
     if (!self || self.className !== "User") return res.status(502).json({ error: "Telegram did not confirm the account session." });
-    await query("INSERT INTO telegram_direct_accounts (agency_id, encrypted_session, pending_auth, account_phone, updated_at) VALUES ($1, $2, NULL, $3, NOW()) ON CONFLICT (agency_id) DO UPDATE SET encrypted_session = EXCLUDED.encrypted_session, pending_auth = NULL, account_phone = EXCLUDED.account_phone, updated_at = NOW()", [agencyId, seal(client.session.save()), pending.phoneNumber]);
+    const savedSession = client.session.save();
+    if (!savedSession) return res.status(502).json({ error: "Telegram did not return a persistent account session. Please sign in again." });
+    await query("INSERT INTO telegram_direct_accounts (agency_id, encrypted_session, pending_auth, account_phone, updated_at) VALUES ($1, $2, NULL, $3, NOW()) ON CONFLICT (agency_id) DO UPDATE SET encrypted_session = EXCLUDED.encrypted_session, pending_auth = NULL, account_phone = EXCLUDED.account_phone, updated_at = NOW()", [agencyId, seal(savedSession), pending.phoneNumber]);
     return res.json({ connected: true, accountPhone: pending.phoneNumber });
   } catch (error) {
     const message = errorText(error);
@@ -143,7 +145,7 @@ router.post("/broadcasts", internalAuth, async (req, res) => {
   const consentAcknowledged = req.body?.consentAcknowledged === true;
   const idempotencyKey = String(req.body?.idempotencyKey || "").trim().slice(0, 120);
   const rawNumbers = Array.isArray(req.body?.phoneNumbers) ? req.body.phoneNumbers : [];
-  const phoneNumbers = [...new Set(rawNumbers.map((value: unknown) => String(value).trim()))];
+  const phoneNumbers: string[] = [...new Set<string>(rawNumbers.map((value: unknown) => String(value).trim()))];
   if (!message || message.length > 4096) return res.status(400).json({ error: "Enter a message between 1 and 4,096 characters." });
   if (!consentAcknowledged) return res.status(400).json({ error: "Confirm that every recipient has agreed to receive messages on Telegram." });
   if (!idempotencyKey) return res.status(400).json({ error: "A unique request key is required." });
@@ -169,7 +171,7 @@ router.post("/broadcasts", internalAuth, async (req, res) => {
     const imported = await client.importContacts(phoneNumbers.map((phone, index) => ({ phone, firstName: `Recipient ${index + 1}`, clientId: index + 1 })));
     const contactUsers = [...(imported.users || []), ...(await client.getContacts())];
     const byId = new Map(contactUsers.map((user) => [String(user.id), user]));
-    const byPhone = new Map(contactUsers.filter((user) => Boolean(user.phone)).map((user) => [String(user.phone).replace(/\D/g, ""), user]));
+    const byPhone = new Map(contactUsers.filter((user): user is Api.User => user.className === "User" && Boolean(user.phone)).map((user) => [String(user.phone).replace(/\D/g, ""), user]));
     const recipients = phoneNumbers.map((phone, index) => {
       const importedContact = (imported.imported || []).find((item) => Number(item.clientId) === index + 1);
       return (importedContact && byId.get(String(importedContact.userId))) || byPhone.get(phone.replace(/\D/g, "")) || null;
