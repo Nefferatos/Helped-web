@@ -82,7 +82,6 @@
               "mapper": {
                 "files": [],
                 "message": "Website extraction instructions:\n{{1.systemPrompt}}\n\nPDF text and requested output schema:\n{{1.userPrompt}}",
-                "threadId": "pdf-autofill-{{ifempty(1.requestId; \"anonymous\")}}",
                 "outputType": "text",
                 "tokenLimit": "8192",
                 "modelConfig": {
@@ -163,7 +162,6 @@
                   }
                 ],
                 "message": "Website extraction instructions:\n{{1.systemPrompt}}\n\nPDF text and requested output schema:\n{{1.userPrompt}}",
-                "threadId": "pdf-autofill-{{ifempty(1.requestId; \"anonymous\")}}",
                 "outputType": "text",
                 "tokenLimit": "8192",
                 "modelConfig": {
@@ -275,7 +273,7 @@
       "",
       "AFTER IMPORT:",
       "1. Create a new custom webhook named Contract Draft Autofill. Run once with a sample request so Make learns systemPrompt, userPrompt, fileName, fileMimeType, and fileDataBase64.",
-      "2. In both AI Agent modules, select the Make AI Provider connection and a model that can read PDF and image attachments. Keep the binary file mapping toBinary(1.fileDataBase64; \"base64\").",
+      "2. In both AI Agent modules, select the Make AI Provider connection and a model that can read PDF and image attachments. Keep the binary file mapping toBinary(1.fileDataBase64; \"base64\"). Leave Conversation ID blank because the scenario is confidential.",
       "3. Set the new webhook URL as the Worker secret MAKE_CONTRACT_AUTOFILL_WEBHOOK_URL.",
       "4. Test with a contract draft and confirm the response is JSON containing maid, agency, employer, spouse, notificationDate, and familyMembers.",
       "5. Activate this scenario. Biodata uploads continue to use the existing PDF Biodata Autofill scenario and webhook.",

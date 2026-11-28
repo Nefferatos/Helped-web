@@ -86,7 +86,6 @@
                             "mapper": {
                                 "files": [],
                                 "message": "Website extraction instructions:\n{{1.systemPrompt}}\n\nPDF text and requested output schema:\n{{1.userPrompt}}",
-                                "threadId": "pdf-autofill-{{ifempty(1.requestId; \"anonymous\")}}",
                                 "outputType": "text",
                                 "tokenLimit": "8192",
                                 "modelConfig": {
@@ -172,7 +171,6 @@
                                     }
                                 ],
                                 "message": "Website extraction instructions:\n{{1.systemPrompt}}\n\nPDF text and requested output schema:\n{{1.userPrompt}}",
-                                "threadId": "pdf-autofill-{{ifempty(1.requestId; \"anonymous\")}}",
                                 "outputType": "text",
                                 "tokenLimit": "8192",
                                 "modelConfig": {
@@ -327,7 +325,7 @@
             "",
             "AFTER IMPORT:",
             "1. WEBHOOK: After import, run the scenario once with a text draft and once with a JPG/PNG so Module 1 learns fileDataBase64, fileName, and fileMimeType.",
-            "2. AI AGENTS: Verify the Make AI Provider connection and select a model that supports JPG, PNG, and PDF input files.",
+            "2. AI AGENTS: Verify the Make AI Provider connection and select a model that supports JPG, PNG, and PDF input files. Leave Conversation ID blank because the scenario is confidential.",
             "3. AUTH TOKEN: In both AI Agent modules AND Module 30 filter conditions, replace REPLACE_WITH_AUTH_TOKEN with the exact same value as MAKE_PDF_AUTOFILL_WEBHOOK_TOKEN.",
             "4. WORKER SECRETS (Cloudflare):",
             "   npx wrangler secret put MAKE_PDF_AUTOFILL_WEBHOOK_URL   (paste the webhook URL)",
