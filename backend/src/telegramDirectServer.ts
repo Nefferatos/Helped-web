@@ -8,6 +8,10 @@ const port = Number(process.env.PORT || 3000);
 app.disable("x-powered-by");
 app.use(express.json({ limit: "64kb" }));
 app.get("/api/health", (_req, res) => res.json({ status: "Telegram direct API is running" }));
+app.use("/api/telegram-direct", (req, res, next) => {
+  res.on("finish", () => console.info(`[telegram-direct] ${req.method} ${req.path} ${res.statusCode}`));
+  next();
+});
 app.use("/api/telegram-direct", telegramDirectRoutes);
 
 app.listen(port, "0.0.0.0", () => {

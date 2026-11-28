@@ -26012,7 +26012,8 @@ const telegramBotUsername = (env: Bindings) => (env.TELEGRAM_BOT_USERNAME || "")
 const telegramDirectServiceRequest = async (env: Bindings, path: string, agencyId: number, body?: Record<string, unknown>) => {
   const baseUrl = env.TELEGRAM_DIRECT_API_URL?.trim().replace(/\/$/, "");
   const secret = env.TELEGRAM_DIRECT_SERVICE_SECRET?.trim();
-  if (!baseUrl || !secret) return { configured: false as const };
+  if (!baseUrl) return { configured: false as const, error: "Set TELEGRAM_DIRECT_API_URL on the production Cloudflare Worker." };
+  if (!secret) return { configured: false as const, error: "Set TELEGRAM_DIRECT_SERVICE_SECRET on the production Cloudflare Worker." };
   const requestUrl = `${baseUrl}/${path}`;
   const url = new URL(requestUrl);
   if (url.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(url.hostname)) throw new Error("The Telegram direct-message backend must use HTTPS.");
@@ -26032,7 +26033,7 @@ app.get("/api/telegram/direct/status", requireAgencyAdminAuth, async (c) => {
   const admin = c.get("agencyAdmin") as AgencyAdminRecord;
   try {
     const service = await telegramDirectServiceRequest(c.env, "status", admin.agencyId);
-    if (!service.configured) return c.json({ configured: false, connected: false, maxRecipients: 25 });
+    if (!service.configured) return c.json({ configured: false, connected: false, maxRecipients: 25, error: service.error });
     if (!service.response.ok) return c.json({ configured: true, connected: false, error: service.result.error || "Could not read the direct-message account status." }, service.response.status as any);
     return c.json(service.result);
   } catch (error) { console.error("Telegram direct status failed:", errMsg(error)); return c.json({ configured: false, connected: false, error: "Direct Telegram account service is unavailable." }, 503); }

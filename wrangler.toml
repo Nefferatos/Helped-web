@@ -31,6 +31,7 @@ ROLLING_ARRIVAL_REPORT_AGENCY_ID = "1"
 # Storage: "kv" uses the APP_DATA KV namespace above. Remove to fall back to Supabase.
 STORAGE_BACKEND = "supabase"
 APP_PUBLIC_URL = "https://rinzinagency.com"
+TELEGRAM_DIRECT_API_URL = "https://telegram-direct-api.onrender.com/api/telegram-direct"
 
 # RECOMMENDED FOR PRODUCTION: collapse agency-admin auth to a single normalized
 # table (helped_agency_admins) so the login store cannot drift from main data —
