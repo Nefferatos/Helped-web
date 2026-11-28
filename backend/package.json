@@ -7,6 +7,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "start:telegram-direct": "node dist/telegramDirectServer.js",
     "demo:enquiry": "ts-node --transpile-only src/scripts/enquiry-demo.ts",
     "lint": "eslint src --ext .ts"
   },
@@ -20,7 +21,8 @@
     "jszip": "^3.10.1",
     "nodemailer": "^8.0.7",
     "pg": "^8.20.0",
-    "sharp": "^0.35.4"
+    "sharp": "^0.35.4",
+    "teleproto": "^1.234.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

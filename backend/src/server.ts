@@ -41,6 +41,7 @@ import contractorRoutes from "./routes/contractorRoutes";
 import knowledgeRoutes from "./routes/knowledgeRoutes";
 import integrationRoutes from "./routes/integrationRoutes";
 import aiCommandCenterRoutes from "./routes/aiCommandCenterRoutes";
+import telegramDirectRoutes from "./routes/telegramDirectRoutes";
 import { handleMcp } from './controllers/mcpController'
 import { initializeDatabase } from "./db";
 import {
@@ -151,6 +152,7 @@ import { requireAgencyAuth } from './middleware/requireAgencyAuth'
 app.post("/api/pdf-autofill", requireAgencyAuth, pdfAutofill);
 
 app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/telegram-direct", telegramDirectRoutes);
 app.use("/api/ats", atsRoutes);
 app.use("/api/applicant-assistant", applicantAssistantRoutes);
 app.use("/api/events", eventRoutes);

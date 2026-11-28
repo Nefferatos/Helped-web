@@ -4,6 +4,32 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+-- Separate user-account MTProto sessions and audit records for direct Telegram
+-- messaging. Session values are AES-GCM encrypted by the service before storage.
+CREATE TABLE IF NOT EXISTS telegram_direct_accounts (
+  agency_id INTEGER PRIMARY KEY,
+  encrypted_session TEXT,
+  pending_auth TEXT,
+  account_phone TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS telegram_direct_broadcasts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agency_id INTEGER NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  message TEXT NOT NULL,
+  total_recipients INTEGER NOT NULL DEFAULT 0,
+  consent_acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
+  matched_count INTEGER NOT NULL DEFAULT 0,
+  successful_count INTEGER NOT NULL DEFAULT 0,
+  failed_count INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL CHECK (status IN ('sending','completed','partial','failed','uncertain')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  UNIQUE (agency_id, idempotency_key)
+);
+
 -- Immutable operator/machine timeline. Make.com and AI workers report their
 -- work here; entity_id is TEXT to support UUIDs and reference codes.
 CREATE TABLE IF NOT EXISTS workflow_events (

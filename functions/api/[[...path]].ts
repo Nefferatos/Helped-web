@@ -628,6 +628,8 @@ type Bindings = {
   TELEGRAM_BOT_USERNAME?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   TELEGRAM_AUTOMATION_SECRET?: string;
+  TELEGRAM_DIRECT_API_URL?: string;
+  TELEGRAM_DIRECT_SERVICE_SECRET?: string;
   // Meta WhatsApp webhook used only to record STOP/START opt-outs; it never replies.
   WHATSAPP_WEBHOOK_VERIFY_TOKEN?: string;
   WHATSAPP_APP_SECRET?: string;
@@ -25238,6 +25240,7 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
   const requestedVision = body.vision === true;
   const makeOnly = body.makeOnly === true;
   const autofillScenario = body.scenario === "contract_autofill" ? "contract_autofill" : "pdf_autofill";
+  const autofillServiceName = autofillScenario === "contract_autofill" ? "contract draft" : "PDF";
   const makeWebhookUrl = autofillScenario === "contract_autofill"
     ? makeContractWebhookUrl
     : makePdfWebhookUrl;
@@ -25297,15 +25300,15 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
         result = JSON.parse(rawBody) as { content?: unknown; finish_reason?: unknown; error?: unknown };
       } catch {
         console.error(`[pdf-autofill] Make webhook returned non-JSON (status ${response.status}):`, rawBody.slice(0, 500));
-        return c.json({ error: `Make PDF autofill returned invalid response (${response.status})` }, 502);
+        return c.json({ error: `Make ${autofillServiceName} autofill failed with HTTP ${response.status}. Check the matching Make scenario's execution history.` }, 502);
       }
       if (!response.ok || typeof result.error === "string") {
         console.error(`[pdf-autofill] Make webhook returned error: status=${response.status}, body=`, rawBody.slice(0, 500));
-        return c.json({ error: typeof result.error === "string" ? result.error : `Make PDF autofill failed (${response.status})` }, 502);
+        return c.json({ error: typeof result.error === "string" ? result.error : `Make ${autofillServiceName} autofill failed (${response.status})` }, 502);
       }
       if (typeof result.content !== "string" || !result.content.trim()) {
         console.error("[pdf-autofill] Make webhook returned empty content:", rawBody.slice(0, 500));
-        return c.json({ error: "Make PDF autofill returned an empty response" }, 502);
+        return c.json({ error: `Make ${autofillServiceName} autofill returned an empty response` }, 502);
       }
       return c.json({
         content: result.content,
@@ -25313,8 +25316,8 @@ app.post("/api/pdf-autofill", requireAgencyAdminAuth, async (c) => {
       });
     } catch (error) {
       const message = error instanceof Error && error.name === "TimeoutError"
-        ? "Make PDF autofill timed out. Please try a smaller file."
-        : "Make PDF autofill is unavailable. Please try again.";
+        ? `Make ${autofillServiceName} autofill timed out. Please try a smaller file.`
+        : `Make ${autofillServiceName} autofill is unavailable. Please try again.`;
       console.error("[pdf-autofill] Make webhook error:", error instanceof Error ? error.message : String(error));
       return c.json({ error: message }, 502);
     }
@@ -26005,6 +26008,79 @@ const telegramBotInfo = async (env: Bindings) => {
 };
 
 const telegramBotUsername = (env: Bindings) => (env.TELEGRAM_BOT_USERNAME || "").trim().replace(/^@+/, "");
+
+const telegramDirectServiceRequest = async (env: Bindings, path: string, agencyId: number, body?: Record<string, unknown>) => {
+  const baseUrl = env.TELEGRAM_DIRECT_API_URL?.trim().replace(/\/$/, "");
+  const secret = env.TELEGRAM_DIRECT_SERVICE_SECRET?.trim();
+  if (!baseUrl || !secret) return { configured: false as const };
+  const requestUrl = `${baseUrl}/${path}`;
+  const url = new URL(requestUrl);
+  if (url.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(url.hostname)) throw new Error("The Telegram direct-message backend must use HTTPS.");
+  if (!body) url.searchParams.set("agencyId", String(agencyId));
+  const response = await fetch(url.toString(), {
+    method: body ? "POST" : "GET",
+    headers: { "Content-Type": "application/json", "x-telegram-direct-secret": secret },
+    redirect: "error",
+    ...(body ? { body: JSON.stringify({ ...body, agencyId }) } : {}),
+    ...(body ? { signal: AbortSignal.timeout(45_000) } : { signal: AbortSignal.timeout(12_000) }),
+  });
+  const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+  return { configured: true as const, response, result };
+};
+
+app.get("/api/telegram/direct/status", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  try {
+    const service = await telegramDirectServiceRequest(c.env, "status", admin.agencyId);
+    if (!service.configured) return c.json({ configured: false, connected: false, maxRecipients: 25 });
+    if (!service.response.ok) return c.json({ configured: true, connected: false, error: service.result.error || "Could not read the direct-message account status." }, service.response.status as any);
+    return c.json(service.result);
+  } catch (error) { console.error("Telegram direct status failed:", errMsg(error)); return c.json({ configured: false, connected: false, error: "Direct Telegram account service is unavailable." }, 503); }
+});
+
+app.post("/api/telegram/direct/login/start", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{ phoneNumber?: string }>(c.req.raw);
+  try {
+    const service = await telegramDirectServiceRequest(c.env, "login/start", admin.agencyId, { phoneNumber: body?.phoneNumber });
+    if (!service.configured) return c.json({ error: "Configure the Telegram direct-message backend service first." }, 503);
+    return c.json(service.result, service.response.status as any);
+  } catch (error) { console.error("Telegram direct login start failed:", errMsg(error)); return c.json({ error: "Could not request a Telegram login code." }, 502); }
+});
+
+app.post("/api/telegram/direct/login/complete", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{ code?: string; password?: string }>(c.req.raw);
+  try {
+    const service = await telegramDirectServiceRequest(c.env, "login/complete", admin.agencyId, { code: body?.code, password: body?.password });
+    if (!service.configured) return c.json({ error: "Configure the Telegram direct-message backend service first." }, 503);
+    return c.json(service.result, service.response.status as any);
+  } catch (error) { console.error("Telegram direct login completion failed:", errMsg(error)); return c.json({ error: "Could not complete Telegram account sign-in." }, 502); }
+});
+
+app.post("/api/telegram/direct/logout", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  try {
+    const service = await telegramDirectServiceRequest(c.env, "logout", admin.agencyId, {});
+    if (!service.configured) return c.json({ error: "Configure the Telegram direct-message backend service first." }, 503);
+    return c.json(service.result, service.response.status as any);
+  } catch (error) { console.error("Telegram direct logout failed:", errMsg(error)); return c.json({ error: "Could not disconnect the Telegram account." }, 502); }
+});
+
+app.post("/api/telegram/direct/broadcasts", requireAgencyAdminAuth, async (c) => {
+  const admin = c.get("agencyAdmin") as AgencyAdminRecord;
+  const body = await parseBody<{ message?: string; phoneNumbers?: string[]; consentAcknowledged?: boolean; idempotencyKey?: string }>(c.req.raw);
+  try {
+    const service = await telegramDirectServiceRequest(c.env, "broadcasts", admin.agencyId, {
+      message: body?.message,
+      phoneNumbers: body?.phoneNumbers,
+      consentAcknowledged: body?.consentAcknowledged,
+      idempotencyKey: body?.idempotencyKey,
+    });
+    if (!service.configured) return c.json({ error: "Configure the Telegram direct-message backend service first." }, 503);
+    return c.json(service.result, service.response.status as any);
+  } catch (error) { console.error("Telegram direct broadcast failed:", errMsg(error)); return c.json({ error: "Telegram direct-message service is unavailable." }, 502); }
+});
 
 app.get("/api/telegram/invitation", (c) => {
   const username = telegramBotUsername(c.env);
